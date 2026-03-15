@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -82,6 +82,10 @@ const installDesktopApi = (
     setApiKey,
     setHotkeyCaptureActive,
     listMicrophones,
+    publishState: (nextState: DashboardViewModel) => {
+      currentState = nextState
+      notify()
+    },
   }
 }
 
@@ -159,5 +163,41 @@ describe('DashboardWindow', () => {
     await waitFor(() => {
       expect(updateSettings).toHaveBeenCalledWith({ insertionStreamingMode: 'letter-by-letter' })
     })
+  })
+
+  it('renders the newest history entry immediately when the dashboard state updates', async () => {
+    const { publishState } = installDesktopApi()
+    render(<DashboardWindow initialTab="history" />)
+
+    expect(await screen.findByText(/no entries yet/i)).toBeInTheDocument()
+
+    await act(async () => {
+      publishState({
+        ...createState(),
+        history: [
+          {
+            id: 'entry-1',
+            createdAt: new Date().toISOString(),
+            appName: 'VS Code',
+            windowTitle: 'prompt.ts',
+            activationMode: 'toggle',
+            modelId: 'google/gemini-3-flash-preview',
+            outputText: 'most recent output',
+            audioFilePath: null,
+            audioDurationMs: 0,
+            audioMimeType: null,
+            audioBytes: 0,
+            submittedContext: null,
+            usedContext: false,
+            latencyMs: 120,
+            insertionStrategy: 'insert-at-cursor',
+          },
+        ],
+      })
+      await Promise.resolve()
+    })
+
+    expect(await screen.findByText('most recent output')).toBeInTheDocument()
+    expect(screen.queryByText(/no entries yet/i)).toBeNull()
   })
 })

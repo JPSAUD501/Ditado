@@ -1,4 +1,4 @@
-import { startTransition, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 
 import { defaultPermissionState, defaultSettings } from '@shared/defaults'
 import type { DashboardViewModel, DictationSession, OverlayViewModel } from '@shared/contracts'
@@ -35,9 +35,7 @@ export const useOverlayBridge = (): OverlayViewModel => {
       }
     })
     const unsubscribe = window.ditado.subscribeOverlayState((value) => {
-      startTransition(() => {
-        setState(value)
-      })
+      setState(value)
     })
     return () => {
       mounted = false
@@ -59,9 +57,7 @@ export const useDashboardBridge = (): DashboardViewModel => {
       }
     })
     const unsubscribe = window.ditado.subscribeDashboardState((value) => {
-      startTransition(() => {
-        setState(value)
-      })
+      setState(value)
     })
     return () => {
       mounted = false
@@ -149,7 +145,11 @@ export const useDictationRecorder = (
         .start(preferredMicrophoneId)
         .then(() => {
           const latestSession = activeSession.current
-          if (!latestSession || latestSession.id !== session.id || latestSession.status !== 'listening') {
+          if (
+            !latestSession ||
+            latestSession.id !== session.id ||
+            !['arming', 'listening'].includes(latestSession.status)
+          ) {
             clearMaxDurationTimer()
             void recorder.cancel().finally(() => setIsRecording(false))
             return
@@ -159,7 +159,11 @@ export const useDictationRecorder = (
           clearMaxDurationTimer()
           maxDurationTimer.current = window.setTimeout(() => {
             const currentSession = activeSession.current
-            if (!currentSession || currentSession.id !== session.id || currentSession.status !== 'listening') {
+            if (
+              !currentSession ||
+              currentSession.id !== session.id ||
+              !['arming', 'listening'].includes(currentSession.status)
+            ) {
               return
             }
             finalizeCapture(currentSession)

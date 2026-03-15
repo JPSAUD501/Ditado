@@ -23,7 +23,7 @@ const pasteChunk = async (chunk: string): Promise<void> => {
 class ProgressiveInsertionSession {
   private chain = Promise.resolve()
   private completed = false
-  private bufferedText = ''
+  private aborted = false
 
   constructor(private readonly mode: InsertionStreamingMode) {}
 
@@ -40,30 +40,49 @@ class ProgressiveInsertionSession {
   }
 
   async append(text: string): Promise<void> {
-    if (this.completed || !text) {
+    if (this.completed || this.aborted || !text) {
       return
     }
 
     if (this.mode === 'all-at-once') {
-      this.bufferedText += text
       return
     }
 
     for (const segment of this.getSegments(text)) {
-      this.chain = this.chain.then(() => pasteChunk(segment))
+      this.chain = this.chain.then(async () => {
+        if (this.aborted) {
+          return
+        }
+        await pasteChunk(segment)
+      })
     }
 
     await this.chain
   }
 
   async finalize(finalText: string): Promise<void> {
+    if (this.aborted) {
+      this.completed = true
+      return
+    }
+
     this.completed = true
 
     if (this.mode === 'all-at-once' && finalText.trim()) {
-      this.chain = this.chain.then(() => pasteChunk(finalText))
+      this.chain = this.chain.then(async () => {
+        if (this.aborted) {
+          return
+        }
+        await pasteChunk(finalText)
+      })
     }
 
     await this.chain
+  }
+
+  cancel(): void {
+    this.aborted = true
+    this.completed = true
   }
 
   async recoverToClipboard(text: string): Promise<void> {

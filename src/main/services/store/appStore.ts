@@ -1,6 +1,7 @@
 import { app, safeStorage } from 'electron'
-import { copyFile, mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { copyFile, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
+import { z } from 'zod'
 
 import { defaultSettings } from '../../../shared/defaults.js'
 import {
@@ -18,16 +19,6 @@ const STORE_VERSION = 2
 const TELEMETRY_LIMIT = 500
 
 const persistedSettingsSchema = settingsSchema.omit({ apiKeyPresent: true })
-const settingsFileSchema = persistedSettingsSchema
-  .extend({
-    version: settingsSchema.shape.historyRetentionDays.transform(() => STORE_VERSION),
-  })
-  .transform(({ version: _version, ...data }) => data)
-
-const historyFileSchema = historyEntrySchema
-  .array()
-  .transform((entries) => ({ version: STORE_VERSION as const, entries }))
-
 const readJsonFile = async (filePath: string): Promise<unknown | null> => {
   try {
     const content = await readFile(filePath, 'utf8')
@@ -60,7 +51,7 @@ const writeAtomicJson = async (filePath: string, payload: unknown): Promise<void
 }
 
 const persistedSettingsFileSchema = persistedSettingsSchema.extend({
-  version: settingsSchema.shape.historyRetentionDays.transform(() => STORE_VERSION),
+  version: z.literal(STORE_VERSION),
 })
 
 const storedHistoryFileSchema = {
@@ -266,7 +257,8 @@ export class AppStore {
   }
 
   private async persistSettings(): Promise<void> {
-    const { apiKeyPresent: _apiKeyPresent, ...persistedSettings } = this.settings
+    const { apiKeyPresent, ...persistedSettings } = this.settings
+    void apiKeyPresent
     await writeAtomicJson(this.settingsFile, {
       version: STORE_VERSION,
       ...persistedSettings,

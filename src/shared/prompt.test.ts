@@ -1,62 +1,35 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildOpenRouterPayload, buildUserPrompt } from './prompt.js'
-import type { ContextSnapshot, LlmRequest } from './contracts.js'
+import { buildSystemPrompt, buildUserPrompt } from './prompt.js'
+import type { ContextSnapshot } from './contracts.js'
 
 const context: ContextSnapshot = {
   appName: 'Slack',
   windowTitle: 'Project chat',
   selectedText: 'old copy',
-  textBefore: 'Yesterday we shipped',
-  textAfter: 'Thanks!',
   permissionsGranted: true,
   confidence: 'high',
   capturedAt: new Date().toISOString(),
 }
 
 describe('prompt helpers', () => {
-  it('builds a GPT-5.4 style system prompt contract', () => {
-    const prompt = buildOpenRouterPayload({
-      audioBase64: 'ZmFrZQ==',
-      audioMimeType: 'audio/wav',
-      languageHint: 'pt-BR',
-      context,
-      modelId: 'google/gemini-3-flash-preview',
-    })
+  it('builds a system prompt focused on lexical fidelity and empty-speech handling', () => {
+    const prompt = buildSystemPrompt()
 
-    const messages = (prompt.messages as Array<{ role: string; content: unknown }>)
-    const systemMessage = messages.find((message) => message.role === 'system')
-
-    expect(systemMessage?.content).toContain('<output_contract>')
-    expect(systemMessage?.content).toContain('<verification_loop>')
-    expect(systemMessage?.content).toContain('<structured_output_contract>')
-    expect(systemMessage?.content).toContain('Preserve lexical fidelity for specific tokens')
-    expect(systemMessage?.content).toContain('Keep uncertainty localized to the token')
+    expect(prompt).toContain('<output_contract>')
+    expect(prompt).toContain('<grounding_rules>')
+    expect(prompt).toContain('<verification_loop>')
+    expect(prompt).toContain('If the audio does not contain intelligible speech, return an empty string.')
+    expect(prompt).toContain('Preserve lexical fidelity')
   })
 
-  it('builds a contextual user prompt', () => {
+  it('builds a contextual user prompt without before/after cursor content', () => {
     const prompt = buildUserPrompt(context, 'pt-BR')
 
     expect(prompt).toContain('Active app: Slack')
     expect(prompt).toContain('Selected text: old copy')
     expect(prompt).toContain('Language hint: pt-BR')
-    expect(prompt).toContain('Definition of done')
-    expect(prompt).toContain('preserve specific spoken tokens faithfully')
-  })
-
-  it('creates an OpenRouter multimodal payload', () => {
-    const request: LlmRequest = {
-      audioBase64: 'ZmFrZQ==',
-      audioMimeType: 'audio/wav',
-      languageHint: 'en-US',
-      context,
-      modelId: 'google/gemini-3-flash-preview',
-    }
-
-    const payload = buildOpenRouterPayload(request)
-    expect(payload).toMatchObject({
-      model: 'google/gemini-3-flash-preview',
-      stream: true,
-    })
+    expect(prompt).not.toContain('Text before cursor')
+    expect(prompt).not.toContain('Text after cursor')
   })
 })

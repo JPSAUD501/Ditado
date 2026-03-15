@@ -1,15 +1,16 @@
 import { motion, useReducedMotion } from 'framer-motion'
 
-import { useDictationRecorder, useOverlayBridge } from '@renderer/hooks/useDitadoBridge'
+import { useOverlayBridge } from '@renderer/hooks/useDitadoBridge'
 
 const statusCopy = {
   idle: 'Ready',
+  arming: 'Listening',
   listening: 'Listening',
   processing: 'Sending',
   streaming: 'Writing',
   completed: 'Done',
   notice: 'Tip',
-  error: 'Fallback',
+  error: 'Error',
   'permission-required': 'Mic',
 } as const
 
@@ -21,10 +22,10 @@ const modeCopy = {
 export const OverlayWindow = () => {
   const reducedMotion = useReducedMotion()
   const state = useOverlayBridge()
-  const { isRecording } = useDictationRecorder(state.session, state.settings.preferredMicrophoneId)
   const session = state.session
   const status = session?.status ?? 'idle'
-  const appName = session?.targetApp ?? 'Foreground app'
+  const isRecording = status === 'arming' || status === 'listening'
+  const appName = session?.context.appName || session?.targetApp || 'Foreground app'
   const detail = session?.noticeMessage ?? appName
   const mode = session?.activationMode ?? 'toggle'
   const modeLabel = modeCopy[mode]
@@ -38,7 +39,7 @@ export const OverlayWindow = () => {
       <motion.div
         initial={reducedMotion ? false : { opacity: 0, scale: 0.985 }}
         animate={reducedMotion ? undefined : { opacity: 1, scale: 1 }}
-        transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+        transition={{ duration: 0.1, ease: [0.16, 1, 0.3, 1] }}
         className="overlay-chip"
         data-mode={mode}
       >

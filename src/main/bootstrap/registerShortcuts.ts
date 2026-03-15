@@ -215,6 +215,15 @@ export const registerShortcuts = (
       return
     }
 
+    if (event.keycode === UiohookKey.Escape) {
+      pressedKeys.clear()
+      pushActive = false
+      pushStartedAt = 0
+      toggleActive = false
+      void orchestrator.cancel()
+      return
+    }
+
     pressedKeys.add(event.keycode)
     const pushMatches = matchesHotkeyFromEvent(event, pressedKeys, parsedPushHotkey)
     const toggleMatches = matchesHotkeyFromEvent(event, pressedKeys, parsedToggleHotkey)

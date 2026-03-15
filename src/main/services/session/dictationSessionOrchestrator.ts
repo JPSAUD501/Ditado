@@ -11,11 +11,14 @@ import { HistoryService } from './historyService.js'
 import { SessionStore } from './sessionStore.js'
 
 type SessionListener = (session: DictationSession | null) => void
+type ProgressiveInsertionSession = ReturnType<InsertionEngine['createProgressiveSession']>
 
 export class DictationSessionOrchestrator {
   private readonly sessions = new SessionStore()
-  private readonly history = new HistoryService(this.store)
+  private readonly history: HistoryService
   private submittingSessionId: string | null = null
+  private activeInsertionSession: { sessionId: string; insertion: ProgressiveInsertionSession } | null = null
+  private cancelledSessionIds = new Set<string>()
 
   constructor(
     private readonly store: AppStore,
@@ -24,7 +27,9 @@ export class DictationSessionOrchestrator {
     private readonly llm: OpenRouterService,
     private readonly telemetry: TelemetryService,
     private readonly permissions: PermissionService,
-  ) {}
+  ) {
+    this.history = new HistoryService(store)
+  }
 
   subscribe(listener: SessionListener): () => void {
     return this.sessions.subscribe(listener)
@@ -42,18 +47,6 @@ export class DictationSessionOrchestrator {
 
     const sessionId = createId('session')
     const startedAt = new Date().toISOString()
-
-    this.sessions.set({
-      ...createIdleSession(),
-      id: sessionId,
-      activationMode: mode,
-      status: 'arming',
-      captureIntent: 'start',
-      startedAt,
-      targetApp: 'Foreground app',
-      noticeMessage: null,
-      errorMessage: null,
-    })
 
     const permissions = await this.permissions.getState()
     if (permissions.microphone === 'denied' || permissions.microphone === 'restricted') {
@@ -73,11 +66,35 @@ export class DictationSessionOrchestrator {
     }
 
     this.sessions.set({
-      ...this.requireCurrent(sessionId),
+      ...createIdleSession(),
+      id: sessionId,
+      activationMode: mode,
       status: 'listening',
       captureIntent: 'start',
+      startedAt,
+      targetApp: 'Foreground app',
+      noticeMessage: null,
+      errorMessage: null,
     })
     await this.telemetry.metric('dictation-started', { mode })
+
+    void this.contextService
+      .capture(false, false)
+      .then((previewContext) => {
+        const activeSession = this.sessions.get()
+        if (!activeSession || activeSession.id !== sessionId || activeSession.status !== 'listening') {
+          return
+        }
+
+        this.sessions.set({
+          ...activeSession,
+          targetApp: previewContext.appName,
+          context: previewContext,
+        })
+      })
+      .catch(() => {
+        // Context preview is best-effort and should never block capture start.
+      })
   }
 
   async toggleCapture(): Promise<void> {
@@ -93,7 +110,10 @@ export class DictationSessionOrchestrator {
     if (currentSession.status === 'listening' && currentSession.activationMode === 'toggle') {
       this.sessions.set({
         ...currentSession,
+        status: 'processing',
         captureIntent: 'stop',
+        noticeMessage: null,
+        errorMessage: null,
       })
     }
   }
@@ -111,7 +131,10 @@ export class DictationSessionOrchestrator {
 
     this.sessions.set({
       ...currentSession,
+      status: 'processing',
       captureIntent: 'stop',
+      noticeMessage: null,
+      errorMessage: null,
     })
   }
 
@@ -119,6 +142,12 @@ export class DictationSessionOrchestrator {
     const currentSession = this.sessions.get()
     if (!currentSession) {
       return
+    }
+
+    this.cancelledSessionIds.add(currentSession.id)
+    if (this.activeInsertionSession?.sessionId === currentSession.id) {
+      this.activeInsertionSession.insertion.cancel()
+      this.activeInsertionSession = null
     }
 
     await this.telemetry.metric('dictation-cancelled', { id: currentSession.id })
@@ -152,7 +181,7 @@ export class DictationSessionOrchestrator {
     const currentSession = this.sessions.get()
     if (
       !currentSession ||
-      currentSession.status !== 'listening' ||
+      !['listening', 'processing'].includes(currentSession.status) ||
       currentSession.activationMode !== mode ||
       this.submittingSessionId === currentSession.id
     ) {
@@ -160,6 +189,7 @@ export class DictationSessionOrchestrator {
     }
 
     this.submittingSessionId = currentSession.id
+    this.cancelledSessionIds.delete(currentSession.id)
 
     if (!payload.speechDetected) {
       this.submittingSessionId = null
@@ -191,6 +221,10 @@ export class DictationSessionOrchestrator {
       const insertion = this.insertionEngine.createProgressiveSession(
         this.store.getSettings().insertionStreamingMode,
       )
+      this.activeInsertionSession = {
+        sessionId: currentSession.id,
+        insertion,
+      }
       let partialText = ''
 
       const response = await this.llm.stream(
@@ -202,6 +236,10 @@ export class DictationSessionOrchestrator {
           modelId: this.store.getSettings().modelId,
         },
         async (delta) => {
+          if (this.cancelledSessionIds.has(currentSession.id)) {
+            return
+          }
+
           partialText += delta
           const activeSession = this.sessions.get()
           if (activeSession?.id === currentSession.id) {
@@ -214,6 +252,10 @@ export class DictationSessionOrchestrator {
           await insertion.append(delta)
         },
       )
+
+      if (this.cancelledSessionIds.has(currentSession.id)) {
+        return
+      }
 
       if (!response.text.trim()) {
         await insertion.finalize('')
@@ -234,14 +276,18 @@ export class DictationSessionOrchestrator {
         finalText: response.text,
       }
 
-      this.sessions.set(completedSession)
       await this.history.appendCompletedSession(completedSession, response, payload)
+      this.sessions.set(completedSession)
       await this.telemetry.metric('dictation-completed', {
         id: completedSession.id,
         latencyMs: response.latencyMs,
         finishReason: response.finishReason ?? 'unknown',
       })
     } catch (error) {
+      if (this.cancelledSessionIds.has(currentSession.id)) {
+        return
+      }
+
       const message = error instanceof Error ? error.message : 'Unknown dictation error'
       const lastText = this.sessions.get()?.partialText ?? ''
 
@@ -264,6 +310,10 @@ export class DictationSessionOrchestrator {
         message,
       })
     } finally {
+      if (this.activeInsertionSession?.sessionId === currentSession.id) {
+        this.activeInsertionSession = null
+      }
+      this.cancelledSessionIds.delete(currentSession.id)
       if (this.submittingSessionId === currentSession.id) {
         this.submittingSessionId = null
       }

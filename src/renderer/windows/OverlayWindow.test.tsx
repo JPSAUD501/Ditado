@@ -17,8 +17,6 @@ const noticeSession: DictationSession = {
     appName: 'Ditado',
     windowTitle: null,
     selectedText: '',
-    textBefore: '',
-    textAfter: '',
     permissionsGranted: false,
     confidence: 'low',
     capturedAt: new Date().toISOString(),
@@ -26,9 +24,9 @@ const noticeSession: DictationSession = {
   partialText: '',
   finalText: '',
   insertionPlan: {
-    strategy: 'clipboard-fallback',
+    strategy: 'insert-at-cursor',
     targetApp: 'Ditado',
-    capability: 'clipboard-only',
+    capability: 'clipboard',
   },
   errorMessage: null,
   noticeMessage: 'Segure para ditar. Toggle: Shift+Alt',
@@ -43,83 +41,55 @@ const toggleSession: DictationSession = {
   targetApp: 'VS Code',
 }
 
-describe('OverlayWindow', () => {
-  it('renders nothing while there is no active dictation session', async () => {
-    window.ditado = {
-      getOverlayState: vi.fn(async () => ({
-        session: null,
+const installOverlayApi = (session: DictationSession | null): void => {
+  window.ditado = {
+    getOverlayState: vi.fn(async () => ({
+      session,
+      settings: defaultSettings,
+      permissions: defaultPermissionState,
+    })),
+    getDashboardState: vi.fn(),
+    subscribeOverlayState: vi.fn((listener) => {
+      listener({
+        session,
         settings: defaultSettings,
         permissions: defaultPermissionState,
-      })),
-      getDashboardState: vi.fn(),
-      subscribeOverlayState: vi.fn((listener) => {
-        listener({
-          session: null,
-          settings: defaultSettings,
-          permissions: defaultPermissionState,
-        })
-        return () => undefined
-      }),
-      subscribeDashboardState: vi.fn(() => () => undefined),
-      startPushToTalk: vi.fn(async () => undefined),
-      stopPushToTalk: vi.fn(async () => undefined),
-      toggleDictation: vi.fn(async () => undefined),
-      cancelDictation: vi.fn(async () => undefined),
-      updateSettings: vi.fn(async () => defaultSettings),
-      setApiKey: vi.fn(async () => defaultSettings),
-      setHotkeyCaptureActive: vi.fn(async () => undefined),
-      listMicrophones: vi.fn(async () => []),
-      requestMicrophoneAccess: vi.fn(async () => defaultPermissionState),
-      getPermissions: vi.fn(async () => defaultPermissionState),
-      openDashboardTab: vi.fn(async () => undefined),
-      clearHistory: vi.fn(async () => undefined),
-      getHistoryAudio: vi.fn(async () => null),
-      getTelemetryTail: vi.fn(async () => []),
-      checkForUpdates: vi.fn(async () => undefined),
-    }
+      })
+      return () => undefined
+    }),
+    subscribeDashboardState: vi.fn(() => () => undefined),
+    startPushToTalk: vi.fn(async () => undefined),
+    stopPushToTalk: vi.fn(async () => undefined),
+    toggleDictation: vi.fn(async () => undefined),
+    cancelDictation: vi.fn(async () => undefined),
+    updateSettings: vi.fn(async () => defaultSettings),
+    setApiKey: vi.fn(async () => defaultSettings),
+    setHotkeyCaptureActive: vi.fn(async () => undefined),
+    listMicrophones: vi.fn(async () => []),
+    requestMicrophoneAccess: vi.fn(async () => defaultPermissionState),
+    getPermissions: vi.fn(async () => defaultPermissionState),
+    openDashboardTab: vi.fn(async () => undefined),
+    clearHistory: vi.fn(async () => undefined),
+    getHistoryAudio: vi.fn(async () => null),
+    getTelemetryTail: vi.fn(async () => []),
+    checkForUpdates: vi.fn(async () => undefined),
+  }
+}
+
+describe('OverlayWindow', () => {
+  it('renders nothing while there is no active dictation session', async () => {
+    installOverlayApi(null)
 
     const { container } = render(<OverlayWindow />)
 
     await waitFor(() => {
       expect(container).toBeEmptyDOMElement()
     })
-    expect(screen.queryByText(/listening|ready|done|fallback/i)).toBeNull()
+    expect(screen.queryByText(/listening|ready|done|error/i)).toBeNull()
   })
 
   it('renders the short-press hint when the session is in notice state', async () => {
-    window.ditado = {
-      getOverlayState: vi.fn(async () => ({
-        session: noticeSession,
-        settings: defaultSettings,
-        permissions: defaultPermissionState,
-      })),
-      getDashboardState: vi.fn(),
-      subscribeOverlayState: vi.fn((listener) => {
-        listener({
-          session: noticeSession,
-          settings: defaultSettings,
-          permissions: defaultPermissionState,
-        })
-        return () => undefined
-      }),
-      subscribeDashboardState: vi.fn(() => () => undefined),
-      startPushToTalk: vi.fn(async () => undefined),
-      stopPushToTalk: vi.fn(async () => undefined),
-      toggleDictation: vi.fn(async () => undefined),
-      cancelDictation: vi.fn(async () => undefined),
-      updateSettings: vi.fn(async () => defaultSettings),
-      setApiKey: vi.fn(async () => defaultSettings),
-      setHotkeyCaptureActive: vi.fn(async () => undefined),
-      listMicrophones: vi.fn(async () => []),
-      requestMicrophoneAccess: vi.fn(async () => defaultPermissionState),
-      getPermissions: vi.fn(async () => defaultPermissionState),
-      openDashboardTab: vi.fn(async () => undefined),
-      clearHistory: vi.fn(async () => undefined),
-      getHistoryAudio: vi.fn(async () => null),
-      getTelemetryTail: vi.fn(async () => []),
-      checkForUpdates: vi.fn(async () => undefined),
-    }
-
+    installOverlayApi(noticeSession)
     render(<OverlayWindow />)
 
     expect(await screen.findByText(/toggle: shift\+alt/i)).toBeInTheDocument()
@@ -128,39 +98,7 @@ describe('OverlayWindow', () => {
   })
 
   it('shows a distinct mode label for toggle dictation', async () => {
-    window.ditado = {
-      getOverlayState: vi.fn(async () => ({
-        session: toggleSession,
-        settings: defaultSettings,
-        permissions: defaultPermissionState,
-      })),
-      getDashboardState: vi.fn(),
-      subscribeOverlayState: vi.fn((listener) => {
-        listener({
-          session: toggleSession,
-          settings: defaultSettings,
-          permissions: defaultPermissionState,
-        })
-        return () => undefined
-      }),
-      subscribeDashboardState: vi.fn(() => () => undefined),
-      startPushToTalk: vi.fn(async () => undefined),
-      stopPushToTalk: vi.fn(async () => undefined),
-      toggleDictation: vi.fn(async () => undefined),
-      cancelDictation: vi.fn(async () => undefined),
-      updateSettings: vi.fn(async () => defaultSettings),
-      setApiKey: vi.fn(async () => defaultSettings),
-      setHotkeyCaptureActive: vi.fn(async () => undefined),
-      listMicrophones: vi.fn(async () => []),
-      requestMicrophoneAccess: vi.fn(async () => defaultPermissionState),
-      getPermissions: vi.fn(async () => defaultPermissionState),
-      openDashboardTab: vi.fn(async () => undefined),
-      clearHistory: vi.fn(async () => undefined),
-      getHistoryAudio: vi.fn(async () => null),
-      getTelemetryTail: vi.fn(async () => []),
-      checkForUpdates: vi.fn(async () => undefined),
-    }
-
+    installOverlayApi(toggleSession)
     render(<OverlayWindow />)
 
     expect(await screen.findByText('Toggle')).toBeInTheDocument()

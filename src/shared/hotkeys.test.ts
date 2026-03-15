@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { hotkeyFromKeyboardEvent, isSupportedHotkey, normalizeHotkey } from './hotkeys.js'
 
 describe('hotkey helpers', () => {
-  it('normalizes legacy shortcuts', () => {
+  it('normalizes mixed shortcut spellings', () => {
     expect(normalizeHotkey('Alt+Space')).toBe('Alt+Space')
     expect(normalizeHotkey('commandorcontrol+shift+space')).toMatch(/^(Ctrl|Meta)\+Shift\+Space$/)
   })

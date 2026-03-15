@@ -17,6 +17,7 @@ vi.mock('electron', () => ({
 
 vi.mock('uiohook-napi', () => ({
   UiohookKey: {
+    Escape: 1,
     Alt: 56,
     AltRight: 3640,
     Ctrl: 29,
@@ -230,5 +231,34 @@ describe('registerShortcuts', () => {
     emit('keydown', { keycode: 32, ctrlKey: true, altKey: false, shiftKey: false, metaKey: false })
 
     expect(orchestrator.toggleCapture).toHaveBeenCalledTimes(1)
+  })
+
+  it('cancels the active session when Escape is pressed', async () => {
+    const { registerShortcuts } = await import('./registerShortcuts.js')
+    const orchestrator = {
+      startCapture: vi.fn(async () => undefined),
+      toggleCapture: vi.fn(async () => undefined),
+      requestStop: vi.fn(),
+      showShortPressHint: vi.fn(async () => undefined),
+      cancel: vi.fn(async () => undefined),
+      getSession: vi.fn(() => ({
+        status: 'streaming',
+        activationMode: 'toggle',
+      })),
+    }
+    const store = {
+      getSettings: () => ({
+        pushToTalkHotkey: 'Ctrl+Alt',
+        toggleHotkey: 'Shift+Alt',
+      }),
+    }
+
+    registerShortcuts(store as never, orchestrator as never, () => false)
+
+    emit('keydown', { keycode: 1, ctrlKey: false, altKey: false, shiftKey: false, metaKey: false })
+
+    expect(orchestrator.cancel).toHaveBeenCalledTimes(1)
+    expect(orchestrator.toggleCapture).not.toHaveBeenCalled()
+    expect(orchestrator.requestStop).not.toHaveBeenCalled()
   })
 })

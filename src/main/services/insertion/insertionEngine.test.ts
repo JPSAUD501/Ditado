@@ -30,7 +30,7 @@ describe('InsertionEngine', () => {
     const session = engine.createProgressiveSession('chunks')
 
     await session.append('hello world from ditado')
-    await session.finalize()
+    await session.finalize('hello world from ditado')
 
     const pastedValues = writeText.mock.calls
       .map((call) => call[0])
@@ -46,7 +46,7 @@ describe('InsertionEngine', () => {
     const session = engine.createProgressiveSession('letter-by-letter')
 
     await session.append('abc')
-    await session.finalize()
+    await session.finalize('abc')
 
     const pastedValues = writeText.mock.calls
       .map((call) => call[0])
@@ -65,7 +65,7 @@ describe('InsertionEngine', () => {
 
     expect(writeText.mock.calls.map((call) => call[0]).filter(Boolean)).toEqual([])
 
-    await session.finalize()
+    await session.finalize('hello world')
 
     const pastedValues = writeText.mock.calls
       .map((call) => call[0])

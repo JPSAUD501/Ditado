@@ -1,5 +1,12 @@
-import { BrowserWindow, ipcMain } from 'electron'
+import { ipcMain } from 'electron'
 
+import {
+  apiKeyInputSchema,
+  dashboardTabSchema,
+  dictationAudioPayloadSchema,
+  historyAudioRequestSchema,
+  settingsPatchSchema,
+} from '../../shared/contracts.js'
 import { ipcChannels } from '../../shared/ipc.js'
 import type { DashboardTab } from '../../shared/contracts.js'
 import type { PermissionService } from '../services/permissions/permissionService.js'
@@ -16,6 +23,7 @@ interface RegisterIpcOptions {
   updates: UpdateService
   setHotkeyCaptureActive: (active: boolean) => void
   onSettingsChanged: () => Promise<void>
+  broadcastState: () => Promise<void>
   openDashboardTab: (tab: DashboardTab) => void
 }
 
@@ -27,6 +35,7 @@ export const registerIpc = ({
   updates,
   setHotkeyCaptureActive,
   onSettingsChanged,
+  broadcastState,
   openDashboardTab,
 }: RegisterIpcOptions): void => {
   ipcMain.handle(ipcChannels.overlay.getState, async () => ({
@@ -46,11 +55,11 @@ export const registerIpc = ({
 
   ipcMain.handle(ipcChannels.dictation.startPushToTalk, () => orchestrator.startCapture('push-to-talk'))
   ipcMain.handle(ipcChannels.dictation.stopPushToTalk, (_event, payload) =>
-    orchestrator.submitAudio('push-to-talk', payload),
+    orchestrator.submitAudio('push-to-talk', dictationAudioPayloadSchema.parse(payload)),
   )
   ipcMain.handle(ipcChannels.dictation.toggle, (_event, payload) => {
     if (payload) {
-      return orchestrator.submitAudio('toggle', payload)
+      return orchestrator.submitAudio('toggle', dictationAudioPayloadSchema.parse(payload))
     }
 
     return orchestrator.toggleCapture()
@@ -58,37 +67,36 @@ export const registerIpc = ({
   ipcMain.handle(ipcChannels.dictation.cancel, () => orchestrator.cancel())
 
   ipcMain.handle(ipcChannels.settings.update, async (_event, patch) => {
-    const settings = await store.updateSettings(patch)
+    const settings = await store.updateSettings(settingsPatchSchema.parse(patch))
     await onSettingsChanged()
     return settings
   })
 
   ipcMain.handle(ipcChannels.settings.setApiKey, async (_event, apiKey: string) => {
-    const settings = await store.setApiKey(apiKey)
+    const settings = await store.setApiKey(apiKeyInputSchema.parse(apiKey))
     await onSettingsChanged()
     return settings
   })
+
   ipcMain.handle(ipcChannels.hotkeys.setCaptureMode, (_event, active: boolean) => {
-    setHotkeyCaptureActive(active)
+    setHotkeyCaptureActive(Boolean(active))
   })
 
   ipcMain.handle(ipcChannels.permissions.requestMicrophone, () => permissions.requestMicrophoneAccess())
   ipcMain.handle(ipcChannels.permissions.get, () => permissions.getState())
-  ipcMain.handle(ipcChannels.history.clear, () => store.clearHistory())
-  ipcMain.handle(ipcChannels.history.audio, (_event, entryId: string) => store.getHistoryAudioAsset(entryId))
+  ipcMain.handle(ipcChannels.history.clear, async () => {
+    await store.clearHistory()
+    await broadcastState()
+  })
+  ipcMain.handle(ipcChannels.history.audio, (_event, entryId: string) =>
+    store.getHistoryAudioAsset(historyAudioRequestSchema.parse(entryId)),
+  )
   ipcMain.handle(ipcChannels.telemetry.tail, () => telemetry.tail())
-  ipcMain.handle(ipcChannels.dashboardNavigation.openTab, (_event, tab: DashboardTab) => openDashboardTab(tab))
+  ipcMain.handle(ipcChannels.dashboardNavigation.openTab, (_event, tab: DashboardTab) =>
+    openDashboardTab(dashboardTabSchema.parse(tab)),
+  )
   ipcMain.handle(ipcChannels.updates.check, async () => {
     await updates.checkForUpdates()
-    for (const window of BrowserWindow.getAllWindows()) {
-      window.webContents.send(ipcChannels.dashboard.state, {
-        session: orchestrator.getSession(),
-        settings: store.getSettings(),
-        history: store.getHistory(),
-        telemetryTail: await telemetry.tail(),
-        permissions: await permissions.getState(),
-        updateState: updates.getState(),
-      })
-    }
+    await broadcastState()
   })
 }

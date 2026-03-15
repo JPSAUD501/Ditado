@@ -4,6 +4,7 @@ import type { DictationStatus } from '@shared/contracts'
 
 const labels: Record<DictationStatus, string> = {
   idle: 'Ready',
+  arming: 'Arming',
   listening: 'Listening',
   processing: 'Thinking',
   streaming: 'Writing',
@@ -17,6 +18,7 @@ export const StatusPill = ({ status }: { status: DictationStatus }) => (
   <span
     className={clsx(
       'inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-medium uppercase tracking-[0.24em]',
+      status === 'arming' && 'border-[rgba(224,198,162,0.22)] bg-[rgba(214,188,147,0.1)] text-[rgba(252,245,234,0.9)]',
       status === 'listening' && 'border-[rgba(224,198,162,0.3)] bg-[rgba(214,188,147,0.14)] text-[rgba(252,245,234,0.96)]',
       status === 'processing' && 'border-[rgba(156,170,128,0.26)] bg-[rgba(156,170,128,0.12)] text-[rgba(237,244,228,0.92)]',
       status === 'streaming' && 'border-[rgba(140,189,132,0.28)] bg-[rgba(140,189,132,0.14)] text-[rgba(237,248,234,0.94)]',

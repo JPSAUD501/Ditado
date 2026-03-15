@@ -30,6 +30,7 @@ const windows: Windows = {
 let isQuitting = false
 let hotkeyCaptureActive = false
 let overlayHideTimer: NodeJS.Timeout | null = null
+let overlayLoaded = false
 const OVERLAY_WIDTH = 280
 const OVERLAY_HEIGHT = 54
 
@@ -64,12 +65,15 @@ const createOverlayWindow = (): BrowserWindow => {
       preload: preloadPath,
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      sandbox: true,
     },
   })
   window.setAlwaysOnTop(true, 'screen-saver')
   window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
   window.setIgnoreMouseEvents(true)
+  window.webContents.on('did-finish-load', () => {
+    overlayLoaded = true
+  })
 
   window.on('close', (event) => {
     if (!isQuitting) {
@@ -95,7 +99,7 @@ const createDashboardWindow = (tab: DashboardTab = 'overview'): BrowserWindow =>
       preload: preloadPath,
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      sandbox: true,
     },
   })
 
@@ -113,6 +117,14 @@ const createDashboardWindow = (tab: DashboardTab = 'overview'): BrowserWindow =>
 const showOverlay = (): void => {
   const overlay = windows.overlay
   if (!overlay) {
+    return
+  }
+
+  if (!overlayLoaded) {
+    overlay.webContents.once('did-finish-load', () => {
+      overlayLoaded = true
+      showOverlay()
+    })
     return
   }
 
@@ -220,6 +232,9 @@ void app.whenReady().then(async () => {
       app.setLoginItemSettings({ openAtLogin: store.getSettings().launchOnLogin })
       updates.syncFromSettings()
       refreshShortcuts()
+      await broadcastState(store, orchestrator, permissions, telemetry, updates)
+    },
+    broadcastState: async () => {
       await broadcastState(store, orchestrator, permissions, telemetry, updates)
     },
     openDashboardTab: (tab) => showDashboard(tab),

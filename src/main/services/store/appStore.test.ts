@@ -5,41 +5,39 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 let userDataDir = ''
 
-vi.mock('electron', () => ({
-  app: {
-    getPath: () => userDataDir,
-  },
-  safeStorage: {
-    isEncryptionAvailable: () => false,
-    encryptString: (value: string) => Buffer.from(value, 'utf8'),
-    decryptString: (value: Buffer) => value.toString('utf8'),
-  },
-}))
+const loadStore = async (
+  safeStorageOverrides: Partial<{
+    isEncryptionAvailable: () => boolean
+    encryptString: (value: string) => Buffer
+    decryptString: (value: Buffer) => string
+  }> = {},
+) => {
+  vi.resetModules()
+  vi.doMock('electron', () => ({
+    app: {
+      getPath: () => userDataDir,
+    },
+    safeStorage: {
+      isEncryptionAvailable: () => true,
+      encryptString: (value: string) => Buffer.from(`enc:${value}`, 'utf8'),
+      decryptString: (value: Buffer) => value.toString('utf8').replace(/^enc:/, ''),
+      ...safeStorageOverrides,
+    },
+  }))
 
-const loadStore = async () => {
   const module = await import('./appStore.js')
   return module.AppStore
 }
 
 beforeEach(async () => {
   userDataDir = await mkdtemp(join(tmpdir(), 'ditado-store-'))
-  vi.resetModules()
 })
 
 describe('AppStore', () => {
-  it('migrates legacy shortcuts during initialization without clobbering the rest of settings', async () => {
-    const settingsFile = join(userDataDir, 'data', 'settings.json')
+  it('starts clean from defaults when the current settings file is invalid', async () => {
+    const settingsFile = join(userDataDir, 'data', 'settings.v2.json')
     await mkdir(join(userDataDir, 'data'), { recursive: true })
-    await writeFile(
-      settingsFile,
-      JSON.stringify({
-        modelId: 'google/gemini-3-flash-preview',
-        sendContextAutomatically: false,
-        pushToTalkHotkey: 'Alt+Space',
-        toggleHotkey: 'CommandOrControl+Shift+Space',
-      }),
-      'utf8',
-    )
+    await writeFile(settingsFile, '{"version":2,"pushToTalkHotkey":', 'utf8')
 
     const AppStore = await loadStore()
     const store = new AppStore()
@@ -47,7 +45,7 @@ describe('AppStore', () => {
 
     expect(store.getSettings().pushToTalkHotkey).toBe('Ctrl+Alt')
     expect(store.getSettings().toggleHotkey).toBe('Shift+Alt')
-    expect(store.getSettings().sendContextAutomatically).toBe(false)
+    expect(store.getSettings().sendContextAutomatically).toBe(true)
   })
 
   it('normalizes hotkeys and persists them through updateSettings', async () => {
@@ -62,9 +60,13 @@ describe('AppStore', () => {
 
     expect(store.getSettings().pushToTalkHotkey).toBe('Ctrl+Alt')
     expect(store.getSettings().toggleHotkey).toBe('Shift+Alt')
+
+    const persisted = JSON.parse(await readFile(join(userDataDir, 'data', 'settings.v2.json'), 'utf8'))
+    expect(persisted.pushToTalkHotkey).toBe('Ctrl+Alt')
+    expect(persisted.toggleHotkey).toBe('Shift+Alt')
   })
 
-  it('persists the API key across store instances and exposes apiKeyPresent on initialize', async () => {
+  it('persists the API key across store instances when secure storage is available', async () => {
     const AppStore = await loadStore()
     const firstStore = new AppStore()
     await firstStore.initialize()
@@ -78,30 +80,20 @@ describe('AppStore', () => {
     expect(secondStore.getSettings().apiKeyPresent).toBe(true)
     expect(await secondStore.getApiKey()).toBe('sk-or-v1-secret')
 
-    const secretFile = join(userDataDir, 'data', 'openrouter.bin')
-    expect((await readFile(secretFile)).toString('utf8')).toBe('sk-or-v1-secret')
+    const secretFile = join(userDataDir, 'data', 'openrouter.secure.bin')
+    expect((await readFile(secretFile)).toString('utf8')).toBe('enc:sk-or-v1-secret')
   })
 
-  it('falls back to plain storage when encryption throws but still persists the API key', async () => {
-    vi.doMock('electron', () => ({
-      app: {
-        getPath: () => userDataDir,
-      },
-      safeStorage: {
-        isEncryptionAvailable: () => true,
-        encryptString: () => {
-          throw new Error('encrypt failed')
-        },
-        decryptString: (value: Buffer) => value.toString('utf8'),
-      },
-    }))
-
-    const AppStore = await loadStore()
+  it('fails closed when secure storage is unavailable', async () => {
+    const AppStore = await loadStore({
+      isEncryptionAvailable: () => false,
+    })
     const store = new AppStore()
     await store.initialize()
 
-    await store.setApiKey('sk-or-v1-fallback')
-    expect(await store.getApiKey()).toBe('sk-or-v1-fallback')
+    await expect(store.setApiKey('sk-or-v1-secret')).rejects.toThrow('Secure local storage is unavailable')
+    expect(await store.getApiKey()).toBeNull()
+    expect(store.getSettings().apiKeyPresent).toBe(false)
   })
 
   it('persists history audio files, deduplicates entries by session id, and removes them on clear', async () => {
