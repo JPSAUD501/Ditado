@@ -13,6 +13,7 @@ export const ipcChannels = {
     toggle: 'dictation:toggle',
     cancel: 'dictation:cancel',
     submitAudio: 'dictation:submitAudio',
+    recorderStarted: 'dictation:recorderStarted',
   },
   settings: {
     update: 'settings:update',

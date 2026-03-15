@@ -26,6 +26,7 @@ const ipcChannels = {
     stopPushToTalk: 'dictation:stopPushToTalk',
     toggle: 'dictation:toggle',
     cancel: 'dictation:cancel',
+    recorderStarted: 'dictation:recorderStarted',
   },
   settings: {
     update: 'settings:update',
@@ -88,6 +89,7 @@ contextBridge.exposeInMainWorld('ditado', {
   stopPushToTalk: (payload: DictationAudioPayload) => ipcRenderer.invoke(ipcChannels.dictation.stopPushToTalk, payload),
   toggleDictation: (payload?: DictationAudioPayload) => ipcRenderer.invoke(ipcChannels.dictation.toggle, payload),
   cancelDictation: () => ipcRenderer.invoke(ipcChannels.dictation.cancel),
+  notifyRecorderStarted: (sessionId: string) => ipcRenderer.invoke(ipcChannels.dictation.recorderStarted, sessionId),
   updateSettings: (patch: Partial<Settings>) => ipcRenderer.invoke(ipcChannels.settings.update, patch),
   setApiKey: (apiKey: string) => ipcRenderer.invoke(ipcChannels.settings.setApiKey, apiKey),
   setHotkeyCaptureActive: (active: boolean) => ipcRenderer.invoke(ipcChannels.hotkeys.setCaptureMode, active),

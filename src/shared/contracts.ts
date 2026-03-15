@@ -212,3 +212,4 @@ export type DictationAudioPayload = z.infer<typeof dictationAudioPayloadSchema>
 
 export const apiKeyInputSchema = z.string().trim().max(4096)
 export const historyAudioRequestSchema = z.string().min(1)
+export const sessionIdInputSchema = z.string().min(1)

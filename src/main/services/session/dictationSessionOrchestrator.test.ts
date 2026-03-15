@@ -37,7 +37,7 @@ const createPayload = (): DictationAudioPayload => ({
 })
 
 describe('DictationSessionOrchestrator', () => {
-  it('starts listening immediately and updates the target app once preview context arrives', async () => {
+  it('starts armed, updates the target app, and only switches to listening after the recorder confirms start', async () => {
     const sessions: Array<DictationSession | null> = []
     const capture = vi.fn(async () => context)
 
@@ -69,9 +69,17 @@ describe('DictationSessionOrchestrator', () => {
     orchestrator.subscribe((session: DictationSession | null) => sessions.push(session))
     await orchestrator.startCapture('toggle')
 
-    expect(sessions.at(-1)?.status).toBe('listening')
+    expect(sessions.at(-1)?.status).toBe('arming')
     expect(capture).toHaveBeenCalledWith(false, false)
     expect(sessions.at(-1)?.targetApp).toBe('VS Code')
+
+    const sessionId = orchestrator.getSession()?.id
+    if (!sessionId) {
+      throw new Error('Expected session id')
+    }
+    orchestrator.markRecorderStarted(sessionId)
+
+    expect(orchestrator.getSession()?.status).toBe('listening')
   })
 
   it('captures context once, streams text, and stores history', async () => {
@@ -124,6 +132,11 @@ describe('DictationSessionOrchestrator', () => {
     )
 
     await orchestrator.startCapture('toggle')
+    const sessionId = orchestrator.getSession()?.id
+    if (!sessionId) {
+      throw new Error('Expected session id')
+    }
+    orchestrator.markRecorderStarted(sessionId)
     await orchestrator.submitAudio('toggle', createPayload())
 
     expect(capture).toHaveBeenCalledTimes(2)
@@ -188,6 +201,11 @@ describe('DictationSessionOrchestrator', () => {
     })
 
     await orchestrator.startCapture('toggle')
+    const sessionId = orchestrator.getSession()?.id
+    if (!sessionId) {
+      throw new Error('Expected session id')
+    }
+    orchestrator.markRecorderStarted(sessionId)
     await orchestrator.submitAudio('toggle', createPayload())
 
     expect(appendHistory).toHaveBeenCalledTimes(1)
@@ -233,6 +251,11 @@ describe('DictationSessionOrchestrator', () => {
     )
 
     await orchestrator.startCapture('toggle')
+    const sessionId = orchestrator.getSession()?.id
+    if (!sessionId) {
+      throw new Error('Expected session id')
+    }
+    orchestrator.markRecorderStarted(sessionId)
 
     const firstSubmit = orchestrator.submitAudio('toggle', createPayload())
     const secondSubmit = orchestrator.submitAudio('toggle', createPayload())
@@ -276,6 +299,11 @@ describe('DictationSessionOrchestrator', () => {
     )
 
     await orchestrator.startCapture('toggle')
+    const sessionId = orchestrator.getSession()?.id
+    if (!sessionId) {
+      throw new Error('Expected session id')
+    }
+    orchestrator.markRecorderStarted(sessionId)
     await orchestrator.submitAudio('toggle', {
       ...createPayload(),
       speechDetected: false,
@@ -354,6 +382,11 @@ describe('DictationSessionOrchestrator', () => {
     )
 
     await orchestrator.startCapture('push-to-talk')
+    const sessionId = orchestrator.getSession()?.id
+    if (!sessionId) {
+      throw new Error('Expected session id')
+    }
+    orchestrator.markRecorderStarted(sessionId)
     orchestrator.requestStop('push-to-talk')
 
     expect(orchestrator.getSession()?.status).toBe('processing')

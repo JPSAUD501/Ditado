@@ -74,6 +74,7 @@ beforeEach(() => {
     stopPushToTalk: vi.fn(async () => undefined),
     toggleDictation: vi.fn(async () => undefined),
     cancelDictation: vi.fn(async () => undefined),
+    notifyRecorderStarted: vi.fn(async () => undefined),
     updateSettings: vi.fn(),
     setApiKey: vi.fn(),
     setHotkeyCaptureActive: vi.fn(),
@@ -98,6 +99,7 @@ describe('useDictationRecorder', () => {
       await Promise.resolve()
     })
     expect(recorderState.start).toHaveBeenCalledTimes(1)
+    expect(window.ditado.notifyRecorderStarted).toHaveBeenCalledWith('session-1')
 
     await act(async () => {
       vi.advanceTimersByTime(1_000)

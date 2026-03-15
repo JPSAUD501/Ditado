@@ -21,6 +21,7 @@ interface DitadoDesktopApi {
   stopPushToTalk: (payload: DictationAudioPayload) => Promise<void>
   toggleDictation: (payload?: DictationAudioPayload) => Promise<void>
   cancelDictation: () => Promise<void>
+  notifyRecorderStarted: (sessionId: string) => Promise<void>
   updateSettings: (patch: Partial<Settings>) => Promise<Settings>
   setApiKey: (apiKey: string) => Promise<Settings>
   setHotkeyCaptureActive: (active: boolean) => Promise<void>

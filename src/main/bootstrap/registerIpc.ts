@@ -5,6 +5,7 @@ import {
   dashboardTabSchema,
   dictationAudioPayloadSchema,
   historyAudioRequestSchema,
+  sessionIdInputSchema,
   settingsPatchSchema,
 } from '../../shared/contracts.js'
 import { ipcChannels } from '../../shared/ipc.js'
@@ -65,6 +66,9 @@ export const registerIpc = ({
     return orchestrator.toggleCapture()
   })
   ipcMain.handle(ipcChannels.dictation.cancel, () => orchestrator.cancel())
+  ipcMain.handle(ipcChannels.dictation.recorderStarted, (_event, sessionId: string) =>
+    orchestrator.markRecorderStarted(sessionIdInputSchema.parse(sessionId)),
+  )
 
   ipcMain.handle(ipcChannels.settings.update, async (_event, patch) => {
     const settings = await store.updateSettings(settingsPatchSchema.parse(patch))

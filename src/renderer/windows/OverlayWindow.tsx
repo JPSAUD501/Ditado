@@ -4,7 +4,7 @@ import { useOverlayBridge } from '@renderer/hooks/useDitadoBridge'
 
 const statusCopy = {
   idle: 'Ready',
-  arming: 'Listening',
+  arming: 'Ready',
   listening: 'Listening',
   processing: 'Sending',
   streaming: 'Writing',

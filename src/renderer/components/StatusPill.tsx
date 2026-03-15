@@ -4,7 +4,7 @@ import type { DictationStatus } from '@shared/contracts'
 
 const labels: Record<DictationStatus, string> = {
   idle: 'Ready',
-  arming: 'Arming',
+  arming: 'Ready',
   listening: 'Listening',
   processing: 'Thinking',
   streaming: 'Writing',

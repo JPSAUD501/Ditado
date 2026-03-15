@@ -155,6 +155,7 @@ export const useDictationRecorder = (
             return
           }
 
+          void window.ditado.notifyRecorderStarted(session.id)
           setIsRecording(true)
           clearMaxDurationTimer()
           maxDurationTimer.current = window.setTimeout(() => {

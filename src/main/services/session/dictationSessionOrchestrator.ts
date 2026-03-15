@@ -48,6 +48,18 @@ export class DictationSessionOrchestrator {
     const sessionId = createId('session')
     const startedAt = new Date().toISOString()
 
+    this.sessions.set({
+      ...createIdleSession(),
+      id: sessionId,
+      activationMode: mode,
+      status: 'arming',
+      captureIntent: 'start',
+      startedAt,
+      targetApp: 'Foreground app',
+      noticeMessage: null,
+      errorMessage: null,
+    })
+
     const permissions = await this.permissions.getState()
     if (permissions.microphone === 'denied' || permissions.microphone === 'restricted') {
       this.sessions.set({
@@ -65,24 +77,13 @@ export class DictationSessionOrchestrator {
       return
     }
 
-    this.sessions.set({
-      ...createIdleSession(),
-      id: sessionId,
-      activationMode: mode,
-      status: 'listening',
-      captureIntent: 'start',
-      startedAt,
-      targetApp: 'Foreground app',
-      noticeMessage: null,
-      errorMessage: null,
-    })
     await this.telemetry.metric('dictation-started', { mode })
 
     void this.contextService
       .capture(false, false)
       .then((previewContext) => {
         const activeSession = this.sessions.get()
-        if (!activeSession || activeSession.id !== sessionId || activeSession.status !== 'listening') {
+        if (!activeSession || activeSession.id !== sessionId || !['arming', 'listening'].includes(activeSession.status)) {
           return
         }
 
@@ -95,6 +96,18 @@ export class DictationSessionOrchestrator {
       .catch(() => {
         // Context preview is best-effort and should never block capture start.
       })
+  }
+
+  markRecorderStarted(sessionId: string): void {
+    const currentSession = this.sessions.get()
+    if (!currentSession || currentSession.id !== sessionId || currentSession.status !== 'arming') {
+      return
+    }
+
+    this.sessions.set({
+      ...currentSession,
+      status: 'listening',
+    })
   }
 
   async toggleCapture(): Promise<void> {
@@ -122,7 +135,7 @@ export class DictationSessionOrchestrator {
     const currentSession = this.sessions.get()
     if (
       !currentSession ||
-      currentSession.status !== 'listening' ||
+      !['arming', 'listening'].includes(currentSession.status) ||
       currentSession.activationMode !== mode ||
       currentSession.captureIntent === 'stop'
     ) {

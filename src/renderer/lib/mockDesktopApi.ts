@@ -78,6 +78,7 @@ export const ensureMockDesktopApi = (): void => {
     stopPushToTalk: noopDictation,
     toggleDictation: noopDictation,
     cancelDictation: async () => undefined,
+    notifyRecorderStarted: async () => undefined,
     updateSettings,
     setApiKey: async () => {
       dashboardState.settings.apiKeyPresent = true
