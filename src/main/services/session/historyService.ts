@@ -29,6 +29,8 @@ export class HistoryService {
       usedContext: Boolean(session.context.selectedText),
       latencyMs: response.latencyMs,
       insertionStrategy: session.insertionPlan.strategy,
+      requestedMode: execution.requestedMode,
+      effectiveMode: execution.effectiveMode,
       insertionMethod: execution.insertionMethod,
       fallbackUsed: execution.fallbackUsed,
     })
@@ -57,7 +59,9 @@ export class HistoryService {
       usedContext: Boolean(session.context.selectedText),
       latencyMs: 0,
       insertionStrategy: session.insertionPlan.strategy,
-      insertionMethod: execution?.insertionMethod ?? 'clipboard-protected',
+      requestedMode: execution?.requestedMode ?? this.store.getSettings().insertionStreamingMode,
+      effectiveMode: execution?.effectiveMode ?? this.store.getSettings().insertionStreamingMode,
+      insertionMethod: execution?.insertionMethod ?? 'clipboard-all-at-once',
       fallbackUsed: execution?.fallbackUsed ?? false,
     })
   }

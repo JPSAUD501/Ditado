@@ -23,7 +23,6 @@ export const insertionStrategySchema = z.enum(['replace-selection', 'insert-at-c
 export type InsertionStrategy = z.infer<typeof insertionStrategySchema>
 
 export const insertionStreamingModeSchema = z.enum([
-  'chunks',
   'letter-by-letter',
   'all-at-once',
 ])
@@ -31,9 +30,8 @@ export const insertionStreamingModeSchema = z.enum([
 export type InsertionStreamingMode = z.infer<typeof insertionStreamingModeSchema>
 
 export const insertionMethodSchema = z.enum([
-  'sendinput-unicode',
-  'clipboard-protected',
-  'clipboard-normal',
+  'enigo-letter',
+  'clipboard-all-at-once',
 ])
 
 export type InsertionMethod = z.infer<typeof insertionMethodSchema>
@@ -52,7 +50,7 @@ export type ContextSnapshot = z.infer<typeof contextSnapshotSchema>
 export const insertionPlanSchema = z.object({
   strategy: insertionStrategySchema,
   targetApp: z.string(),
-  capability: z.literal('clipboard'),
+  capability: z.enum(['automation', 'clipboard']),
 })
 
 export type InsertionPlan = z.infer<typeof insertionPlanSchema>
@@ -93,7 +91,9 @@ export const historyEntrySchema = z.object({
   usedContext: z.boolean(),
   latencyMs: z.number().nonnegative().default(0),
   insertionStrategy: insertionStrategySchema,
-  insertionMethod: insertionMethodSchema.default('clipboard-protected'),
+  requestedMode: insertionStreamingModeSchema,
+  effectiveMode: insertionStreamingModeSchema,
+  insertionMethod: insertionMethodSchema.default('clipboard-all-at-once'),
   fallbackUsed: z.boolean().default(false),
 })
 
@@ -118,7 +118,7 @@ export const settingsSchema = z.object({
   telemetryEnabled: z.boolean().default(true),
   autoUpdateEnabled: z.boolean().default(true),
   updateChannel: z.enum(['stable', 'beta']).default('stable'),
-  insertionStreamingMode: insertionStreamingModeSchema.default('chunks'),
+  insertionStreamingMode: insertionStreamingModeSchema.default('letter-by-letter'),
   historyRetentionDays: z.number().int().positive().default(365),
   maxHistoryAudioBytes: z.number().int().positive().default(512 * 1024 * 1024),
   modelId: z.string().default('google/gemini-3-flash-preview'),
@@ -171,6 +171,7 @@ export type HistoryAudioAsset = z.infer<typeof historyAudioAssetSchema>
 
 export const insertionBenchmarkResultSchema = z.object({
   mode: insertionStreamingModeSchema,
+  effectiveMode: insertionStreamingModeSchema,
   targetApp: z.string(),
   graphemeCount: z.number().int().positive(),
   durationMs: z.number().nonnegative(),

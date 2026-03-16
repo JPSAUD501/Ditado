@@ -26,7 +26,7 @@ const noticeSession: DictationSession = {
   insertionPlan: {
     strategy: 'insert-at-cursor',
     targetApp: 'Ditado',
-    capability: 'clipboard',
+    capability: 'automation',
   },
   errorMessage: null,
   noticeMessage: 'Segure para ditar. Toggle: Shift+Alt',
@@ -66,14 +66,15 @@ const installOverlayApi = (session: DictationSession | null): void => {
     notifyRecorderFailed: vi.fn(async () => undefined),
     updateSettings: vi.fn(async () => defaultSettings),
     setApiKey: vi.fn(async () => defaultSettings),
-    benchmarkInsertion: vi.fn(async (mode: 'chunks' | 'letter-by-letter' | 'all-at-once', text: string): Promise<InsertionBenchmarkResult> => ({
+    benchmarkInsertion: vi.fn(async (mode: 'letter-by-letter' | 'all-at-once', text: string): Promise<InsertionBenchmarkResult> => ({
       mode,
+      effectiveMode: mode,
       targetApp: 'VS Code',
       graphemeCount: Array.from(text).length,
       durationMs: 1000,
       charactersPerSecond: Array.from(text).length,
       sampleText: text,
-      insertionMethod: mode === 'letter-by-letter' ? 'sendinput-unicode' : mode === 'all-at-once' ? 'clipboard-normal' : 'clipboard-protected',
+      insertionMethod: mode === 'letter-by-letter' ? 'enigo-letter' : 'clipboard-all-at-once',
       fallbackUsed: false,
     })),
     setHotkeyCaptureActive: vi.fn(async () => undefined),

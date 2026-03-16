@@ -46,12 +46,13 @@ const installDesktopApi = (
 
   const benchmarkInsertion = vi.fn(async (mode: Settings['insertionStreamingMode'], text: string): Promise<InsertionBenchmarkResult> => ({
     mode,
+    effectiveMode: mode,
     targetApp: 'VS Code',
     graphemeCount: Array.from(text).length,
     durationMs: 1000,
     charactersPerSecond: Array.from(text).length,
     sampleText: text,
-    insertionMethod: mode === 'letter-by-letter' ? 'sendinput-unicode' : mode === 'all-at-once' ? 'clipboard-normal' : 'clipboard-protected',
+    insertionMethod: mode === 'letter-by-letter' ? 'enigo-letter' : 'clipboard-all-at-once',
     fallbackUsed: false,
   }))
 
@@ -220,7 +221,9 @@ describe('DashboardWindow', () => {
             usedContext: false,
             latencyMs: 120,
             insertionStrategy: 'insert-at-cursor',
-            insertionMethod: 'clipboard-protected',
+            requestedMode: 'all-at-once',
+            effectiveMode: 'all-at-once',
+            insertionMethod: 'clipboard-all-at-once',
             fallbackUsed: false,
           },
         ],

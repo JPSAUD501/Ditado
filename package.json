@@ -7,17 +7,17 @@
   "main": "dist-electron/main/main/main.js",
   "scripts": {
     "clean": "rimraf dist dist-electron release",
-    "dev": "npm run build:input-worker && concurrently -k -n MAIN,PRELOAD,RENDERER,ELECTRON -c blue,magenta,green,yellow \"npm:dev:main\" \"npm:dev:preload\" \"npm:dev:renderer\" \"npm:dev:electron\"",
+    "dev": "npm run build:native-automation && concurrently -k -n MAIN,PRELOAD,RENDERER,ELECTRON -c blue,magenta,green,yellow \"npm:dev:main\" \"npm:dev:preload\" \"npm:dev:renderer\" \"npm:dev:electron\"",
     "dev:main": "tsc -p tsconfig.main.json --watch --preserveWatchOutput",
     "dev:preload": "tsc -p tsconfig.preload.json --watch --preserveWatchOutput",
     "dev:renderer": "vite",
-    "dev:electron": "wait-on tcp:5173 dist-electron/main/main/main.js dist-electron/preload/preload/preload.cjs dist-electron/helpers/Ditado.InputWorker.exe && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .",
-    "dev:electron:debug-shortcuts": "wait-on tcp:5173 dist-electron/main/main/main.js dist-electron/preload/preload/preload.cjs dist-electron/helpers/Ditado.InputWorker.exe && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 DITADO_DEBUG_SHORTCUTS=1 electron .",
+    "dev:electron": "wait-on tcp:5173 dist-electron/main/main/main.js dist-electron/preload/preload/preload.cjs dist-electron/native/ditado_native_automation.cjs && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .",
+    "dev:electron:debug-shortcuts": "wait-on tcp:5173 dist-electron/main/main/main.js dist-electron/preload/preload/preload.cjs dist-electron/native/ditado_native_automation.cjs && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 DITADO_DEBUG_SHORTCUTS=1 electron .",
     "typecheck": "tsc -b && tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.preload.json --noEmit",
     "build:main": "tsc -p tsconfig.main.json",
     "build:preload": "tsc -p tsconfig.preload.json",
-    "build:input-worker": "node scripts/build-input-worker.mjs",
-    "build": "npm run clean && npm run typecheck && npm run build:main && npm run build:preload && npm run build:input-worker && vite build",
+    "build:native-automation": "node scripts/build-native-automation.mjs",
+    "build": "npm run clean && npm run typecheck && npm run build:main && npm run build:preload && npm run build:native-automation && vite build",
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -34,13 +34,13 @@
     "files": [
       "dist/**/*",
       "dist-electron/**/*",
-      "!dist-electron/helpers/**/*",
+      "!dist-electron/native/**/*",
       "package.json"
     ],
     "extraResources": [
       {
-        "from": "dist-electron/helpers",
-        "to": "helpers"
+        "from": "dist-electron/native",
+        "to": "native"
       }
     ],
     "asar": true

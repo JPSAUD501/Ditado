@@ -126,7 +126,9 @@ describe('AppStore', () => {
       usedContext: true,
       latencyMs: 180,
       insertionStrategy: 'replace-selection',
-      insertionMethod: 'clipboard-protected',
+      requestedMode: 'all-at-once',
+      effectiveMode: 'all-at-once',
+      insertionMethod: 'clipboard-all-at-once',
       fallbackUsed: false,
     })
 
@@ -145,7 +147,9 @@ describe('AppStore', () => {
       usedContext: true,
       latencyMs: 180,
       insertionStrategy: 'replace-selection',
-      insertionMethod: 'clipboard-protected',
+      requestedMode: 'all-at-once',
+      effectiveMode: 'all-at-once',
+      insertionMethod: 'clipboard-all-at-once',
       fallbackUsed: false,
     })
 

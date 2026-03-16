@@ -4,7 +4,7 @@ import { promisify } from 'node:util'
 import { emptyContextSnapshot } from '../../../shared/defaults.js'
 import type { ContextSnapshot } from '../../../shared/contracts.js'
 import { createId, wait } from '../../../shared/utils.js'
-import { ProtectedClipboardUnavailableError, type ClipboardService } from '../clipboard/clipboardService.js'
+import type { ClipboardService } from '../clipboard/clipboardService.js'
 
 const execFileAsync = promisify(execFile)
 
@@ -102,18 +102,7 @@ export class ActiveContextService {
   private async captureSelectedText(): Promise<string> {
     const sentinel = `__ditado_selection_${createId('capture')}__`
     const previousClipboard = await this.clipboardService.readCurrent()
-    let restoreMode: 'normal' | 'protected' = 'protected'
-
-    try {
-      await this.clipboardService.writeProtected(sentinel)
-    } catch (error) {
-      if (!(error instanceof ProtectedClipboardUnavailableError)) {
-        throw error
-      }
-
-      restoreMode = 'normal'
-      await this.clipboardService.writeNormal(sentinel)
-    }
+    await this.clipboardService.writeNormal(sentinel)
 
     try {
       const copied = await runShortcut('copy')
@@ -131,7 +120,7 @@ export class ActiveContextService {
 
       return selection
     } finally {
-      await this.clipboardService.restore(previousClipboard, restoreMode)
+      await this.clipboardService.restore(previousClipboard)
     }
   }
 }

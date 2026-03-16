@@ -12,7 +12,6 @@ import { SessionStore } from './sessionStore.js'
 
 type SessionListener = (session: DictationSession | null) => void
 type ProgressiveInsertionSession = ReturnType<InsertionEngine['createProgressiveSession']>
-type ClipboardWriterSession = ReturnType<InsertionEngine['createWriterSession']>
 
 export class DictationSessionOrchestrator {
   private readonly sessions = new SessionStore()
@@ -21,7 +20,6 @@ export class DictationSessionOrchestrator {
   private activeInsertionSession: { sessionId: string; insertion: ProgressiveInsertionSession } | null = null
   private cancelledSessionIds = new Set<string>()
   private contextCaptureBySessionId = new Map<string, Promise<Awaited<ReturnType<ActiveContextService['capture']>>>>()
-  private writerSessionBySessionId = new Map<string, ClipboardWriterSession>()
 
   constructor(
     private readonly store: AppStore,
@@ -65,15 +63,12 @@ export class DictationSessionOrchestrator {
 
     await this.telemetry.metric('dictation-started', { mode })
 
-    const writerSession = this.insertionEngine.createWriterSession()
-    this.writerSessionBySessionId.set(sessionId, writerSession)
-    void writerSession.warmup().catch(() => {
-      // Warmup is opportunistic. The write path will surface the actual failure if needed.
-    })
-    if (process.platform === 'win32' && this.store.getSettings().insertionStreamingMode === 'letter-by-letter') {
-      void this.insertionEngine.warmupLetterInput().catch(() => {
-        // SendInput warmup is opportunistic; the insertion path will decide whether to fallback.
-      })
+    if (this.store.getSettings().insertionStreamingMode === 'letter-by-letter') {
+      try {
+        this.insertionEngine.warmupLetterInput()
+      } catch {
+        // Warmup is opportunistic; the insertion path will decide whether to fallback.
+      }
     }
 
     const shouldCaptureSelectionImmediately =
@@ -143,7 +138,6 @@ export class DictationSessionOrchestrator {
       await this.telemetry.error('microphone-permission-required', {
         mode: currentSession.activationMode,
       })
-      await this.disposeWriterSession(sessionId)
       return
     }
 
@@ -151,7 +145,6 @@ export class DictationSessionOrchestrator {
       id: currentSession.id,
       message,
     })
-    await this.disposeWriterSession(sessionId)
   }
 
   async toggleCapture(): Promise<void> {
@@ -214,11 +207,9 @@ export class DictationSessionOrchestrator {
       captureIntent: 'none',
       finishedAt: new Date().toISOString(),
     })
-    await this.disposeWriterSession(currentSession.id)
   }
 
   async showShortPressHint(): Promise<void> {
-    const currentSessionId = this.sessions.get()?.id ?? null
     await this.telemetry.metric('dictation-short-press-hint', {
       toggleHotkey: this.store.getSettings().toggleHotkey,
     })
@@ -234,9 +225,6 @@ export class DictationSessionOrchestrator {
       targetApp: 'Ditado',
       noticeMessage: `Segure para ditar. Toggle: ${this.store.getSettings().toggleHotkey}`,
     })
-    if (currentSessionId) {
-      await this.disposeWriterSession(currentSessionId)
-    }
   }
 
   async submitAudio(mode: DictationSession['activationMode'], payload: DictationAudioPayload): Promise<void> {
@@ -263,7 +251,6 @@ export class DictationSessionOrchestrator {
     }
 
     try {
-      const clipboardSnapshot = await this.insertionEngine.captureClipboardSnapshot()
       const contextCapture = this.contextCaptureBySessionId.get(currentSession.id)
       let context = contextCapture ? await contextCapture : currentSession.context
 
@@ -294,8 +281,6 @@ export class DictationSessionOrchestrator {
 
       const insertion = this.insertionEngine.createProgressiveSession(
         this.store.getSettings().insertionStreamingMode,
-        clipboardSnapshot,
-        this.writerSessionBySessionId.get(currentSession.id),
       )
       await insertion.warmup()
       this.activeInsertionSession = {
@@ -410,7 +395,6 @@ export class DictationSessionOrchestrator {
       if (this.activeInsertionSession?.sessionId === currentSession.id) {
         this.activeInsertionSession = null
       }
-      await this.disposeWriterSession(currentSession.id)
       this.cancelledSessionIds.delete(currentSession.id)
       if (this.submittingSessionId === currentSession.id) {
         this.submittingSessionId = null
@@ -439,18 +423,5 @@ export class DictationSessionOrchestrator {
       noticeMessage: message,
       errorMessage: null,
     })
-    if (current?.id) {
-      await this.disposeWriterSession(current.id)
-    }
-  }
-
-  private async disposeWriterSession(sessionId: string): Promise<void> {
-    const writerSession = this.writerSessionBySessionId.get(sessionId)
-    if (!writerSession) {
-      return
-    }
-
-    this.writerSessionBySessionId.delete(sessionId)
-    await writerSession.dispose().catch(() => undefined)
   }
 }

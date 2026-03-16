@@ -16,7 +16,7 @@ export const defaultSettings: Settings = {
   telemetryEnabled: true,
   autoUpdateEnabled: true,
   updateChannel: 'stable',
-  insertionStreamingMode: 'chunks',
+  insertionStreamingMode: 'letter-by-letter',
   historyRetentionDays: 365,
   maxHistoryAudioBytes: 512 * 1024 * 1024,
   modelId: 'google/gemini-3-flash-preview',
@@ -37,7 +37,7 @@ export const emptyContextSnapshot: ContextSnapshot = {
 export const defaultInsertionPlan: InsertionPlan = {
   strategy: 'insert-at-cursor',
   targetApp: 'Unknown App',
-  capability: 'clipboard',
+  capability: 'automation',
 }
 
 export const defaultPermissionState: PermissionState = {

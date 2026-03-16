@@ -138,7 +138,7 @@ export const SettingsPanel = ({
 
             <Field
               label="Insertion reveal"
-              hint="Choose how the final text appears in the target field: in chunks, letter by letter, or all at once."
+              hint="Choose how the final text appears in the target field: letter by letter or all at once."
             >
               <select
                 className="field"
@@ -150,7 +150,6 @@ export const SettingsPanel = ({
                 }
                 aria-label="Insertion reveal"
               >
-                <option value="chunks">Piece by piece (chunks)</option>
                 <option value="letter-by-letter">Letter by letter</option>
                 <option value="all-at-once">All at once</option>
               </select>
@@ -217,7 +216,8 @@ export const SettingsPanel = ({
                     </div>
                     <div className="copy-muted mt-1 text-xs">
                       {benchmarkResult.graphemeCount} chars in {Math.round(benchmarkResult.durationMs)} ms using{' '}
-                      {benchmarkResult.mode} via {benchmarkResult.insertionMethod}.
+                      {benchmarkResult.mode} via {benchmarkResult.insertionMethod}. Effective mode:{' '}
+                      {benchmarkResult.effectiveMode}.
                     </div>
                     {benchmarkResult.fallbackUsed ? (
                       <div className="copy-muted mt-1 text-xs">Fallback was used during this run.</div>

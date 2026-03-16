@@ -9,9 +9,9 @@ import { registerIpc } from './bootstrap/registerIpc.js'
 import { configureMediaPermissions } from './bootstrap/configureMediaPermissions.js'
 import { registerShortcuts } from './bootstrap/registerShortcuts.js'
 import { registerTray } from './bootstrap/registerTray.js'
+import { AutomationService } from './services/automation/automationService.js'
 import { ClipboardService } from './services/clipboard/clipboardService.js'
 import { ActiveContextService } from './services/context/activeContextService.js'
-import { InputWorkerClient } from './services/input/inputWorkerClient.js'
 import { InsertionEngine } from './services/insertion/insertionEngine.js'
 import { InsertionBenchmarkService } from './services/insertion/insertionBenchmarkService.js'
 import { OpenRouterService } from './services/llm/openRouterService.js'
@@ -201,9 +201,9 @@ void app.whenReady().then(async () => {
   const telemetry = new TelemetryService(store)
   const updates = new UpdateService(store)
   const clipboardService = new ClipboardService()
-  const inputWorker = new InputWorkerClient()
+  const automation = new AutomationService()
   const context = new ActiveContextService(clipboardService)
-  const insertion = new InsertionEngine(clipboardService, inputWorker)
+  const insertion = new InsertionEngine(clipboardService, automation)
   const benchmark = new InsertionBenchmarkService(insertion, context)
   const llm = new OpenRouterService(store)
   const orchestrator = new DictationSessionOrchestrator(store, context, insertion, llm, telemetry, permissions)

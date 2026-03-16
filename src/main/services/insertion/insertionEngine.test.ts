@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { AutomationEnvironment } from '../automation/automationService.js'
 
 const runShortcut = vi.fn(async () => true)
 
@@ -6,32 +7,32 @@ vi.mock('../context/activeContextService.js', () => ({
   runShortcut,
 }))
 
-const setPlatform = (platform: NodeJS.Platform): void => {
-  Object.defineProperty(process, 'platform', {
-    value: platform,
-    configurable: true,
-  })
-}
-
-const createWriterSession = () => ({
-  warmup: vi.fn(async () => undefined),
-  writeProtected: vi.fn(async () => undefined),
-  dispose: vi.fn(async () => undefined),
-})
-
 const createClipboard = () => ({
   readCurrent: vi.fn(async () => ({ text: 'previous clipboard' })),
-  writeProtected: vi.fn(async () => undefined),
   writeNormal: vi.fn(async () => undefined),
   restore: vi.fn(async () => undefined),
-  createWriterSession: vi.fn(() => createWriterSession()),
 })
 
-const createInputWorker = () => ({
-  warmup: vi.fn(async () => ({ foregroundWindowHandle: '100' })),
-  sendTextUnicode: vi.fn(async () => undefined),
-  dispose: vi.fn(async () => undefined),
-  ping: vi.fn(async () => undefined),
+const createEnvironment = (
+  overrides: Partial<AutomationEnvironment> = {},
+): AutomationEnvironment => ({
+  platform: process.platform,
+  sessionType: null,
+  supportsLetterByLetter: true,
+  reason: null,
+  ...overrides,
+})
+
+const createAutomation = () => ({
+  warmup: vi.fn(() => ({
+    ...createEnvironment(),
+  })),
+  getEnvironment: vi.fn(() => ({
+    ...createEnvironment(),
+  })),
+  typeGrapheme: vi.fn(() => undefined),
+  typeText: vi.fn(() => undefined),
+  dispose: vi.fn(() => undefined),
 })
 
 describe('InsertionEngine', () => {
@@ -40,122 +41,194 @@ describe('InsertionEngine', () => {
   })
 
   afterEach(() => {
-    setPlatform('win32')
+    vi.useRealTimers()
   })
 
-  it('writes raw model deltas in chunks mode and restores the previous clipboard after success', async () => {
-    setPlatform('win32')
+  const flushAdaptiveTyping = async () => {
+    await vi.advanceTimersByTimeAsync(5_000)
+  }
+
+  it('buffers incoming chunks instead of draining them synchronously on append', async () => {
+    vi.useFakeTimers()
     const clipboard = createClipboard()
-    const inputWorker = createInputWorker()
-    const writerSession = createWriterSession()
+    const automation = createAutomation()
 
     const { InsertionEngine } = await import('./insertionEngine.js')
-    const engine = new InsertionEngine(clipboard as never, inputWorker as never)
-    const session = engine.createProgressiveSession('chunks', null, writerSession as never)
-
-    await session.append('hello ')
-    await session.append('world')
-    const execution = await session.finalize('hello world')
-
-    expect(clipboard.writeProtected).toHaveBeenNthCalledWith(1, 'hello ', writerSession)
-    expect(clipboard.writeProtected).toHaveBeenNthCalledWith(2, 'world', writerSession)
-    expect(runShortcut).toHaveBeenCalledTimes(2)
-    expect(clipboard.writeNormal).toHaveBeenCalledWith('hello world')
-    expect(clipboard.restore).toHaveBeenCalledWith({ text: 'previous clipboard' }, 'protected', writerSession)
-    expect(clipboard.restore).toHaveBeenCalledTimes(1)
-    expect(execution).toEqual({
-      insertionMethod: 'clipboard-protected',
-      fallbackUsed: false,
-    })
-    expect(inputWorker.sendTextUnicode).not.toHaveBeenCalled()
-  })
-
-  it('uses SendInput Unicode for letter-by-letter mode on Windows', async () => {
-    setPlatform('win32')
-    const clipboard = createClipboard()
-    const inputWorker = createInputWorker()
-    const writerSession = createWriterSession()
-
-    const { InsertionEngine } = await import('./insertionEngine.js')
-    const engine = new InsertionEngine(clipboard as never, inputWorker as never)
-    const session = engine.createProgressiveSession('letter-by-letter', null, writerSession as never)
+    const engine = new InsertionEngine(clipboard as never, automation as never)
+    const session = engine.createProgressiveSession('letter-by-letter')
 
     await session.warmup()
-    await session.append('A👍🏽B')
-    const execution = await session.finalize('A👍🏽B')
+    await session.append('abc')
 
-    expect(inputWorker.warmup).toHaveBeenCalledTimes(1)
-    expect(inputWorker.sendTextUnicode.mock.calls).toEqual([
-      ['A', '100'],
-      ['👍🏽', '100'],
-      ['B', '100'],
-    ])
-    expect(clipboard.writeProtected).not.toHaveBeenCalled()
-    expect(clipboard.writeNormal).toHaveBeenCalledWith('A👍🏽B')
-    expect(clipboard.restore).toHaveBeenCalledWith({ text: 'previous clipboard' }, 'protected', writerSession)
+    expect(automation.typeGrapheme).not.toHaveBeenCalled()
+
+    const executionPromise = session.finalize('abc')
+    await flushAdaptiveTyping()
+    const execution = await executionPromise
+
+    expect(automation.typeGrapheme.mock.calls).toEqual([['a'], ['b'], ['c']])
+    expect(execution.effectiveMode).toBe('letter-by-letter')
+  })
+
+  it('types one grapheme at a time with automation in letter-by-letter mode', async () => {
+    vi.useFakeTimers()
+    const clipboard = createClipboard()
+    const automation = createAutomation()
+
+    const { InsertionEngine } = await import('./insertionEngine.js')
+    const engine = new InsertionEngine(clipboard as never, automation as never)
+    const session = engine.createProgressiveSession('letter-by-letter')
+
+    await session.warmup()
+    const text = 'A\u{1F44D}\u{1F3FD}B'
+    await session.append(text)
+    const executionPromise = session.finalize(text)
+    await flushAdaptiveTyping()
+    const execution = await executionPromise
+
+    expect(automation.warmup).toHaveBeenCalledTimes(1)
+    expect(automation.typeGrapheme.mock.calls).toEqual([['A'], ['\u{1F44D}\u{1F3FD}'], ['B']])
+    expect(runShortcut).not.toHaveBeenCalled()
+    expect(clipboard.writeNormal).toHaveBeenCalledWith(text)
     expect(execution).toEqual({
-      insertionMethod: 'sendinput-unicode',
+      requestedMode: 'letter-by-letter',
+      effectiveMode: 'letter-by-letter',
+      insertionMethod: 'enigo-letter',
       fallbackUsed: false,
     })
   })
 
-  it('switches to chunked protected clipboard writes when SendInput returns a generic worker error', async () => {
-    setPlatform('win32')
+  it('falls back from letter-by-letter to all-at-once when automation is unsupported', async () => {
+    vi.useFakeTimers()
     const clipboard = createClipboard()
-    const inputWorker = createInputWorker()
-    inputWorker.sendTextUnicode.mockRejectedValueOnce(
-      new (await import('../input/inputWorkerClient.js')).InputWorkerError('send failed', 'send_failed'),
+    const automation = createAutomation()
+    automation.warmup.mockReturnValue(
+      createEnvironment({
+        platform: 'linux',
+        sessionType: 'wayland',
+        supportsLetterByLetter: false,
+        reason: 'wayland_unsupported',
+      }),
     )
-    const writerSession = createWriterSession()
 
     const { InsertionEngine } = await import('./insertionEngine.js')
-    const engine = new InsertionEngine(clipboard as never, inputWorker as never)
-    const session = engine.createProgressiveSession('letter-by-letter', null, writerSession as never)
+    const engine = new InsertionEngine(clipboard as never, automation as never)
+    const session = engine.createProgressiveSession('letter-by-letter')
 
     await session.warmup()
-    await session.append('AB')
-    const execution = await session.finalize('AB')
+    await session.append('hello')
+    const executionPromise = session.finalize('hello')
+    await flushAdaptiveTyping()
+    const execution = await executionPromise
 
-    expect(inputWorker.sendTextUnicode).toHaveBeenCalledTimes(1)
-    expect(clipboard.writeProtected.mock.calls).toEqual([['AB', writerSession]])
+    expect(automation.typeGrapheme).not.toHaveBeenCalled()
+    expect(clipboard.writeNormal).toHaveBeenNthCalledWith(1, 'hello')
+    expect(clipboard.writeNormal).toHaveBeenNthCalledWith(2, 'hello')
     expect(runShortcut).toHaveBeenCalledTimes(1)
     expect(execution).toEqual({
-      insertionMethod: 'clipboard-protected',
+      requestedMode: 'letter-by-letter',
+      effectiveMode: 'all-at-once',
+      insertionMethod: 'clipboard-all-at-once',
       fallbackUsed: true,
     })
   })
 
-  it('fails explicitly when SendInput reports a foreground focus change', async () => {
-    setPlatform('win32')
+  it('falls back to all-at-once when a grapheme write fails', async () => {
+    vi.useFakeTimers()
     const clipboard = createClipboard()
-    const inputWorker = createInputWorker()
-    inputWorker.sendTextUnicode.mockRejectedValueOnce(
-      new (await import('../input/inputWorkerClient.js')).InputWorkerFocusChangedError(),
-    )
-    const writerSession = createWriterSession()
+    const automation = createAutomation()
+    const { AutomationServiceError } = await import('../automation/automationService.js')
+    automation.typeGrapheme.mockImplementationOnce(() => {
+      throw new AutomationServiceError('no focus', 'focus_lost')
+    })
 
     const { InsertionEngine } = await import('./insertionEngine.js')
-    const engine = new InsertionEngine(clipboard as never, inputWorker as never)
-    const session = engine.createProgressiveSession('letter-by-letter', null, writerSession as never)
+    const engine = new InsertionEngine(clipboard as never, automation as never)
+    const session = engine.createProgressiveSession('letter-by-letter')
 
     await session.warmup()
-    await session.append('A')
+    await session.append('AB')
+    const executionPromise = session.finalize('AB')
+    await flushAdaptiveTyping()
+    const execution = await executionPromise
 
-    await expect(session.finalize('A')).rejects.toThrow('Foreground window changed during SendInput.')
-    expect(clipboard.writeProtected).not.toHaveBeenCalled()
+    expect(automation.typeGrapheme).toHaveBeenCalledTimes(1)
+    expect(runShortcut).toHaveBeenCalledTimes(1)
+    expect(clipboard.writeNormal).toHaveBeenNthCalledWith(1, 'AB')
+    expect(clipboard.writeNormal).toHaveBeenNthCalledWith(2, 'AB')
+    expect(execution).toEqual({
+      requestedMode: 'letter-by-letter',
+      effectiveMode: 'all-at-once',
+      insertionMethod: 'clipboard-all-at-once',
+      fallbackUsed: true,
+    })
   })
 
-  it('copies recovery text to the normal clipboard without restoring on failure', async () => {
+  it('replaces line breaks with spaces before inserting text', async () => {
+    vi.useFakeTimers()
     const clipboard = createClipboard()
-    const inputWorker = createInputWorker()
+    const automation = createAutomation()
 
     const { InsertionEngine } = await import('./insertionEngine.js')
-    const engine = new InsertionEngine(clipboard as never, inputWorker as never)
+    const engine = new InsertionEngine(clipboard as never, automation as never)
+    const session = engine.createProgressiveSession('letter-by-letter')
+
+    await session.warmup()
+    await session.append('oi\n')
+    await session.append('mundo')
+    const executionPromise = session.finalize('oi\nmundo')
+    await flushAdaptiveTyping()
+    const execution = await executionPromise
+
+    expect(automation.typeGrapheme.mock.calls).toEqual([
+      ['o'],
+      ['i'],
+      [' '],
+      ['m'],
+      ['u'],
+      ['n'],
+      ['d'],
+      ['o'],
+    ])
+    expect(clipboard.writeNormal).toHaveBeenCalledWith('oi mundo')
+    expect(execution.effectiveMode).toBe('letter-by-letter')
+  })
+
+  it('uses clipboard plus paste for all-at-once mode', async () => {
+    const clipboard = createClipboard()
+    const automation = createAutomation()
+
+    const { InsertionEngine } = await import('./insertionEngine.js')
+    const engine = new InsertionEngine(clipboard as never, automation as never)
+    const session = engine.createProgressiveSession('all-at-once')
+
+    await session.append('hello\n')
+    await session.append('world')
+    const execution = await session.finalize('hello\nworld')
+
+    expect(automation.typeGrapheme).not.toHaveBeenCalled()
+    expect(clipboard.writeNormal).toHaveBeenNthCalledWith(1, 'hello world')
+    expect(clipboard.writeNormal).toHaveBeenNthCalledWith(2, 'hello world')
+    expect(runShortcut).toHaveBeenCalledTimes(1)
+    expect(execution).toEqual({
+      requestedMode: 'all-at-once',
+      effectiveMode: 'all-at-once',
+      insertionMethod: 'clipboard-all-at-once',
+      fallbackUsed: false,
+    })
+  })
+
+  it('copies recovery text to the clipboard on failure salvage', async () => {
+    const clipboard = createClipboard()
+    const automation = createAutomation()
+
+    const { InsertionEngine } = await import('./insertionEngine.js')
+    const engine = new InsertionEngine(clipboard as never, automation as never)
     const session = engine.createProgressiveSession('all-at-once')
 
     await session.recoverToClipboard('failed insertion text')
 
     expect(clipboard.writeNormal).toHaveBeenCalledWith('failed insertion text')
-    expect(clipboard.restore).not.toHaveBeenCalled()
+    expect(runShortcut).not.toHaveBeenCalled()
   })
 })

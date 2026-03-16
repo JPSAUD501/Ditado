@@ -32,30 +32,6 @@ describe('ActiveContextService', () => {
         .fn()
         .mockResolvedValueOnce({ text: 'previous clipboard' })
         .mockResolvedValueOnce({ text: 'selected text' }),
-      writeProtected: vi.fn(async () => undefined),
-      writeNormal: vi.fn(async () => undefined),
-      restore: vi.fn(async () => undefined),
-    }
-
-    const { ActiveContextService } = await import('./activeContextService.js')
-    const service = new ActiveContextService(clipboard as never)
-    const context = await service.capture(true, true)
-
-    expect(context.selectedText).toBe('selected text')
-    expect(clipboard.writeProtected).toHaveBeenCalled()
-    expect(clipboard.restore).toHaveBeenCalledWith({ text: 'previous clipboard' }, 'protected')
-  })
-
-  it('falls back to normal sentinel restore when protected clipboard is unavailable', async () => {
-    const clipboard = {
-      readCurrent: vi
-        .fn()
-        .mockResolvedValueOnce({ text: 'previous clipboard' })
-        .mockResolvedValueOnce({ text: 'selected text' }),
-      writeProtected: vi.fn(async () => {
-        const { ProtectedClipboardUnavailableError } = await import('../clipboard/clipboardService.js')
-        throw new ProtectedClipboardUnavailableError()
-      }),
       writeNormal: vi.fn(async () => undefined),
       restore: vi.fn(async () => undefined),
     }
@@ -66,6 +42,6 @@ describe('ActiveContextService', () => {
 
     expect(context.selectedText).toBe('selected text')
     expect(clipboard.writeNormal).toHaveBeenCalled()
-    expect(clipboard.restore).toHaveBeenCalledWith({ text: 'previous clipboard' }, 'normal')
+    expect(clipboard.restore).toHaveBeenCalledWith({ text: 'previous clipboard' })
   })
 })

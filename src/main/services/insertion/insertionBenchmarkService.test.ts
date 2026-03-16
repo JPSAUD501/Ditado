@@ -3,26 +3,20 @@ import { describe, expect, it, vi } from 'vitest'
 import { InsertionBenchmarkService } from './insertionBenchmarkService.js'
 
 describe('InsertionBenchmarkService', () => {
-  it('measures the current insertion mode using the real insertion session contract', async () => {
+  it('reports requested and effective modes using the progressive insertion session contract', async () => {
     const append = vi.fn(async () => undefined)
     const finalize = vi.fn(async () => ({
-      insertionMethod: 'clipboard-protected' as const,
-      fallbackUsed: false,
+      requestedMode: 'letter-by-letter' as const,
+      effectiveMode: 'all-at-once' as const,
+      insertionMethod: 'clipboard-all-at-once' as const,
+      fallbackUsed: true,
     }))
-    const sessionWarmup = vi.fn(async () => undefined)
     const warmup = vi.fn(async () => undefined)
-    const dispose = vi.fn(async () => undefined)
 
     const service = new InsertionBenchmarkService(
       {
-        captureClipboardSnapshot: vi.fn(async () => ({ text: 'before benchmark' })),
-        createWriterSession: vi.fn(() => ({
-          warmup,
-          writeProtected: vi.fn(async () => undefined),
-          dispose,
-        })),
         createProgressiveSession: vi.fn(() => ({
-          warmup: sessionWarmup,
+          warmup,
           append,
           finalize,
         })),
@@ -40,20 +34,19 @@ describe('InsertionBenchmarkService', () => {
     )
 
     const result = await service.run({
-      mode: 'chunks',
+      mode: 'letter-by-letter',
       text: 'abcdefghijlmnopqrstuvxz abcdefghijlmnopqrstuvxz',
     })
 
     expect(warmup).toHaveBeenCalledTimes(1)
-    expect(sessionWarmup).toHaveBeenCalledTimes(1)
-    expect(append).toHaveBeenCalled()
-    expect(finalize).toHaveBeenCalledTimes(1)
-    expect(dispose).toHaveBeenCalledTimes(1)
-    expect(result.mode).toBe('chunks')
+    expect(append).toHaveBeenCalledWith('abcdefghijlmnopqrstuvxz abcdefghijlmnopqrstuvxz')
+    expect(finalize).toHaveBeenCalledWith('abcdefghijlmnopqrstuvxz abcdefghijlmnopqrstuvxz')
+    expect(result.mode).toBe('letter-by-letter')
+    expect(result.effectiveMode).toBe('all-at-once')
     expect(result.targetApp).toBe('VS Code')
     expect(result.graphemeCount).toBeGreaterThan(20)
     expect(result.charactersPerSecond).toBeGreaterThan(0)
-    expect(result.insertionMethod).toBe('clipboard-protected')
-    expect(result.fallbackUsed).toBe(false)
+    expect(result.insertionMethod).toBe('clipboard-all-at-once')
+    expect(result.fallbackUsed).toBe(true)
   })
 })

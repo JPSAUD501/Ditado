@@ -4,26 +4,10 @@ import type {
   InsertionPlan,
   InsertionStreamingMode,
 } from '../../../shared/contracts.js'
-import { wait } from '../../../shared/utils.js'
 import { runShortcut } from '../context/activeContextService.js'
-import {
-  type ClipboardService,
-  type ClipboardSnapshot,
-  type ClipboardWriterSession,
-} from '../clipboard/clipboardService.js'
-import {
-  InputWorkerError,
-  InputWorkerFocusChangedError,
-  type InputWorkerClient,
-} from '../input/inputWorkerClient.js'
-
-const WINDOWS_FINAL_CLIPBOARD_SETTLE_MS = 36
-const DEFAULT_PRE_PASTE_SETTLE_MS = 6
-const DEFAULT_POST_PASTE_SETTLE_MS = 10
-const DEFAULT_FINAL_CLIPBOARD_SETTLE_MS = 12
-const LETTER_FALLBACK_CHUNK_SIZE = 24
-
-const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value))
+import type { ClipboardService } from '../clipboard/clipboardService.js'
+import type { AutomationService } from '../automation/automationService.js'
+import { AutomationServiceError } from '../automation/automationService.js'
 
 const segmenter =
   typeof Intl !== 'undefined' && 'Segmenter' in Intl
@@ -42,18 +26,54 @@ const splitGraphemes = (text: string): string[] => {
   return Array.from(text)
 }
 
+const clamp = (value: number, min: number, max: number): number => {
+  return Math.max(min, Math.min(max, value))
+}
+
+const normalizeInsertionText = (text: string): string => {
+  if (!text) {
+    return ''
+  }
+
+  return text.replace(/[ \t\f\v]*\r?\n+[ \t\f\v]*/g, ' ')
+}
+
+const getCharStepMultiplier = (char: string): number => {
+  if (char === ' ' || char === '\t') {
+    return 0.4
+  }
+
+  if (',.;:'.includes(char)) {
+    return 0.68
+  }
+
+  if (')]}!?'.includes(char)) {
+    return 0.82
+  }
+
+  return 1
+}
+
 export interface InsertionExecutionReport {
+  requestedMode: InsertionStreamingMode
+  effectiveMode: InsertionStreamingMode
   insertionMethod: InsertionMethod
   fallbackUsed: boolean
 }
 
-class AdaptiveLetterRevealScheduler {
-  private readonly queue: string[] = []
-  private running = false
-  private streamDone = false
-  private stopped = false
-  private drainedWaiters: Array<{ resolve: () => void; reject: (error: Error) => void }> = []
-  private failure: Error | null = null
+class ProgressiveInsertionSession {
+  private bufferedText = ''
+  private completed = false
+  private aborted = false
+  private fallbackUsed = false
+  private effectiveMode: InsertionStreamingMode
+  private insertionMethod: InsertionMethod
+  private writtenGraphemeCount = 0
+  private pendingChars: string[] = []
+  private flushWaiters: Array<() => void> = []
+  private timer: ReturnType<typeof setTimeout> | null = null
+  private scheduledAt = 0
+  private unexpectedError: Error | null = null
   private lastChunkTs = 0
   private arrivalRateEwma = 0
   private interArrivalMsEwma = 120
@@ -62,203 +82,174 @@ class AdaptiveLetterRevealScheduler {
   private currentIntervalMs = 24
   private nextRevealAt = 0
   private renderRateEwma = 0
+  private lastPumpTs = 0
 
-  constructor(private readonly commit: (text: string) => Promise<void>) {}
-
-  push(text: string): void {
-    const graphemes = splitGraphemes(text)
-    if (!graphemes.length) {
-      return
-    }
-
-    const now = Date.now()
-    this.observeArrival(graphemes.length, now)
-    this.queue.push(...graphemes)
-    this.ensureRunning()
+  constructor(
+    private readonly requestedMode: InsertionStreamingMode,
+    private readonly clipboardService: ClipboardService,
+    private readonly automationService: AutomationService,
+  ) {
+    this.effectiveMode = requestedMode
+    this.insertionMethod =
+      requestedMode === 'letter-by-letter' ? 'enigo-letter' : 'clipboard-all-at-once'
   }
 
-  async finalize(): Promise<void> {
-    if (this.failure) {
-      throw this.failure
-    }
-
-    this.streamDone = true
-    this.ensureRunning()
-
-    if (!this.queue.length && !this.running) {
-      if (this.failure) {
-        throw this.failure
-      }
+  async warmup(): Promise<void> {
+    if (this.requestedMode !== 'letter-by-letter') {
       return
     }
 
-    await new Promise<void>((resolve, reject) => {
-      this.drainedWaiters.push({
-        resolve,
-        reject,
-      })
-    })
+    try {
+      const environment = this.automationService.warmup()
+      if (!environment.supportsLetterByLetter) {
+        this.switchToAllAtOnce()
+      }
+    } catch (error) {
+      if (error instanceof AutomationServiceError) {
+        this.switchToAllAtOnce()
+        return
+      }
+
+      throw error
+    }
+  }
+
+  async append(text: string): Promise<void> {
+    if (this.completed || this.aborted || !text) {
+      return
+    }
+
+    const normalizedText = normalizeInsertionText(text)
+    if (!normalizedText) {
+      return
+    }
+
+    this.bufferedText += normalizedText
+
+    if (this.requestedMode !== 'letter-by-letter' || this.effectiveMode !== 'letter-by-letter') {
+      return
+    }
+
+    const chars = splitGraphemes(normalizedText)
+    if (chars.length === 0) {
+      return
+    }
+
+    const now = performance.now()
+    const wasEmpty = this.pendingChars.length === 0
+    this.observeArrival(chars.length, now)
+    this.pendingChars.push(...chars)
+
+    if (wasEmpty) {
+      const wakeDelay = Math.min(10, this.currentIntervalMs * 0.2)
+      this.nextRevealAt = this.nextRevealAt > 0 ? Math.min(this.nextRevealAt, now + wakeDelay) : now + wakeDelay
+    }
+
+    this.schedulePump(Math.max(0, this.nextRevealAt - now))
+    this.throwUnexpectedErrorIfNeeded()
+  }
+
+  async finalize(finalText: string): Promise<InsertionExecutionReport> {
+    this.completed = true
+    const normalizedFinalText = normalizeInsertionText(finalText)
+    const fullText = normalizedFinalText.trim() ? normalizedFinalText : this.bufferedText
+
+    if (this.effectiveMode === 'letter-by-letter' && this.pendingChars.length > 0) {
+      if (this.nextRevealAt === 0) {
+        this.nextRevealAt = performance.now()
+      }
+
+      this.schedulePump(0)
+    }
+
+    await this.waitForPendingInsertion()
+    this.throwUnexpectedErrorIfNeeded()
+
+    if (this.aborted || !fullText.trim()) {
+      return this.getExecutionReport()
+    }
+
+    if (this.effectiveMode === 'all-at-once') {
+      await this.pasteRemainingText(fullText)
+    }
+
+    await this.clipboardService.writeNormal(fullText)
+    return this.getExecutionReport()
   }
 
   cancel(): void {
-    this.stopped = true
-    this.queue.length = 0
-    this.resolveDrained()
+    this.aborted = true
+    this.completed = true
+    this.clearTimer()
+    this.resolveFlushWaiters()
   }
 
-  private observeArrival(graphemeCount: number, now: number): void {
+  async recoverToClipboard(text: string): Promise<void> {
+    this.completed = true
+    await this.clipboardService.writeNormal(text)
+  }
+
+  getExecutionReport(): InsertionExecutionReport {
+    return {
+      requestedMode: this.requestedMode,
+      effectiveMode: this.effectiveMode,
+      insertionMethod: this.insertionMethod,
+      fallbackUsed: this.fallbackUsed,
+    }
+  }
+
+  private switchToAllAtOnce(): void {
+    this.effectiveMode = 'all-at-once'
+    this.insertionMethod = 'clipboard-all-at-once'
+    this.fallbackUsed = true
+    this.clearTimer()
+    this.resolveFlushWaiters()
+  }
+
+  private async pasteRemainingText(fullText: string): Promise<void> {
+    const fullGraphemes = splitGraphemes(fullText)
+    const remainingText =
+      this.requestedMode === 'letter-by-letter'
+        ? fullGraphemes.slice(this.writtenGraphemeCount).join('')
+        : fullText
+
+    if (!remainingText) {
+      return
+    }
+
+    await this.clipboardService.writeNormal(remainingText)
+    const pasted = await runShortcut('paste')
+    if (!pasted) {
+      throw new Error('Clipboard paste shortcut unavailable')
+    }
+  }
+
+  private observeArrival(chunkLen: number, now: number): void {
     if (this.lastChunkTs > 0) {
       const dtMs = Math.max(now - this.lastChunkTs, 16)
       const dtSec = dtMs / 1000
-      const instantRate = graphemeCount / dtSec
+      const instantRate = chunkLen / dtSec
       const cappedInstantRate =
         this.arrivalRateEwma > 0
-          ? Math.min(instantRate, this.arrivalRateEwma * 2.2 + graphemeCount * 16 + 110)
+          ? Math.min(instantRate, this.arrivalRateEwma * 2.2 + chunkLen * 16 + 110)
           : instantRate
 
       const rateAlpha = dtMs < 120 ? 0.14 : 0.08
       this.arrivalRateEwma += (cappedInstantRate - this.arrivalRateEwma) * rateAlpha
-      const previousGap = this.interArrivalMsEwma
-      this.interArrivalMsEwma += (dtMs - previousGap) * 0.12
+
+      const prevGap = this.interArrivalMsEwma
+      this.interArrivalMsEwma += (dtMs - prevGap) * 0.12
       const deviation = Math.abs(dtMs - this.interArrivalMsEwma)
       this.jitterMsEwma += (deviation - this.jitterMsEwma) * 0.11
-      this.chunkSizeEwma += (graphemeCount - this.chunkSizeEwma) * 0.16
+      this.chunkSizeEwma += (chunkLen - this.chunkSizeEwma) * 0.16
     } else {
-      this.arrivalRateEwma = Math.max(55, graphemeCount / 0.1)
+      this.arrivalRateEwma = Math.max(55, chunkLen / 0.1)
       this.interArrivalMsEwma = 120
       this.jitterMsEwma = 18
-      this.chunkSizeEwma = graphemeCount
+      this.chunkSizeEwma = chunkLen
     }
 
     this.lastChunkTs = now
-    if (this.queue.length === 0) {
-      const wakeDelay = Math.min(10, this.currentIntervalMs * 0.2)
-      this.nextRevealAt = this.nextRevealAt > 0 ? Math.min(this.nextRevealAt, now + wakeDelay) : now + wakeDelay
-    }
-  }
-
-  private ensureRunning(): void {
-    if (this.running || this.stopped) {
-      return
-    }
-
-    this.running = true
-    void this.run()
-  }
-
-  private async run(): Promise<void> {
-    let lastFrameTs = 0
-
-    try {
-      while (!this.stopped) {
-        if (!this.queue.length) {
-          if (this.streamDone) {
-            break
-          }
-
-          this.running = false
-          return
-        }
-
-        const now = Date.now()
-        if (!lastFrameTs) {
-          lastFrameTs = now
-          if (this.nextRevealAt === 0) {
-            this.nextRevealAt = now
-          }
-        }
-
-        const dtMs = clamp(now - lastFrameTs, 0, 50)
-        lastFrameTs = now
-
-        const desiredCharsPerSecond = this.getDesiredCharsPerSecond(now)
-        const desiredIntervalMs = desiredCharsPerSecond > 0 ? 1000 / desiredCharsPerSecond : 160
-        const speedingUp = desiredIntervalMs < this.currentIntervalMs
-        const smoothing = speedingUp ? 1 - Math.exp(-dtMs / 110) : 1 - Math.exp(-dtMs / 320)
-
-        this.currentIntervalMs += (desiredIntervalMs - this.currentIntervalMs) * smoothing
-        this.currentIntervalMs = clamp(this.currentIntervalMs, this.streamDone ? 5 : 3, 120)
-
-        if (this.queue.length > 0 && this.nextRevealAt === 0) {
-          this.nextRevealAt = now + Math.min(14, this.currentIntervalMs * 0.24)
-        }
-
-        if (now < this.nextRevealAt) {
-          await wait(Math.max(1, Math.min(8, this.nextRevealAt - now)))
-          continue
-        }
-
-        const revealed = await this.revealOneChar(now)
-        if (!revealed) {
-          continue
-        }
-
-        if (this.nextRevealAt < now - Math.max(70, this.currentIntervalMs * 2.2)) {
-          this.nextRevealAt = now - Math.min(18, this.currentIntervalMs * 0.65)
-        }
-
-        if (this.queue.length === 0 && !this.streamDone) {
-          this.nextRevealAt = 0
-        }
-      }
-    } catch (error) {
-      this.failure = error instanceof Error ? error : new Error('Adaptive letter reveal failed.')
-      this.stopped = true
-    } finally {
-      this.running = false
-      if (this.streamDone || this.stopped) {
-        this.resolveDrained()
-      }
-    }
-  }
-
-  private async revealOneChar(now: number): Promise<boolean> {
-    if (!this.queue.length) {
-      return false
-    }
-
-    const nextChar = this.queue.shift()
-    if (!nextChar) {
-      return false
-    }
-
-    await this.commit(nextChar)
-
-    const reserveChars = this.getReserveChars(now)
-    const bufferAhead = this.queue.length - reserveChars
-    const tailMode = this.streamDone
-    const catchupFactor = tailMode
-      ? 1
-      : bufferAhead > 0
-        ? 1 / (1 + Math.min(bufferAhead / Math.max(18, this.chunkSizeEwma * 5), 0.28))
-        : 1.18
-
-    const tailMultiplier = tailMode ? clamp(1 + Math.max(0, 4 - this.queue.length) * 0.01, 1, 1.04) : 1
-    const stepMs = Math.max(
-      tailMode ? 3.6 : 2.8,
-      (this.currentIntervalMs * this.getCharStepMultiplier(nextChar) * tailMultiplier) / catchupFactor,
-    )
-
-    this.nextRevealAt += stepMs
-    const instantaneousRender = this.currentIntervalMs > 0 ? 1000 / this.currentIntervalMs : 0
-    this.renderRateEwma += (instantaneousRender - this.renderRateEwma) * 0.14
-    return true
-  }
-
-  private getCharStepMultiplier(char: string): number {
-    if (char === ' ' || char === '\n' || char === '\t') {
-      return 0.4
-    }
-
-    if (',.;:'.includes(char)) {
-      return 0.68
-    }
-
-    if (')]}!?'.includes(char)) {
-      return 0.82
-    }
-
-    return 1
   }
 
   private getPredictedIncomingRate(now: number): number {
@@ -336,7 +327,7 @@ class AdaptiveLetterRevealScheduler {
   }
 
   private getTailTargetCps(now: number): number {
-    const remaining = Math.max(1, this.queue.length)
+    const remaining = Math.max(1, this.pendingChars.length)
     const intervalCps = this.currentIntervalMs > 0 ? 1000 / this.currentIntervalMs : 0
     const recentVisualCps = Math.max(this.renderRateEwma * 0.92, intervalCps, 1)
     const recentSourceCps = Math.max(this.getPredictedIncomingRate(now) * 0.85, this.arrivalRateEwma * 0.8, 0)
@@ -344,7 +335,8 @@ class AdaptiveLetterRevealScheduler {
     const structuralChars = Math.max(3, this.chunkSizeEwma)
     const groupsRemaining = remaining / structuralChars
     const pressureBoost = 1 + Math.min(0.34, Math.sqrt(groupsRemaining) * 0.11 + groupsRemaining * 0.018)
-    const endSoftening = 1 - Math.min(0.1, (structuralChars / (remaining + structuralChars * 1.8)) * 0.22)
+    const endSoftening =
+      1 - Math.min(0.1, (structuralChars / (remaining + structuralChars * 1.8)) * 0.22)
     const targetCps = anchorCps * pressureBoost * endSoftening
     const floorCps = Math.max(6, anchorCps * 0.96, recentVisualCps * 0.9)
     const ceilCps = Math.max(floorCps + 1, anchorCps * (1.22 + Math.min(0.18, groupsRemaining * 0.035)))
@@ -352,7 +344,7 @@ class AdaptiveLetterRevealScheduler {
   }
 
   private getTailDrainSeconds(now: number): number {
-    const remaining = Math.max(1, this.queue.length)
+    const remaining = Math.max(1, this.pendingChars.length)
     const structuralChars = Math.max(3, this.chunkSizeEwma)
     const groupsRemaining = remaining / structuralChars
     const targetCps = this.getTailTargetCps(now)
@@ -367,335 +359,267 @@ class AdaptiveLetterRevealScheduler {
     const predictedIncoming = this.getPredictedIncomingRate(now)
     const targetLagChars = this.getTargetLagChars(now)
     const reserveChars = this.getReserveChars(now)
-    const backlogError = this.queue.length - targetLagChars
+    const backlogError = this.pendingChars.length - targetLagChars
 
     const speedUpWindow = clamp(0.38 + this.interArrivalMsEwma / 1700 + this.jitterMsEwma / 900, 0.35, 1.35)
     const slowDownWindow = clamp(1.1 + this.interArrivalMsEwma / 900 + this.jitterMsEwma / 480, 1, 3.2)
-    const correction = backlogError >= 0 ? backlogError / speedUpWindow : backlogError / slowDownWindow
+    const correction =
+      backlogError >= 0 ? backlogError / speedUpWindow : backlogError / slowDownWindow
 
-    const bridgeCps = this.queue.length > 0 ? this.queue.length / this.getBridgeWindowSeconds(now) : 0
+    const bridgeCps = this.pendingChars.length > 0 ? this.pendingChars.length / this.getBridgeWindowSeconds(now) : 0
     let desired = predictedIncoming + correction
 
-    if (this.queue.length > 0) {
-      desired = Math.max(desired, Math.min(Math.max(bridgeCps, 6), this.arrivalRateEwma || bridgeCps || 6))
+    if (this.pendingChars.length > 0) {
+      desired = Math.max(
+        desired,
+        Math.min(Math.max(bridgeCps, 6), this.arrivalRateEwma || bridgeCps || 6),
+      )
     }
 
-    if (!this.streamDone && this.queue.length > 0) {
+    if (!this.completed && this.pendingChars.length > 0) {
       const etaSec = this.getExpectedNextChunkEtaMs(now) / 1000
-      const survivableChars = Math.max(0.6, this.queue.length - reserveChars * 0.15)
+      const survivableChars = Math.max(0.6, this.pendingChars.length - reserveChars * 0.15)
       const preserveCap = survivableChars / clamp(etaSec + 0.18, 0.22, 3.8)
-      const lowBufferRatio = this.queue.length / Math.max(reserveChars, 1)
+      const lowBufferRatio = this.pendingChars.length / Math.max(reserveChars, 1)
 
       if (lowBufferRatio < 1.5) {
         desired = Math.min(desired, Math.max(2.8, preserveCap))
       }
 
       if (lowBufferRatio < 1.05) {
-        desired = Math.min(desired, Math.max(1.8, this.queue.length / clamp(etaSec + 0.35, 0.35, 4.4)))
+        desired = Math.min(
+          desired,
+          Math.max(1.8, this.pendingChars.length / clamp(etaSec + 0.35, 0.35, 4.4)),
+        )
       }
     }
 
-    if (predictedIncoming < 2.5 && this.queue.length === 0) {
+    if (predictedIncoming < 2.5 && this.pendingChars.length === 0) {
       desired = 0
     }
 
-    if (this.streamDone && this.queue.length > 0) {
+    if (this.completed && this.pendingChars.length > 0) {
       const tailTargetCps = this.getTailTargetCps(now)
       const tailSeconds = this.getTailDrainSeconds(now)
-      const tailCpsRaw = this.queue.length / tailSeconds
+      const tailCpsRaw = this.pendingChars.length / tailSeconds
       desired = tailCpsRaw * 0.35 + tailTargetCps * 0.65
     }
 
     return clamp(desired, 0, 900)
   }
 
-  private resolveDrained(): void {
-    const waiters = this.drainedWaiters.splice(0)
-    for (const waiter of waiters) {
-      if (this.failure) {
-        waiter.reject(this.failure)
-        continue
-      }
-
-      waiter.resolve()
+  private schedulePump(delayMs: number): void {
+    if (this.aborted || this.effectiveMode !== 'letter-by-letter' || this.unexpectedError) {
+      return
     }
-  }
-}
 
-class ProgressiveInsertionSession {
-  private chain = Promise.resolve()
-  private completed = false
-  private aborted = false
-  private bufferedText = ''
-  private effectiveMode: InsertionStreamingMode
-  private chunkFallbackBuffer: string[] = []
-  private operationalSnapshot: ClipboardSnapshot | null
-  private readonly letterScheduler: AdaptiveLetterRevealScheduler | null
-  private insertionMethod: InsertionMethod
-  private fallbackUsed = false
-  private expectedWindowHandle: string | null = null
+    const boundedDelay = clamp(delayMs, 0, 150)
+    const dueAt = performance.now() + boundedDelay
+    if (this.timer && this.scheduledAt <= dueAt) {
+      return
+    }
 
-  constructor(
-    private readonly mode: InsertionStreamingMode,
-    private readonly clipboardService: ClipboardService,
-    private readonly inputWorker: InputWorkerClient,
-    private readonly writerSession: ClipboardWriterSession,
-    initialSnapshot: ClipboardSnapshot | null = null,
-  ) {
-    this.effectiveMode = mode
-    this.operationalSnapshot = initialSnapshot
-    this.insertionMethod =
-      mode === 'all-at-once'
-        ? 'clipboard-normal'
-        : mode === 'letter-by-letter' && process.platform === 'win32'
-          ? 'sendinput-unicode'
-          : process.platform === 'win32'
-            ? 'clipboard-protected'
-            : 'clipboard-normal'
-
-    this.letterScheduler =
-      mode === 'letter-by-letter'
-        ? new AdaptiveLetterRevealScheduler(async (grapheme) => {
-            await this.commitLetter(grapheme)
-          })
-        : null
+    this.clearTimer()
+    this.scheduledAt = dueAt
+    this.timer = setTimeout(() => {
+      this.timer = null
+      this.scheduledAt = 0
+      this.runPump()
+    }, boundedDelay)
   }
 
-  async warmup(): Promise<void> {
-    if (this.insertionMethod !== 'sendinput-unicode') {
+  private runPump(): void {
+    if (this.aborted || this.effectiveMode !== 'letter-by-letter') {
+      this.resolveFlushWaiters()
+      return
+    }
+
+    if (this.unexpectedError) {
+      this.resolveFlushWaiters()
+      return
+    }
+
+    const now = performance.now()
+    if (!this.lastPumpTs) {
+      this.lastPumpTs = now
+      if (this.nextRevealAt === 0) {
+        this.nextRevealAt = now
+      }
+    }
+
+    const dtMs = clamp(now - this.lastPumpTs, 0, 50)
+    this.lastPumpTs = now
+
+    if (this.pendingChars.length === 0) {
+      this.resolveFlushWaiters()
+      return
+    }
+
+    const desiredCps = this.getDesiredCharsPerSecond(now)
+    const desiredIntervalMs = desiredCps > 0 ? 1000 / desiredCps : 160
+    const speedingUp = desiredIntervalMs < this.currentIntervalMs
+    const smoothing = dtMs > 0 ? 1 - Math.exp(-dtMs / (speedingUp ? 110 : 320)) : 1
+
+    this.currentIntervalMs += (desiredIntervalMs - this.currentIntervalMs) * smoothing
+    this.currentIntervalMs = clamp(this.currentIntervalMs, this.completed ? 6.5 : 3.5, 150)
+
+    if (this.pendingChars.length > 0 && this.nextRevealAt === 0) {
+      this.nextRevealAt = now + Math.min(14, this.currentIntervalMs * 0.24)
+    }
+
+    let revealedThisPump = 0
+    const reserveChars = this.getReserveChars(now)
+    const bufferAhead = Math.max(0, this.pendingChars.length - reserveChars)
+    const maxCharsThisPump = this.completed
+      ? 2
+      : clamp(1 + Math.floor(bufferAhead / Math.max(20, this.chunkSizeEwma * 3.8)), 1, 3)
+
+    while (
+      this.pendingChars.length > 0 &&
+      now >= this.nextRevealAt &&
+      revealedThisPump < maxCharsThisPump &&
+      this.effectiveMode === 'letter-by-letter' &&
+      !this.unexpectedError
+    ) {
+      this.typeNextChar(now)
+      if (this.effectiveMode !== 'letter-by-letter' || this.unexpectedError) {
+        break
+      }
+      revealedThisPump += 1
+    }
+
+    if (this.effectiveMode !== 'letter-by-letter' || this.unexpectedError) {
+      this.resolveFlushWaiters()
+      return
+    }
+
+    if (this.nextRevealAt < now - Math.max(70, this.currentIntervalMs * 2.2)) {
+      this.nextRevealAt = now - Math.min(18, this.currentIntervalMs * 0.65)
+    }
+
+    if (this.pendingChars.length === 0 && !this.completed) {
+      this.nextRevealAt = 0
+    }
+
+    const instantaneousRender = this.currentIntervalMs > 0 ? 1000 / this.currentIntervalMs : 0
+    const revealRateNow = revealedThisPump > 0 ? instantaneousRender : 0
+    const renderAlpha = revealedThisPump > 0 ? 0.14 : 0.04
+    this.renderRateEwma += (revealRateNow - this.renderRateEwma) * renderAlpha
+
+    if (this.pendingChars.length === 0) {
+      this.resolveFlushWaiters()
+      return
+    }
+
+    const nextDelay = Math.max(0, this.nextRevealAt - performance.now())
+    this.schedulePump(nextDelay)
+  }
+
+  private typeNextChar(now: number): void {
+    const nextChar = this.pendingChars.shift()
+    if (!nextChar) {
       return
     }
 
     try {
-      const result = await this.inputWorker.warmup()
-      this.expectedWindowHandle = result.foregroundWindowHandle
+      this.automationService.typeGrapheme(nextChar)
+      this.writtenGraphemeCount += 1
     } catch (error) {
-      if (error instanceof InputWorkerError) {
-        this.insertionMethod = process.platform === 'win32' ? 'clipboard-protected' : 'clipboard-normal'
-        this.fallbackUsed = true
-        this.expectedWindowHandle = null
+      this.pendingChars.unshift(nextChar)
+
+      if (error instanceof AutomationServiceError) {
+        this.switchToAllAtOnce()
         return
       }
 
-      throw error
+      this.unexpectedError = error instanceof Error ? error : new Error(String(error))
+      this.clearTimer()
+      this.resolveFlushWaiters()
+      return
     }
+
+    const reserveChars = this.getReserveChars(now)
+    const bufferAhead = this.pendingChars.length - reserveChars
+    const tailMode = this.completed
+    const catchupFactor = tailMode
+      ? 1
+      : bufferAhead > 0
+        ? 1 / (1 + Math.min(bufferAhead / Math.max(18, this.chunkSizeEwma * 5), 0.28))
+        : 1.18
+
+    const tailMultiplier = tailMode ? clamp(1 + Math.max(0, 4 - this.pendingChars.length) * 0.01, 1, 1.04) : 1
+
+    const stepMs = Math.max(
+      tailMode ? 3.6 : 2.8,
+      (this.currentIntervalMs * getCharStepMultiplier(nextChar) * tailMultiplier) / catchupFactor,
+    )
+
+    this.nextRevealAt += stepMs
   }
 
-  getExecutionReport(): InsertionExecutionReport {
-    return {
-      insertionMethod: this.insertionMethod,
-      fallbackUsed: this.fallbackUsed,
-    }
-  }
-
-  private async ensureOperationalSnapshot(): Promise<ClipboardSnapshot> {
-    if (!this.operationalSnapshot) {
-      this.operationalSnapshot = await this.clipboardService.readCurrent()
+  private waitForPendingInsertion(): Promise<void> {
+    if (this.effectiveMode !== 'letter-by-letter' || this.aborted || this.unexpectedError) {
+      return Promise.resolve()
     }
 
-    return this.operationalSnapshot
-  }
-
-  private async pasteChunk(chunk: string, clipboardMode: 'normal' | 'protected'): Promise<void> {
-    await this.ensureOperationalSnapshot()
-    if (clipboardMode === 'protected') {
-      await this.clipboardService.writeProtected(chunk, this.writerSession)
-    } else {
-      await this.clipboardService.writeNormal(chunk)
-    }
-    await wait(process.platform === 'win32' ? 2 : DEFAULT_PRE_PASTE_SETTLE_MS)
-
-    const pasted = await runShortcut('paste')
-    if (!pasted) {
-      throw new Error('Clipboard paste shortcut unavailable')
+    if (this.pendingChars.length === 0 && !this.timer) {
+      return Promise.resolve()
     }
 
-    await wait(process.platform === 'win32' ? 4 : DEFAULT_POST_PASTE_SETTLE_MS)
-  }
-
-  private enqueuePaste(text: string, clipboardMode: 'normal' | 'protected'): Promise<void> {
-    this.chain = this.chain.then(async () => {
-      if (this.aborted || !text) {
-        return
-      }
-
-      await this.pasteChunk(text, clipboardMode)
+    return new Promise((resolve) => {
+      this.flushWaiters.push(resolve)
     })
-
-    return this.chain
   }
 
-  private async commitLetter(grapheme: string): Promise<void> {
-    if (this.insertionMethod === 'sendinput-unicode') {
-      try {
-        if (!this.expectedWindowHandle) {
-          await this.warmup()
-        }
-
-        await this.inputWorker.sendTextUnicode(grapheme, this.expectedWindowHandle ?? '')
-        return
-      } catch (error) {
-        if (error instanceof InputWorkerFocusChangedError) {
-          throw error
-        }
-
-        if (error instanceof InputWorkerError) {
-          this.effectiveMode = 'chunks'
-          this.insertionMethod = process.platform === 'win32' ? 'clipboard-protected' : 'clipboard-normal'
-          this.fallbackUsed = true
-          this.queueChunkFallbackGrapheme(grapheme)
-          return
-        }
-
-        throw error
-      }
-    }
-
-    if (this.effectiveMode === 'chunks') {
-      this.queueChunkFallbackGrapheme(grapheme)
+  private resolveFlushWaiters(): void {
+    if (this.flushWaiters.length === 0) {
       return
     }
 
-    await this.enqueuePaste(grapheme, process.platform === 'win32' ? 'protected' : 'normal')
+    const waiters = this.flushWaiters.splice(0)
+    for (const resolve of waiters) {
+      resolve()
+    }
   }
 
-  async append(text: string): Promise<void> {
-    if (this.completed || this.aborted || !text) {
-      return
+  private clearTimer(): void {
+    if (this.timer) {
+      clearTimeout(this.timer)
+      this.timer = null
+      this.scheduledAt = 0
     }
-
-    this.bufferedText += text
-
-    if (this.effectiveMode === 'all-at-once') {
-      return
-    }
-
-    if (this.mode === 'chunks') {
-      void this.enqueuePaste(text, process.platform === 'win32' ? 'protected' : 'normal')
-      return
-    }
-
-    this.letterScheduler?.push(text)
   }
 
-  async finalize(finalText: string): Promise<InsertionExecutionReport> {
-    if (this.aborted) {
-      this.completed = true
-      return this.getExecutionReport()
+  private throwUnexpectedErrorIfNeeded(): void {
+    if (this.unexpectedError) {
+      throw this.unexpectedError
     }
-
-    this.completed = true
-    const fullText = finalText.trim() ? finalText : this.bufferedText
-
-    if (this.mode === 'letter-by-letter') {
-      await this.letterScheduler?.finalize()
-    }
-
-    this.flushChunkFallbackBuffer()
-
-    await this.chain
-
-    if (!fullText.trim()) {
-      return this.getExecutionReport()
-    }
-
-    if (this.mode === 'all-at-once' && !this.aborted) {
-      await this.pasteChunk(fullText, 'normal')
-    }
-
-    if (!this.aborted) {
-      const snapshot = await this.ensureOperationalSnapshot()
-      await this.clipboardService.writeNormal(fullText)
-      await wait(
-        process.platform === 'win32'
-          ? WINDOWS_FINAL_CLIPBOARD_SETTLE_MS
-          : DEFAULT_FINAL_CLIPBOARD_SETTLE_MS,
-      )
-      await this.clipboardService.restore(snapshot, 'protected', this.writerSession)
-    }
-
-    return this.getExecutionReport()
-  }
-
-  cancel(): void {
-    this.aborted = true
-    this.completed = true
-    this.letterScheduler?.cancel()
-  }
-
-  async recoverToClipboard(text: string): Promise<void> {
-    this.completed = true
-    await this.clipboardService.writeNormal(text)
-  }
-
-  private queueChunkFallbackGrapheme(grapheme: string): void {
-    this.chunkFallbackBuffer.push(grapheme)
-    if (this.chunkFallbackBuffer.length < LETTER_FALLBACK_CHUNK_SIZE) {
-      return
-    }
-
-    this.flushChunkFallbackBuffer(LETTER_FALLBACK_CHUNK_SIZE)
-  }
-
-  private flushChunkFallbackBuffer(limit = this.chunkFallbackBuffer.length): void {
-    if (limit <= 0) {
-      return
-    }
-
-    const chunk = this.chunkFallbackBuffer.splice(0, limit).join('')
-    if (!chunk) {
-      return
-    }
-
-    void this.enqueuePaste(chunk, process.platform === 'win32' ? 'protected' : 'normal')
   }
 }
 
 export class InsertionEngine {
   constructor(
     private readonly clipboardService: ClipboardService,
-    private readonly inputWorker: InputWorkerClient,
+    private readonly automationService: AutomationService,
   ) {}
 
-  async warmupLetterInput(): Promise<void> {
-    if (process.platform !== 'win32') {
-      return
-    }
-
-    await this.inputWorker.warmup()
+  warmupLetterInput(): void {
+    this.automationService.warmup()
   }
 
-  async dispose(): Promise<void> {
-    await this.inputWorker.dispose().catch(() => undefined)
-  }
-
-  createWriterSession(): ClipboardWriterSession {
-    return this.clipboardService.createWriterSession()
-  }
-
-  async captureClipboardSnapshot(): Promise<ClipboardSnapshot> {
-    return this.clipboardService.readCurrent()
+  dispose(): void {
+    this.automationService.dispose()
   }
 
   createPlan(context: ContextSnapshot): InsertionPlan {
     return {
       strategy: context.selectedText ? 'replace-selection' : 'insert-at-cursor',
       targetApp: context.appName,
-      capability: 'clipboard',
+      capability: 'automation',
     }
   }
 
-  createProgressiveSession(
-    mode: InsertionStreamingMode,
-    initialSnapshot: ClipboardSnapshot | null = null,
-    writerSession?: ClipboardWriterSession,
-  ): ProgressiveInsertionSession {
-    return new ProgressiveInsertionSession(
-      mode,
-      this.clipboardService,
-      this.inputWorker,
-      writerSession ?? this.clipboardService.createWriterSession(),
-      initialSnapshot,
-    )
+  createProgressiveSession(mode: InsertionStreamingMode): ProgressiveInsertionSession {
+    return new ProgressiveInsertionSession(mode, this.clipboardService, this.automationService)
   }
 }
