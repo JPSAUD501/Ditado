@@ -14,9 +14,16 @@ release
 coverage
 playwright-report
 test-results
+native/target/
+native/target-wsl/
 *.local
 .env
 .env.*
+*.exe
+*.node
+.codex-*.cjs
+.codex-*.log
+tmp-*
 
 # Editor directories and files
 .vscode/*

@@ -12,7 +12,6 @@ export const ipcChannels = {
     stopPushToTalk: 'dictation:stopPushToTalk',
     toggle: 'dictation:toggle',
     cancel: 'dictation:cancel',
-    submitAudio: 'dictation:submitAudio',
     recorderStarted: 'dictation:recorderStarted',
     recorderFailed: 'dictation:recorderFailed',
   },
@@ -34,9 +33,6 @@ export const ipcChannels = {
   permissions: {
     requestMicrophone: 'permissions:requestMicrophone',
     get: 'permissions:get',
-  },
-  devices: {
-    listMicrophones: 'devices:listMicrophones',
   },
   dashboardNavigation: {
     openTab: 'dashboardNavigation:openTab',

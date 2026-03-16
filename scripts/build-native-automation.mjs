@@ -1,6 +1,7 @@
 import { copyFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { dirname, join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 const rootDir = process.cwd()
 const crateDir = join(rootDir, 'native', 'ditado_native_automation')
@@ -9,6 +10,7 @@ const targetDirWsl = join(rootDir, 'native', 'target-wsl')
 const outputDir = join(rootDir, 'dist-electron', 'native')
 const outputPath = join(outputDir, 'ditado_native_automation.node')
 const fallbackPath = join(outputDir, 'ditado_native_automation.cjs')
+const LOCK_ERROR_CODES = new Set(['EACCES', 'EBUSY', 'EPERM'])
 
 const libraryExtension =
   process.platform === 'win32' ? 'dll' : process.platform === 'darwin' ? 'dylib' : 'so'
@@ -31,9 +33,72 @@ const toWslPath = (windowsPath) => {
   return `/mnt/${driveMatch[1].toLowerCase()}/${driveMatch[2]}`
 }
 
+export const isLockError = (error) =>
+  Boolean(error && typeof error === 'object' && 'code' in error && LOCK_ERROR_CODES.has(error.code))
+
+export const createLockedAddonError = (filePath, action, cause) =>
+  new Error(
+    `Failed to ${action} ${filePath}. A running Ditado or Node process is still holding the native addon. Close the process and rerun the build.`,
+    cause ? { cause } : undefined,
+  )
+
+const removeAddonOutput = (filePath, action = 'replace') => {
+  try {
+    rmSync(filePath, { force: true })
+  } catch (error) {
+    if (isLockError(error)) {
+      throw createLockedAddonError(filePath, action, error)
+    }
+
+    throw error
+  }
+}
+
+export const syncNativeAddonOutput = ({
+  artifactFilePath,
+  destinationFilePath,
+  removeFile = removeAddonOutput,
+  copyFile = copyFileSync,
+}) => {
+  try {
+    removeFile(destinationFilePath, 'replace')
+  } catch (error) {
+    if (isLockError(error)) {
+      throw createLockedAddonError(destinationFilePath, 'replace', error)
+    }
+
+    throw error
+  }
+
+  try {
+    copyFile(artifactFilePath, destinationFilePath)
+  } catch (error) {
+    if (isLockError(error)) {
+      throw createLockedAddonError(destinationFilePath, 'replace', error)
+    }
+
+    throw error
+  }
+}
+
+export const clearNativeAddonOutput = ({
+  destinationFilePath,
+  removeFile = removeAddonOutput,
+}) => {
+  try {
+    removeFile(destinationFilePath, 'clear')
+  } catch (error) {
+    if (isLockError(error)) {
+      throw createLockedAddonError(destinationFilePath, 'clear', error)
+    }
+
+    throw error
+  }
+}
+
 const tryWslBuild = () => {
   if (process.platform !== 'win32') {
-    return false
+    return null
   }
 
   try {
@@ -58,10 +123,9 @@ const tryWslBuild = () => {
       throw new Error(`WSL artifact not found at ${wslArtifactPath}`)
     }
 
-    copyFileSync(wslArtifactPath, outputPath)
-    return true
+    return wslArtifactPath
   } catch {
-    return false
+    return null
   }
 }
 
@@ -82,15 +146,14 @@ const tryNativeBuild = () => {
       },
     )
   } catch {
-    return false
+    return null
   }
 
   if (!existsSync(artifactPath)) {
-    return false
+    return null
   }
 
-  copyFileSync(artifactPath, outputPath)
-  return true
+  return artifactPath
 }
 
 const fallbackSource = `'use strict'
@@ -112,17 +175,49 @@ exports.typeText = () => {
 }
 `
 
-mkdirSync(dirname(outputPath), { recursive: true })
-rmSync(outputPath, { force: true })
-writeFileSync(fallbackPath, fallbackSource, 'utf8')
+export const runBuildNativeAutomation = () => {
+  mkdirSync(dirname(outputPath), { recursive: true })
+  writeFileSync(fallbackPath, fallbackSource, 'utf8')
 
-if (tryWslBuild()) {
-  console.log('[build-native-automation] Built native addon via WSL cargo-xwin.')
-} else if (tryNativeBuild()) {
-  console.log('[build-native-automation] Built native addon with the local Rust toolchain.')
-} else {
+  const wslArtifact = tryWslBuild()
+  if (wslArtifact) {
+    syncNativeAddonOutput({
+      artifactFilePath: wslArtifact,
+      destinationFilePath: outputPath,
+    })
+    console.log('[build-native-automation] Built native addon via WSL cargo-xwin.')
+    return
+  }
+
+  const nativeArtifact = tryNativeBuild()
+  if (nativeArtifact) {
+    syncNativeAddonOutput({
+      artifactFilePath: nativeArtifact,
+      destinationFilePath: outputPath,
+    })
+    console.log('[build-native-automation] Built native addon with the local Rust toolchain.')
+    return
+  }
+
+  clearNativeAddonOutput({
+    destinationFilePath: outputPath,
+  })
   console.warn('[build-native-automation] Native addon build failed. Using JS automation fallback.')
   console.warn(
     '[build-native-automation] Install the Windows C++ toolchain or keep WSL cargo-xwin available to enable the napi-rs addon.',
   )
+}
+
+const isEntrypoint =
+  process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url
+
+if (isEntrypoint) {
+  try {
+    runBuildNativeAutomation()
+  } catch (error) {
+    console.error(
+      `[build-native-automation] ${error instanceof Error ? error.message : 'Unexpected build failure.'}`,
+    )
+    process.exitCode = 1
+  }
 }

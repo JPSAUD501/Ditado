@@ -1,73 +1,32 @@
-# React + TypeScript + Vite
+# Ditado
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Ditado is a desktop dictation overlay for writing into other apps. It captures audio in the renderer, coordinates dictation in Electron's main process, and inserts text into the focused app through a native automation addon with clipboard fallback behavior.
 
-Currently, two official plugins are available:
+## Stack
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- Electron for windows, tray, shortcuts, IPC, and OS integration
+- React + Vite for the dashboard and overlay UI
+- TypeScript across renderer, preload, and main process code
+- Rust (`napi-rs`) for the native automation addon
+- Vitest and Playwright for test coverage
 
-## React Compiler
+## Prerequisites
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- Node.js 20+ and npm
+- A supported desktop OS for runtime development
+- Rust only when building the native automation addon locally
+- On Windows, WSL plus `cargo-xwin` can be used as an alternate addon build path
 
-## Expanding the ESLint configuration
+## Commands
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+- `npm run dev`: build the native automation layer, start TypeScript watchers, Vite, and Electron
+- `npm test`: run the Vitest suite
+- `npm run lint`: run ESLint
+- `npm run build`: create production renderer and Electron bundles
+- `npm run package`: build the app and package it with `electron-builder`
+- `npm run clean`: remove renderer, preload, main, and release artifacts while preserving native outputs
+- `npm run clean:native`: remove generated native addon outputs and Rust target directories
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+## Native addon note
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
-
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+`scripts/build-native-automation.mjs` always writes the JS fallback module and then tries to build the native addon. If the addon output file is locked on Windows, the build fails with a clear error instead of silently keeping a stale `.node` binary. Close any running Ditado or Node process that may have loaded the addon before rebuilding.

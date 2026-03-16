@@ -6,7 +6,8 @@
   "type": "module",
   "main": "dist-electron/main/main/main.js",
   "scripts": {
-    "clean": "rimraf dist dist-electron release",
+    "clean": "node scripts/clean-build.mjs",
+    "clean:native": "node scripts/clean-native-artifacts.mjs",
     "dev": "npm run build:native-automation && concurrently -k -n MAIN,PRELOAD,RENDERER,ELECTRON -c blue,magenta,green,yellow \"npm:dev:main\" \"npm:dev:preload\" \"npm:dev:renderer\" \"npm:dev:electron\"",
     "dev:main": "tsc -p tsconfig.main.json --watch --preserveWatchOutput",
     "dev:preload": "tsc -p tsconfig.preload.json --watch --preserveWatchOutput",
@@ -49,6 +50,7 @@
     "@openrouter/sdk": "^0.9.11",
     "active-win": "^8.2.1",
     "clsx": "^2.1.1",
+    "electron-updater": "^6.8.3",
     "framer-motion": "^12.23.24",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
