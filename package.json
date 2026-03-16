@@ -3,7 +3,10 @@
   "private": true,
   "version": "0.1.6",
   "description": "Universal AI dictation overlay for desktop apps.",
-  "author": "JPSAUD501",
+  "author": {
+    "name": "JPSAUD501",
+    "email": "joaopedrosaudcardoso@gmail.com"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/JPSAUD501/Ditado.git"
