@@ -124,14 +124,29 @@ export const settingsSchema = z.object({
   modelId: z.string().default('google/gemini-3-flash-preview'),
   apiKeyPresent: z.boolean().default(false),
   onboardingCompleted: z.boolean().default(false),
-  theme: z.literal('dark-glass').default('dark-glass'),
+  theme: z.enum(['dark', 'light', 'system']).default('system'),
+  language: z.enum(['en', 'pt-BR', 'es', 'system']).default('system'),
 })
 
 export type Settings = z.infer<typeof settingsSchema>
 
-export const settingsPatchSchema = settingsSchema
-  .omit({ apiKeyPresent: true })
-  .partial()
+export const settingsPatchSchema = z.object({
+  launchOnLogin: z.boolean().optional(),
+  pushToTalkHotkey: z.string().optional(),
+  toggleHotkey: z.string().optional(),
+  preferredMicrophoneId: z.string().nullable().optional(),
+  sendContextAutomatically: z.boolean().optional(),
+  telemetryEnabled: z.boolean().optional(),
+  autoUpdateEnabled: z.boolean().optional(),
+  updateChannel: z.enum(['stable', 'beta']).optional(),
+  insertionStreamingMode: insertionStreamingModeSchema.optional(),
+  historyRetentionDays: z.number().int().positive().optional(),
+  maxHistoryAudioBytes: z.number().int().positive().optional(),
+  modelId: z.string().optional(),
+  onboardingCompleted: z.boolean().optional(),
+  theme: z.enum(['dark', 'light', 'system']).optional(),
+  language: z.enum(['en', 'pt-BR', 'es', 'system']).optional(),
+})
   .strict()
 
 export type SettingsPatch = z.infer<typeof settingsPatchSchema>

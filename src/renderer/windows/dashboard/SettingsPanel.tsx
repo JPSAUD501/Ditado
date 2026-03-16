@@ -1,4 +1,5 @@
 import { type ReactNode, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ChevronDown } from 'lucide-react'
 
 import type { InsertionBenchmarkResult, Settings } from '@shared/contracts'
@@ -68,6 +69,7 @@ export const SettingsPanel = ({
     transition: { duration: number; ease: readonly [number, number, number, number] }
   }
 }) => {
+  const { t } = useTranslation()
   const [benchmarkOpen, setBenchmarkOpen] = useState(true)
   const [shortcutStatus, setShortcutStatus] = useState<{ captureActive: boolean; uiohookRunning: boolean } | null>(null)
 
@@ -282,8 +284,36 @@ export const SettingsPanel = ({
         </div>
       </div>
 
-      {/* ── Right column: behavior toggles ── */}
+      {/* ── Right column: appearance + behavior toggles ── */}
       <div className="surface-panel p-4 grid gap-3 content-start">
+        <div className="section-label">{t('settings.appearance')}</div>
+        <label className="grid gap-1">
+          <span className="text-xs font-medium" style={{ color: 'var(--text-1)' }}>{t('settings.theme')}</span>
+          <select
+            className="field"
+            value={settings.theme}
+            onChange={(e) => void updateSettings({ theme: e.target.value as Settings['theme'] })}
+          >
+            <option value="system">{t('common.system')}</option>
+            <option value="dark">{t('common.dark')}</option>
+            <option value="light">{t('common.light')}</option>
+          </select>
+        </label>
+        <label className="grid gap-1">
+          <span className="text-xs font-medium" style={{ color: 'var(--text-1)' }}>{t('settings.language')}</span>
+          <select
+            className="field"
+            value={settings.language}
+            onChange={(e) => void updateSettings({ language: e.target.value as Settings['language'] })}
+          >
+            <option value="system">{t('common.system')}</option>
+            <option value="en">English</option>
+            <option value="pt-BR">Portugues (Brasil)</option>
+            <option value="es">Espanol</option>
+          </select>
+        </label>
+
+        <div className="divider" />
         <div className="section-label">Behavior</div>
         <ToggleRow
           label="Send context automatically"
@@ -302,7 +332,7 @@ export const SettingsPanel = ({
         <div className="section-label">Updates &amp; Telemetry</div>
         <ToggleRow
           label="Telemetry"
-          description="Technical metrics only — no audio or text."
+          description="Technical telemetry only: no audio or dictated text. Builds without OTLP config stay local-only."
           value={settings.telemetryEnabled}
           onChange={(v) => void updateSettings({ telemetryEnabled: v })}
         />

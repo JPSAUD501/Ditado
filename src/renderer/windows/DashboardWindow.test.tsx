@@ -22,6 +22,16 @@ const createState = (settings: Settings = onboardedSettings): DashboardViewModel
   },
 })
 
+const createDeferred = <T,>() => {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
+
 const installDesktopApi = (
   initialSettings: Settings = onboardedSettings,
   microphones: Array<{ deviceId: string; label: string; kind: 'audioinput' }> = [],
@@ -137,6 +147,57 @@ describe('DashboardWindow', () => {
     await waitFor(() => {
       expect(updateSettings).toHaveBeenCalledWith({ updateChannel: 'beta' })
     })
+  })
+
+  it('keeps newer optimistic settings applied while an older save is still resolving', async () => {
+    installDesktopApi()
+    const firstSave = createDeferred<Settings>()
+    const secondSave = createDeferred<Settings>()
+    const updateSettings = vi.fn((patch: Partial<Settings>) => {
+      if ('sendContextAutomatically' in patch) {
+        return firstSave.promise
+      }
+      if ('launchOnLogin' in patch) {
+        return secondSave.promise
+      }
+      return Promise.resolve(onboardedSettings)
+    })
+    window.ditado.updateSettings = updateSettings
+
+    render(<DashboardWindow initialTab="settings" />)
+
+    const sendContextToggle = await screen.findByRole('button', { name: /send context automatically/i })
+    const launchOnLoginToggle = screen.getByRole('button', { name: /launch on login/i })
+
+    await userEvent.click(sendContextToggle)
+    await userEvent.click(launchOnLoginToggle)
+
+    expect(sendContextToggle).toHaveAttribute('aria-pressed', 'false')
+    expect(launchOnLoginToggle).toHaveAttribute('aria-pressed', 'true')
+
+    await act(async () => {
+      firstSave.resolve({ ...onboardedSettings, sendContextAutomatically: false })
+      await firstSave.promise
+      await Promise.resolve()
+    })
+
+    expect(sendContextToggle).toHaveAttribute('aria-pressed', 'false')
+    expect(launchOnLoginToggle).toHaveAttribute('aria-pressed', 'true')
+
+    await act(async () => {
+      secondSave.resolve({
+        ...onboardedSettings,
+        sendContextAutomatically: false,
+        launchOnLogin: true,
+      })
+      await secondSave.promise
+      await Promise.resolve()
+    })
+
+    expect(updateSettings).toHaveBeenNthCalledWith(1, { sendContextAutomatically: false })
+    expect(updateSettings).toHaveBeenNthCalledWith(2, { launchOnLogin: true })
+    expect(sendContextToggle).toHaveAttribute('aria-pressed', 'false')
+    expect(launchOnLoginToggle).toHaveAttribute('aria-pressed', 'true')
   })
 
   it('captures a modifier-only hotkey, exits capture mode, and persists the normalized combo', async () => {

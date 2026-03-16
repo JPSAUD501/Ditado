@@ -1,36 +1,39 @@
-import { Check, Mic, Shield, X } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+import { Shield } from 'lucide-react'
 
 import { StatusPill } from '@renderer/components/StatusPill'
-import type { DashboardViewModel } from '@shared/contracts'
+import type { DashboardViewModel, DictationStatus } from '@shared/contracts'
 import { formatDate } from './formatters'
 
-const updateStatusCopy = {
-  idle: 'Up to date',
-  checking: 'Checking…',
-  available: 'Update available',
-  downloading: 'Downloading…',
-  downloaded: 'Ready on restart',
-  disabled: 'Disabled',
-  error: 'Check failed',
-  unsupported: 'Dev build',
-} as const
+const HealthDot = ({ ok, label }: { ok: boolean; label: string }) => (
+  <span
+    title={label}
+    style={{
+      width: 7,
+      height: 7,
+      borderRadius: '50%',
+      background: ok ? 'var(--status-ok)' : 'var(--status-error)',
+      display: 'inline-block',
+      flexShrink: 0,
+    }}
+  />
+)
 
-const stageCopy: Record<string, string> = {
-  idle: 'Standing by',
-  arming: 'Opening mic',
-  listening: 'Capturing speech',
-  processing: 'Drafting text',
-  streaming: 'Writing output',
-  completed: 'Insertion done',
-  notice: 'Notice',
-  'permission-required': 'Permission blocked',
-  error: 'Error',
+const stageCopyKeys: Record<string, string> = {
+  idle: 'overview.standingBy',
+  arming: 'overview.openingMic',
+  listening: 'overview.capturingSpeech',
+  processing: 'overview.draftingText',
+  streaming: 'overview.writingOutput',
+  completed: 'overview.insertionDone',
+  notice: 'overview.notice',
+  'permission-required': 'overview.permissionBlocked',
+  error: 'overview.error',
 }
 
 export const OverviewPanel = ({
   state,
   isRecording,
-  openSettings,
 }: {
   state: DashboardViewModel
   isRecording: boolean
@@ -40,150 +43,103 @@ export const OverviewPanel = ({
     animate: { opacity: number; y: number }
     transition: { duration: number; ease: readonly [number, number, number, number] }
   }
-  openSettings: () => void
 }) => {
+  const { t } = useTranslation()
   const latestEntry = state.history[0] ?? null
-  const sessionStatus = state.session?.status ?? 'idle'
-  const stageLabel = stageCopy[sessionStatus] ?? 'Unknown'
-  const telemetrySample = state.telemetryTail.slice(0, 5)
+  const sessionStatus: DictationStatus = state.session?.status ?? 'idle'
+  const stageLabel = t(stageCopyKeys[sessionStatus] ?? 'overview.unknown')
   const modelShort = state.settings.modelId.split('/').at(-1) ?? state.settings.modelId
   const micOk = state.permissions.microphone === 'granted'
   const accOk = state.permissions.accessibility === 'granted'
   const apiOk = state.settings.apiKeyPresent
 
-  const StatusIcon = ({ ok }: { ok: boolean }) =>
-    ok ? <Check size={12} style={{ color: 'var(--status-ok)' }} /> : <X size={12} style={{ color: 'var(--status-error)' }} />
-
   return (
     <div className="grid gap-3">
-      {/* Row 1: Status + Quick actions */}
-      <div className="grid gap-3" style={{ gridTemplateColumns: '1fr auto' }}>
-        <div className="surface-panel p-4">
-          <div className="flex items-center justify-between gap-3 mb-3">
-            <div className="flex items-center gap-2">
-              <StatusPill status={sessionStatus} />
-              <span className="text-sm font-semibold" style={{ color: 'var(--text-1)' }}>{stageLabel}</span>
+      {/* Row 1: Status */}
+      <div className="surface-panel p-4">
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <div className="flex items-center gap-2">
+            <StatusPill status={sessionStatus} />
+            <span className="text-sm font-semibold" style={{ color: 'var(--text-1)' }}>{stageLabel}</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5" title={t('overview.systemHealth')}>
+              <Shield size={10} style={{ color: 'var(--text-3)' }} />
+              <HealthDot ok={apiOk} label={t('overview.apiKey')} />
+              <HealthDot ok={micOk} label={t('overview.microphone')} />
+              <HealthDot ok={accOk} label={t('overview.accessibility')} />
             </div>
             <span className="text-xs" style={{ color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>
               {state.session?.targetApp ?? '—'}
             </span>
           </div>
-          {state.session?.partialText ? (
-            <div className="surface-muted p-2.5 text-sm wrap-safe" style={{ color: 'var(--text-2)', lineHeight: 1.5 }}>
-              {state.session.partialText}
-            </div>
-          ) : (
-            <div className="text-xs" style={{ color: 'var(--text-3)' }}>
-              Use a shortcut to begin dictating into the focused application.
-            </div>
-          )}
         </div>
-
-        <div className="surface-panel p-4 grid gap-2 content-start" style={{ width: '160px' }}>
-          <button className="button-primary w-full" type="button" onClick={() => void window.ditado.toggleDictation()}>
-            Toggle
-          </button>
-          <button className="button-secondary w-full" type="button" onClick={() => void window.ditado.startPushToTalk()}>
-            Push-to-talk
-          </button>
-          <button className="button-ghost w-full" type="button" onClick={openSettings}>
-            Settings
-          </button>
-        </div>
+        {state.session?.partialText ? (
+          <div className="surface-muted p-2.5 text-sm wrap-safe" style={{ color: 'var(--text-2)', lineHeight: 1.5 }}>
+            {state.session.partialText}
+          </div>
+        ) : (
+          <div className="text-xs" style={{ color: 'var(--text-3)' }}>
+            {t('overview.useShortcutHint')}
+          </div>
+        )}
       </div>
 
       {/* Row 2: Metrics */}
       <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
         <div className="metric-card">
-          <div className="metric-label">Status</div>
-          <div className="metric-value">{isRecording ? 'Recording' : 'Idle'}</div>
+          <div className="metric-label">{t('overview.status')}</div>
+          <div className="metric-value">{isRecording ? t('common.recording') : t('common.idle')}</div>
         </div>
         <div className="metric-card">
-          <div className="metric-label">Context</div>
-          <div className="metric-value">{state.settings.sendContextAutomatically ? 'Auto' : 'Off'}</div>
+          <div className="metric-label">{t('overview.context')}</div>
+          <div className="metric-value">{state.settings.sendContextAutomatically ? t('common.auto') : t('common.off')}</div>
         </div>
         <div className="metric-card">
-          <div className="metric-label">Model</div>
+          <div className="metric-label">{t('overview.model')}</div>
           <div className="metric-value" title={state.settings.modelId}>{modelShort}</div>
         </div>
         <div className="metric-card">
-          <div className="metric-label">Reveal</div>
+          <div className="metric-label">{t('overview.reveal')}</div>
           <div className="metric-value">
-            {state.settings.insertionStreamingMode === 'letter-by-letter' ? 'Stream' : 'Instant'}
+            {state.settings.insertionStreamingMode === 'letter-by-letter' ? t('common.stream') : t('common.instant')}
           </div>
         </div>
       </div>
 
-      {/* Row 3: Health + Last output + Telemetry */}
-      <div className="grid gap-3" style={{ gridTemplateColumns: '200px 1fr 260px' }}>
-        {/* Health */}
-        <div className="surface-panel p-4">
-          <div className="eyebrow mb-3">
-            <Shield size={10} className="inline -mt-px mr-1" />System health
-          </div>
-          <div className="health-row">
-            <span className="health-label">API key</span>
-            <StatusIcon ok={apiOk} />
-          </div>
-          <div className="health-row">
-            <span className="health-label"><Mic size={11} className="inline -mt-px mr-0.5" /> Microphone</span>
-            <StatusIcon ok={micOk} />
-          </div>
-          <div className="health-row">
-            <span className="health-label">Accessibility</span>
-            <StatusIcon ok={accOk} />
-          </div>
-          <div className="health-row">
-            <span className="health-label">Updates</span>
-            <span className="health-value" style={{ color: 'var(--text-2)', fontSize: '0.68rem' }}>
-              {updateStatusCopy[state.updateState.status]}
-            </span>
-          </div>
-        </div>
-
-        {/* Last output */}
-        <div className="surface-panel p-4">
-          <div className="eyebrow mb-2">Last output</div>
-          {latestEntry ? (
-            <>
-              <div className="flex items-center gap-2 mb-1.5">
-                <span className="text-sm font-medium" style={{ color: 'var(--text-1)' }}>{latestEntry.appName}</span>
-                <span className="text-xs" style={{ color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>
-                  {latestEntry.modelId.split('/').at(-1)}
-                </span>
-              </div>
-              <p className="text-sm wrap-safe line-clamp-3" style={{ color: 'var(--text-2)', lineHeight: 1.55 }}>
-                {latestEntry.outputText || 'No text inserted.'}
-              </p>
-              <div className="mt-2 text-xs" style={{ color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>
-                {formatDate(latestEntry.createdAt)}
-              </div>
-            </>
-          ) : (
-            <p className="text-xs" style={{ color: 'var(--text-3)' }}>No dictation history yet.</p>
-          )}
-        </div>
-
-        {/* Telemetry */}
-        <div className="surface-panel p-4">
-          <div className="eyebrow mb-2">Events</div>
-          {telemetrySample.length === 0 ? (
-            <p className="text-xs" style={{ color: 'var(--text-3)' }}>No events captured.</p>
-          ) : (
-            <div className="grid gap-1">
-              {telemetrySample.map((event) => (
-                <div key={event.id} className="flex items-center justify-between gap-2" style={{ padding: '0.2rem 0' }}>
-                  <span className="text-xs" style={{ color: 'var(--text-2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {event.name}
-                  </span>
-                  <span className="text-xs" style={{ color: 'var(--text-3)', fontFamily: 'var(--font-mono)', flexShrink: 0, fontSize: '0.62rem' }}>
-                    {event.kind}
-                  </span>
-                </div>
-              ))}
+      {/* Row 3: Last output (full width) */}
+      <div className="surface-panel p-4">
+        <div className="eyebrow mb-2">{t('overview.lastOutput')}</div>
+        {latestEntry ? (
+          <>
+            <div className="flex items-center gap-2 mb-1.5">
+              <span className="text-sm font-medium" style={{ color: 'var(--text-1)' }}>{latestEntry.appName}</span>
+              <span
+                style={{
+                  display: 'inline-flex', alignItems: 'center', height: '1rem',
+                  padding: '0 0.35rem', borderRadius: '999px', fontSize: '0.58rem', fontWeight: 600,
+                  letterSpacing: '0.08em', textTransform: 'uppercase' as const,
+                  border: latestEntry.outcome === 'error' ? '1px solid rgba(210,90,80,0.22)' : '1px solid rgba(112,192,134,0.2)',
+                  background: latestEntry.outcome === 'error' ? 'rgba(210,90,80,0.06)' : 'rgba(112,192,134,0.06)',
+                  color: latestEntry.outcome === 'error' ? 'var(--status-error)' : 'var(--status-ok)',
+                }}
+              >
+                {latestEntry.outcome === 'error' ? t('history.err') : t('history.ok')}
+              </span>
+              <span className="text-xs" style={{ color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>
+                {latestEntry.modelId.split('/').at(-1)}
+              </span>
             </div>
-          )}
-        </div>
+            <p className="text-sm wrap-safe line-clamp-3" style={{ color: 'var(--text-2)', lineHeight: 1.55 }}>
+              {latestEntry.outputText || t('history.noTextInserted')}
+            </p>
+            <div className="mt-2 text-xs" style={{ color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>
+              {formatDate(latestEntry.createdAt)}
+            </div>
+          </>
+        ) : (
+          <p className="text-xs" style={{ color: 'var(--text-3)' }}>{t('overview.noHistory')}</p>
+        )}
       </div>
     </div>
   )

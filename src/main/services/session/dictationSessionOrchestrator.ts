@@ -61,7 +61,11 @@ export class DictationSessionOrchestrator {
       errorMessage: null,
     })
 
-    await this.telemetry.metric('dictation-started', { mode })
+    await this.telemetry.startSession(sessionId, {
+      activationMode: mode,
+      targetApp: 'Foreground app',
+    })
+    await this.telemetry.metric('dictation-started', { mode }, { sessionId })
 
     if (this.store.getSettings().insertionStreamingMode === 'letter-by-letter') {
       try {
@@ -76,7 +80,7 @@ export class DictationSessionOrchestrator {
 
     const contextCapture = this.contextService
       .capture(shouldCaptureSelectionImmediately, shouldCaptureSelectionImmediately)
-      .then((previewContext) => {
+      .then(async (previewContext) => {
         const activeSession = this.sessions.get()
         if (
           !activeSession ||
@@ -90,6 +94,16 @@ export class DictationSessionOrchestrator {
           ...activeSession,
           targetApp: previewContext.appName,
           context: previewContext,
+        })
+        await this.telemetry.annotateSession(sessionId, {
+          targetApp: previewContext.appName,
+          contextConfidence: previewContext.confidence,
+          permissionsGranted: previewContext.permissionsGranted,
+          selectedTextPresent: Boolean(previewContext.selectedText),
+        })
+        this.telemetry.sessionEvent(sessionId, 'context-captured', {
+          selectedTextPresent: Boolean(previewContext.selectedText),
+          confidence: previewContext.confidence,
         })
 
         return previewContext
@@ -111,6 +125,7 @@ export class DictationSessionOrchestrator {
       ...currentSession,
       status: 'listening',
     })
+    this.telemetry.sessionEvent(sessionId, 'recorder-started')
   }
 
   async markRecorderFailed(sessionId: string, reason: string): Promise<void> {
@@ -137,6 +152,9 @@ export class DictationSessionOrchestrator {
     if (microphoneBlocked) {
       await this.telemetry.error('microphone-permission-required', {
         mode: currentSession.activationMode,
+      }, { sessionId })
+      await this.telemetry.finishSession(sessionId, 'permission-required', {
+        reason: 'microphone-permission-required',
       })
       return
     }
@@ -144,6 +162,10 @@ export class DictationSessionOrchestrator {
     await this.telemetry.error('recorder-start-failed', {
       id: currentSession.id,
       message,
+    }, { sessionId })
+    await this.telemetry.finishSession(sessionId, 'error', {
+      reason: 'recorder-start-failed',
+      'error.message': message,
     })
   }
 
@@ -200,7 +222,10 @@ export class DictationSessionOrchestrator {
       this.activeInsertionSession = null
     }
 
-    await this.telemetry.metric('dictation-cancelled', { id: currentSession.id })
+    await this.telemetry.metric('dictation-cancelled', { id: currentSession.id }, { sessionId: currentSession.id })
+    await this.telemetry.finishSession(currentSession.id, 'cancelled', {
+      cancelledAt: new Date().toISOString(),
+    })
     this.sessions.set({
       ...currentSession,
       status: 'idle',
@@ -246,7 +271,7 @@ export class DictationSessionOrchestrator {
       await this.showNotice('Nenhuma fala detectada.', 'dictation-no-speech', {
         peakAmplitude: payload.peakAmplitude.toFixed(5),
         rmsAmplitude: payload.rmsAmplitude.toFixed(5),
-      })
+      }, currentSession.id)
       return
     }
 
@@ -267,6 +292,16 @@ export class DictationSessionOrchestrator {
         }
       }
       const insertionPlan = this.insertionEngine.createPlan(context)
+      await this.telemetry.annotateSession(currentSession.id, {
+        targetApp: context.appName,
+        insertionStrategy: insertionPlan.strategy,
+        insertionCapability: insertionPlan.capability,
+        selectedTextPresent: Boolean(context.selectedText),
+        requestedMode: this.store.getSettings().insertionStreamingMode,
+      })
+      this.telemetry.sessionEvent(currentSession.id, 'submission-started', {
+        hasSelectedText: Boolean(context.selectedText),
+      })
 
       this.sessions.set({
         ...currentSession,
@@ -288,6 +323,7 @@ export class DictationSessionOrchestrator {
         insertion,
       }
       let partialText = ''
+      let streamingStarted = false
 
       const response = await this.llm.stream(
         {
@@ -302,6 +338,10 @@ export class DictationSessionOrchestrator {
             return
           }
 
+          if (!streamingStarted) {
+            streamingStarted = true
+            this.telemetry.sessionEvent(currentSession.id, 'streaming-started')
+          }
           partialText += delta
           const activeSession = this.sessions.get()
           if (activeSession?.id === currentSession.id) {
@@ -323,7 +363,7 @@ export class DictationSessionOrchestrator {
         await insertion.finalize('')
         await this.showNotice('Nenhum texto final retornado.', 'dictation-empty-output', {
           modelId: this.store.getSettings().modelId,
-        })
+        }, currentSession.id)
         return
       }
 
@@ -347,6 +387,18 @@ export class DictationSessionOrchestrator {
         id: completedSession.id,
         latencyMs: response.latencyMs,
         finishReason: response.finishReason ?? 'unknown',
+        fallbackUsed: execution.fallbackUsed,
+        insertionMethod: execution.insertionMethod,
+        requestedMode: execution.requestedMode,
+        effectiveMode: execution.effectiveMode,
+      }, { sessionId: completedSession.id })
+      await this.telemetry.finishSession(completedSession.id, 'completed', {
+        latencyMs: response.latencyMs,
+        finishReason: response.finishReason ?? 'unknown',
+        fallbackUsed: execution.fallbackUsed,
+        insertionMethod: execution.insertionMethod,
+        requestedMode: execution.requestedMode,
+        effectiveMode: execution.effectiveMode,
       })
       try {
         await this.history.appendCompletedSession(completedSession, response, payload, execution)
@@ -389,6 +441,14 @@ export class DictationSessionOrchestrator {
       await this.telemetry.error('dictation-failed', {
         id: activeSession.id,
         message,
+        fallbackUsed: execution?.fallbackUsed ?? false,
+        insertionMethod: execution?.insertionMethod ?? 'clipboard-all-at-once',
+      }, { sessionId: activeSession.id, exception: error })
+      await this.telemetry.finishSession(activeSession.id, 'error', {
+        'error.message': message,
+        fallbackUsed: execution?.fallbackUsed ?? false,
+        insertionMethod: execution?.insertionMethod ?? 'clipboard-all-at-once',
+        recoveredToClipboard: Boolean(lastText),
       })
     } finally {
       this.contextCaptureBySessionId.delete(currentSession.id)
@@ -406,8 +466,15 @@ export class DictationSessionOrchestrator {
     message: string,
     telemetryName: string,
     detail: Record<string, string> = {},
+    sessionId?: string,
   ): Promise<void> {
-    await this.telemetry.metric(telemetryName, detail)
+    await this.telemetry.metric(telemetryName, detail, sessionId ? { sessionId } : {})
+    if (sessionId) {
+      await this.telemetry.finishSession(sessionId, 'notice', {
+        noticeName: telemetryName,
+        ...detail,
+      })
+    }
     const current = this.sessions.get()
     this.sessions.set({
       ...createIdleSession(),

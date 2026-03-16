@@ -34,9 +34,11 @@ export const useOverlayBridge = (): OverlayViewModel => {
         setState(value)
       }
     })
+
     const unsubscribe = window.ditado.subscribeOverlayState((value) => {
       setState(value)
     })
+
     return () => {
       mounted = false
       unsubscribe()
@@ -56,9 +58,11 @@ export const useDashboardBridge = (): DashboardViewModel => {
         setState(value)
       }
     })
+
     const unsubscribe = window.ditado.subscribeDashboardState((value) => {
       setState(value)
     })
+
     return () => {
       mounted = false
       unsubscribe()

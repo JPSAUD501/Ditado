@@ -22,7 +22,8 @@ export const defaultSettings: Settings = {
   modelId: 'google/gemini-3-flash-preview',
   apiKeyPresent: false,
   onboardingCompleted: false,
-  theme: 'dark-glass',
+  theme: 'system',
+  language: 'system',
 }
 
 export const emptyContextSnapshot: ContextSnapshot = {

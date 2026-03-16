@@ -97,7 +97,8 @@ describe('OverlayWindow', () => {
     const { container } = render(<OverlayWindow />)
 
     await waitFor(() => {
-      expect(container).toBeEmptyDOMElement()
+      expect(container.querySelector('.overlay-shell')).toBeInTheDocument()
+      expect(container.querySelector('.overlay-chip')).toBeNull()
     })
     expect(screen.queryByText(/listening|ready|done|error/i)).toBeNull()
   })

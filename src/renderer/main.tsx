@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 
 import { App } from '@renderer/App'
+import '@renderer/i18n'
 import { ensureMockDesktopApi } from '@renderer/lib/mockDesktopApi'
 import '@renderer/styles.css'
 

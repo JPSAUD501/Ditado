@@ -14,7 +14,7 @@ import {
 } from '../../../shared/contracts.js'
 import { normalizeHotkey } from '../../../shared/hotkeys.js'
 
-const TELEMETRY_LIMIT = 500
+const TELEMETRY_LIMIT = 10_000
 
 const persistedSettingsSchema = settingsSchema.omit({ apiKeyPresent: true }).partial()
 
@@ -45,7 +45,9 @@ const writeAtomicJson = async (filePath: string, payload: unknown): Promise<void
     // No previous file yet.
   }
 
-  await rm(filePath, { force: true })
+  // On Windows, fs.rename atomically replaces the destination if it exists
+  // (uses MoveFileExW with MOVEFILE_REPLACE_EXISTING). The prior rm() call is
+  // unnecessary and can throw EPERM/EBUSY under AV scanning, so it's removed.
   await rename(tempPath, filePath)
 }
 
@@ -326,10 +328,39 @@ export class AppStore {
   }
 }
 
+const migrateRawSettings = (raw: unknown): unknown => {
+  if (typeof raw !== 'object' || raw === null) {
+    return raw
+  }
+  const data = raw as Record<string, unknown>
+  // Migrate legacy theme value from before the light/dark/system enum was introduced.
+  if (data.theme === 'dark-glass') {
+    return { ...data, theme: 'dark' }
+  }
+  return data
+}
+
 const parsePersistedSettings = (settingsCandidate: unknown): Partial<Settings> | null => {
-  const candidate = persistedSettingsSchema.safeParse(settingsCandidate)
+  const migrated = migrateRawSettings(settingsCandidate)
+  const candidate = persistedSettingsSchema.safeParse(migrated)
   if (!candidate.success) {
-    return null
+    // If the whole object fails, try to salvage individual valid fields so
+    // a single bad field does not wipe all user preferences.
+    if (typeof migrated !== 'object' || migrated === null) {
+      return null
+    }
+    const salvaged: Record<string, unknown> = {}
+    for (const [key, value] of Object.entries(migrated as Record<string, unknown>)) {
+      const shape = persistedSettingsSchema.shape as Record<string, { safeParse: (v: unknown) => { success: boolean; data?: unknown } }>
+      if (key in shape) {
+        const result = shape[key].safeParse(value)
+        if (result.success) {
+          salvaged[key] = result.data
+        }
+      }
+    }
+    const salvagedCandidate = persistedSettingsSchema.safeParse(salvaged)
+    return salvagedCandidate.success ? salvagedCandidate.data : null
   }
 
   return candidate.data

@@ -217,4 +217,37 @@ describe('AppStore', () => {
     expect(secondStore.getHistory()).toHaveLength(0)
     await expect(readFile(firstEntry?.audioFilePath ?? '', 'utf8')).rejects.toThrow()
   })
+
+  it('rotates telemetry.ndjson to keep only the most recent 10000 records', async () => {
+    const telemetryFile = join(userDataDir, 'data', 'telemetry.ndjson')
+    await mkdir(join(userDataDir, 'data'), { recursive: true })
+
+    const existingRecords = Array.from({ length: 10_000 }, (_, index) =>
+      JSON.stringify({
+        id: `metric-${index}`,
+        timestamp: new Date(2024, 0, 1, 0, 0, index).toISOString(),
+        kind: 'metric',
+        name: `metric-${index}`,
+        detail: { index: String(index) },
+      }),
+    ).join('\n')
+
+    await writeFile(telemetryFile, `${existingRecords}\n`, 'utf8')
+
+    const AppStore = await loadStore()
+    const store = new AppStore()
+    await store.initialize()
+    await store.appendTelemetry({
+      id: 'metric-latest',
+      timestamp: new Date().toISOString(),
+      kind: 'metric',
+      name: 'latest',
+      detail: {},
+    })
+
+    const persisted = (await readFile(telemetryFile, 'utf8')).trim().split('\n').map((line) => JSON.parse(line))
+    expect(persisted).toHaveLength(10_000)
+    expect(persisted[0]?.id).toBe('metric-latest')
+    expect(persisted.at(-1)?.id).toBe('metric-9998')
+  })
 })

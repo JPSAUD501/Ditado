@@ -1,24 +1,27 @@
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { motion, useReducedMotion } from 'framer-motion'
 import { Clock, LayoutDashboard, Settings2 } from 'lucide-react'
 
 import type { DashboardTab, InsertionBenchmarkResult, Settings } from '@shared/contracts'
 import { StatusPill } from '@renderer/components/StatusPill'
 import { useDashboardBridge, useDictationRecorder } from '@renderer/hooks/useDitadoBridge'
+import { useThemeAndLanguage } from '@renderer/hooks/useThemeAndLanguage'
 import { HistoryPanel } from './dashboard/HistoryPanel'
 import { OnboardingWizard } from './dashboard/OnboardingWizard'
 import { OverviewPanel } from './dashboard/OverviewPanel'
 import { SettingsPanel } from './dashboard/SettingsPanel'
 
-const navTabs: Array<{ id: DashboardTab; label: string; Icon: React.FC<{ size?: number; strokeWidth?: number }> }> = [
-  { id: 'overview', label: 'Overview', Icon: LayoutDashboard },
-  { id: 'settings', label: 'Settings', Icon: Settings2 },
-  { id: 'history', label: 'History', Icon: Clock },
+const navTabs: Array<{ id: DashboardTab; labelKey: string; Icon: React.FC<{ size?: number; strokeWidth?: number }> }> = [
+  { id: 'overview', labelKey: 'common.overview', Icon: LayoutDashboard },
+  { id: 'settings', labelKey: 'common.settings', Icon: Settings2 },
+  { id: 'history', labelKey: 'common.history', Icon: Clock },
 ]
 
 const easeOutExpo = [0.16, 1, 0.3, 1] as const
 const defaultBenchmarkText =
   'abcdefghijlmnopqrstuvxz abcdefghijlmnopqrstuvxz abcdefghijlmnopqrstuvxz abcdefghijlmnopqrstuvxz'
+const areSettingsEqual = (left: Settings, right: Settings): boolean => JSON.stringify(left) === JSON.stringify(right)
 
 export const DashboardWindow = ({ initialTab }: { initialTab: DashboardTab }) => {
   const state = useDashboardBridge()
@@ -33,34 +36,59 @@ export const DashboardWindow = ({ initialTab }: { initialTab: DashboardTab }) =>
   const [benchmarkRunning, setBenchmarkRunning] = useState(false)
   const [benchmarkResult, setBenchmarkResult] = useState<InsertionBenchmarkResult | null>(null)
   const [benchmarkError, setBenchmarkError] = useState<string | null>(null)
+  const latestStateSettings = useRef(state.settings)
+  // Always keep in sync during render — never rely on useEffect for this ref,
+  // because effects run *after* paint and a fast second mutation would read stale data.
+  latestStateSettings.current = draftSettings ?? state.settings
+  const latestSettingsMutationId = useRef(0)
   const { isRecording } = useDictationRecorder(state.session, state.settings.preferredMicrophoneId)
+  const { t } = useTranslation()
   const settings = draftSettings ?? state.settings
+  useThemeAndLanguage(settings)
   const sessionStatus = state.session?.status ?? 'idle'
 
-  const updateSettings = async (patch: Partial<Settings>) => {
-    const optimisticSettings = { ...settings, ...patch }
-    setDraftSettings(optimisticSettings)
+  useEffect(() => {
+    // When the server confirms a new state, clear the optimistic draft only if it
+    // already matches (meaning all in-flight mutations have been acknowledged).
+    setDraftSettings((currentDraft) => {
+      if (!currentDraft || areSettingsEqual(currentDraft, state.settings)) {
+        return null
+      }
+      return currentDraft
+    })
+  }, [state.settings])
+
+  const applySettingsMutation = async (
+    applyOptimisticUpdate: (base: Settings) => Settings,
+    commit: () => Promise<Settings>,
+  ): Promise<Settings> => {
+    const mutationId = ++latestSettingsMutationId.current
+    setDraftSettings((currentDraft) => applyOptimisticUpdate(currentDraft ?? latestStateSettings.current))
     try {
-      const nextSettings = await window.ditado.updateSettings(patch)
-      setDraftSettings(nextSettings)
+      const nextSettings = await commit()
+      if (mutationId === latestSettingsMutationId.current) {
+        setDraftSettings(nextSettings)
+      }
       return nextSettings
     } catch (error) {
-      setDraftSettings(state.settings)
+      if (mutationId === latestSettingsMutationId.current) {
+        setDraftSettings(latestStateSettings.current)
+      }
       throw error
     }
   }
 
+  const updateSettings = async (patch: Partial<Settings>) => applySettingsMutation(
+    (baseSettings) => ({ ...baseSettings, ...patch }),
+    () => window.ditado.updateSettings(patch),
+  )
+
   const saveApiKey = async (): Promise<void> => {
-    const optimisticSettings = { ...settings, apiKeyPresent: Boolean(pendingApiKey.trim()) }
-    setDraftSettings(optimisticSettings)
-    try {
-      const nextSettings = await window.ditado.setApiKey(pendingApiKey)
-      setDraftSettings(nextSettings)
-      setPendingApiKey('')
-    } catch (error) {
-      setDraftSettings(state.settings)
-      throw error
-    }
+    await applySettingsMutation(
+      (baseSettings) => ({ ...baseSettings, apiKeyPresent: Boolean(pendingApiKey.trim()) }),
+      () => window.ditado.setApiKey(pendingApiKey),
+    )
+    setPendingApiKey('')
   }
 
   const sectionMotion = {
@@ -135,22 +163,29 @@ export const DashboardWindow = ({ initialTab }: { initialTab: DashboardTab }) =>
     )
   }
 
-  const activeTabMeta = navTabs.find((t) => t.id === activeTab)
+  const activeTabMeta = navTabs.find((tab) => tab.id === activeTab)
 
   return (
     <div className="app-shell">
       {/* Sidebar */}
       <nav className="sidebar">
-        <div className="sidebar-logo">D</div>
+        <div className="sidebar-logo" aria-label="Ditado">
+          <svg viewBox="0 0 20 20" width="16" height="16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="7.5" y="2" width="5" height="8" rx="2.5" fill="currentColor" />
+            <path d="M5 10c0 3.5 2.5 6.2 5 6.2s5-2.7 5-6.2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" fill="none" />
+            <line x1="10" y1="16.2" x2="10" y2="18" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+            <line x1="7" y1="18" x2="13" y2="18" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+          </svg>
+        </div>
         <div className="sidebar-nav">
-          {navTabs.map(({ id, label, Icon }) => (
+          {navTabs.map(({ id, labelKey, Icon }) => (
             <button
               key={id}
               className="sidebar-icon"
               data-active={activeTab === id}
-              data-tooltip={label}
+              data-tooltip={t(labelKey)}
               type="button"
-              aria-label={label}
+              aria-label={t(labelKey)}
               onClick={() => setActiveTab(id)}
             >
               <Icon size={17} strokeWidth={1.8} />
@@ -160,7 +195,7 @@ export const DashboardWindow = ({ initialTab }: { initialTab: DashboardTab }) =>
         <div className="sidebar-footer">
           <div className="session-dot" data-status={sessionStatus} title={sessionStatus} />
           <span className="sidebar-label">
-            {sessionStatus === 'idle' ? 'Idle' : sessionStatus === 'listening' ? 'Rec' : sessionStatus}
+            {sessionStatus === 'idle' ? t('common.idle') : sessionStatus === 'listening' ? t('sidebar.rec') : sessionStatus}
           </span>
         </div>
       </nav>
@@ -168,7 +203,7 @@ export const DashboardWindow = ({ initialTab }: { initialTab: DashboardTab }) =>
       {/* Main */}
       <div className="main-content">
         <div className="topbar">
-          <span className="topbar-title">{activeTabMeta?.label ?? 'Ditado'}</span>
+          <span className="topbar-title">{activeTabMeta ? t(activeTabMeta.labelKey) : 'Ditado'}</span>
           {state.session?.targetApp ? (
             <>
               <span className="topbar-sep">/</span>
@@ -177,8 +212,6 @@ export const DashboardWindow = ({ initialTab }: { initialTab: DashboardTab }) =>
           ) : null}
           <div className="topbar-actions">
             <StatusPill status={sessionStatus} />
-            <button className="button-ghost" type="button" onClick={() => void window.ditado.toggleDictation()}>Toggle</button>
-            <button className="button-ghost" type="button" onClick={() => void window.ditado.startPushToTalk()}>Push</button>
           </div>
         </div>
 
@@ -190,7 +223,6 @@ export const DashboardWindow = ({ initialTab }: { initialTab: DashboardTab }) =>
                 isRecording={isRecording}
                 reducedMotion={reducedMotion}
                 sectionMotion={sectionMotion}
-                openSettings={() => setActiveTab('settings')}
               />
             </motion.div>
           )}

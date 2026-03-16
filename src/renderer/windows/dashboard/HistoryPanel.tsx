@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { Trash2 } from 'lucide-react'
 
 import type { HistoryEntry } from '@shared/contracts'
@@ -15,29 +16,33 @@ export const HistoryPanel = ({
     animate: { opacity: number; y: number }
     transition: { duration: number; ease: readonly [number, number, number, number] }
   }
-}) => (
-  <div className="grid gap-3">
-    <div className="flex items-center justify-between gap-3">
-      <div className="flex items-center gap-3">
-        <span className="eyebrow">{history.length} entries</span>
-        <span className="text-xs" style={{ color: 'var(--text-3)' }}>·</span>
-        <span className="text-xs" style={{ color: 'var(--text-3)' }}>{retentionDays}d retention</span>
-      </div>
-      <button className="button-ghost" type="button" onClick={() => void window.ditado.clearHistory()}>
-        <Trash2 size={13} /> Clear
-      </button>
-    </div>
+}) => {
+  const { t } = useTranslation()
 
-    {history.length === 0 ? (
-      <div className="surface-panel p-5 text-center">
-        <div className="text-sm" style={{ color: 'var(--text-3)' }}>
-          No entries yet. Use a shortcut to start dictating.
+  return (
+    <div className="grid gap-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <span className="eyebrow">{t('history.entries', { count: history.length })}</span>
+          <span className="text-xs" style={{ color: 'var(--text-3)' }}>·</span>
+          <span className="text-xs" style={{ color: 'var(--text-3)' }}>{t('history.retention', { days: retentionDays })}</span>
         </div>
+        <button className="button-ghost" type="button" onClick={() => void window.ditado.clearHistory()}>
+          <Trash2 size={13} /> {t('common.clear')}
+        </button>
       </div>
-    ) : (
-      <div className="grid gap-1.5">
-        {history.map((entry, index) => <HistoryRow key={entry.id} entry={entry} index={index} />)}
-      </div>
-    )}
-  </div>
-)
+
+      {history.length === 0 ? (
+        <div className="surface-panel p-5 text-center">
+          <div className="text-sm" style={{ color: 'var(--text-3)' }}>
+            {t('history.noEntries')}
+          </div>
+        </div>
+      ) : (
+        <div className="grid gap-1.5">
+          {history.map((entry, index) => <HistoryRow key={entry.id} entry={entry} index={index} />)}
+        </div>
+      )}
+    </div>
+  )
+}

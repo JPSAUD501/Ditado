@@ -12,6 +12,21 @@ class MockUpdater extends EventEmitter {
   checkForUpdates = vi.fn(async () => undefined)
 }
 
+vi.mock('electron', () => ({
+  app: {
+    isPackaged: false,
+    getVersion: () => '0.1.0',
+  },
+}))
+
+vi.mock('electron-updater', () => ({
+  default: {
+    autoUpdater: {},
+  },
+}))
+
+import { UpdateService } from './updateService.js'
+
 const createStore = (enabled = true, channel: UpdateState['channel'] = 'stable') =>
   ({
     getSettings: () => ({
@@ -23,7 +38,6 @@ const createStore = (enabled = true, channel: UpdateState['channel'] = 'stable')
 describe('UpdateService', () => {
   it('stays unsupported in unpackaged environments', async () => {
     const updater = new MockUpdater()
-    const { UpdateService } = await import('./updateService.js')
     const service = new UpdateService(createStore(true), () => undefined, updater as never, false, '0.1.0')
 
     await service.initialize()
@@ -34,7 +48,6 @@ describe('UpdateService', () => {
 
   it('configures updater behavior from settings', async () => {
     const updater = new MockUpdater()
-    const { UpdateService } = await import('./updateService.js')
     const service = new UpdateService(createStore(true, 'beta'), () => undefined, updater as never, true, '0.1.0-beta.1')
 
     await service.initialize()
@@ -49,7 +62,6 @@ describe('UpdateService', () => {
   it('tracks updater event transitions', async () => {
     const updater = new MockUpdater()
     const onStateChanged = vi.fn()
-    const { UpdateService } = await import('./updateService.js')
     const service = new UpdateService(createStore(true), onStateChanged, updater as never, true, '0.1.0')
 
     await service.initialize()

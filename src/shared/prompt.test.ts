@@ -19,7 +19,9 @@ describe('prompt helpers', () => {
     expect(prompt).toContain('<output_contract>')
     expect(prompt).toContain('<grounding_rules>')
     expect(prompt).toContain('<verification_loop>')
-    expect(prompt).toContain('If the audio does not contain intelligible speech, return an empty string.')
+    expect(prompt).toContain('If the user did not say anything, return an empty string.')
+    expect(prompt).toContain('If you are unsure whether any real words were spoken, prefer the empty string.')
+    expect(prompt).toContain('Context is never permission to fabricate missing speech.')
     expect(prompt).toContain('Preserve lexical fidelity')
   })
 
@@ -29,6 +31,7 @@ describe('prompt helpers', () => {
     expect(prompt).toContain('Active app: Slack')
     expect(prompt).toContain('Selected text: old copy')
     expect(prompt).toContain('Language hint: pt-BR')
+    expect(prompt).toContain('output exactly an empty string')
     expect(prompt).not.toContain('Text before cursor')
     expect(prompt).not.toContain('Text after cursor')
   })
