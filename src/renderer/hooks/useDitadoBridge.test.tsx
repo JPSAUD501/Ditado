@@ -90,9 +90,12 @@ beforeEach(() => {
     getPermissions: vi.fn(),
     openDashboardTab: vi.fn(),
     clearHistory: vi.fn(),
+    deleteHistoryEntry: vi.fn(async () => undefined),
     getHistoryAudio: vi.fn(),
     getTelemetryTail: vi.fn(),
     checkForUpdates: vi.fn(),
+    downloadUpdate: vi.fn(async () => undefined),
+    installUpdate: vi.fn(async () => undefined),
   }
 })
 

@@ -73,9 +73,12 @@ const installOverlayApi = (session: DictationSession | null): void => {
     getPermissions: vi.fn(async () => defaultPermissionState),
     openDashboardTab: vi.fn(async () => undefined),
     clearHistory: vi.fn(async () => undefined),
+    deleteHistoryEntry: vi.fn(async () => undefined),
     getHistoryAudio: vi.fn(async () => null),
     getTelemetryTail: vi.fn(async () => []),
     checkForUpdates: vi.fn(async () => undefined),
+    downloadUpdate: vi.fn(async () => undefined),
+    installUpdate: vi.fn(async () => undefined),
   }
 }
 
