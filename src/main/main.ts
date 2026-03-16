@@ -15,7 +15,6 @@ import { AutomationService } from './services/automation/automationService.js'
 import { ClipboardService } from './services/clipboard/clipboardService.js'
 import { ActiveContextService } from './services/context/activeContextService.js'
 import { InsertionEngine } from './services/insertion/insertionEngine.js'
-import { InsertionBenchmarkService } from './services/insertion/insertionBenchmarkService.js'
 import { OpenRouterService } from './services/llm/openRouterService.js'
 import { PermissionService } from './services/permissions/permissionService.js'
 import { DictationSessionOrchestrator } from './services/session/dictationSessionOrchestrator.js'
@@ -262,7 +261,6 @@ void app.whenReady().then(async () => {
   const automation = new AutomationService()
   const context = new ActiveContextService(clipboardService)
   const insertion = new InsertionEngine(clipboardService, automation)
-  const benchmark = new InsertionBenchmarkService(insertion, context)
   const llm = new OpenRouterService(store)
   const orchestrator = new DictationSessionOrchestrator(store, context, insertion, llm, telemetry, permissions)
   const updates = new UpdateService(store, () => {
@@ -304,7 +302,6 @@ void app.whenReady().then(async () => {
     permissions,
     telemetry,
     updates,
-    benchmark,
     setHotkeyCaptureActive: (active) => {
       hotkeyCaptureActive = active
     },

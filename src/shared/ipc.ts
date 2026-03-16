@@ -18,7 +18,6 @@ export const ipcChannels = {
   settings: {
     update: 'settings:update',
     setApiKey: 'settings:setApiKey',
-    benchmarkInsertion: 'settings:benchmarkInsertion',
   },
   hotkeys: {
     setCaptureMode: 'hotkeys:setCaptureMode',

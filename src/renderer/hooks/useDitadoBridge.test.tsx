@@ -83,7 +83,6 @@ beforeEach(() => {
     notifyRecorderFailed: vi.fn(async () => undefined),
     updateSettings: vi.fn(),
     setApiKey: vi.fn(),
-    benchmarkInsertion: vi.fn(),
     setHotkeyCaptureActive: vi.fn(),
     getShortcutStatus: vi.fn(async () => ({ captureActive: false, uiohookRunning: true })),
     listMicrophones: vi.fn(),

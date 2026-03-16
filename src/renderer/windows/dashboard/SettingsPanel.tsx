@@ -1,8 +1,7 @@
 import { type ReactNode, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ChevronDown } from 'lucide-react'
 
-import type { InsertionBenchmarkResult, Settings } from '@shared/contracts'
+import type { Settings } from '@shared/contracts'
 import { HotkeyField, MicrophoneSelect, ToggleRow } from './controls'
 
 const requestBrowserMicrophonePermission = async (): Promise<void> => {
@@ -38,14 +37,7 @@ export const SettingsPanel = ({
   updateSettings,
   microphoneRefreshKey,
   refreshMicrophones,
-  benchmarkText,
-  setBenchmarkText,
-  resetBenchmarkText,
-  benchmarkCountdown,
-  benchmarkRunning,
-  benchmarkResult,
-  benchmarkError,
-  runInsertionBenchmark,
+  onRestartOnboarding,
 }: {
   settings: Settings
   pendingApiKey: string
@@ -54,14 +46,7 @@ export const SettingsPanel = ({
   updateSettings: (patch: Partial<Settings>) => Promise<Settings>
   microphoneRefreshKey: number
   refreshMicrophones: () => void
-  benchmarkText: string
-  setBenchmarkText: (value: string) => void
-  resetBenchmarkText: () => void
-  benchmarkCountdown: number | null
-  benchmarkRunning: boolean
-  benchmarkResult: InsertionBenchmarkResult | null
-  benchmarkError: string | null
-  runInsertionBenchmark: () => void
+  onRestartOnboarding: () => void
   reducedMotion: boolean | null
   sectionMotion: {
     initial: { opacity: number; y: number }
@@ -70,7 +55,6 @@ export const SettingsPanel = ({
   }
 }) => {
   const { t } = useTranslation()
-  const [benchmarkOpen, setBenchmarkOpen] = useState(true)
   const [shortcutStatus, setShortcutStatus] = useState<{ captureActive: boolean; uiohookRunning: boolean } | null>(null)
 
   useEffect(() => {
@@ -193,6 +177,14 @@ export const SettingsPanel = ({
             >
               Reset shortcut capture
             </button>
+            <button
+              className="button-ghost"
+              type="button"
+              title="Walk through the setup wizard again."
+              onClick={onRestartOnboarding}
+            >
+              Restart setup wizard
+            </button>
           </div>
           {shortcutStatus && (
             <div className="surface-muted p-2.5 text-xs grid gap-1" style={{ borderRadius: '0.4rem' }}>
@@ -217,71 +209,6 @@ export const SettingsPanel = ({
           )}
         </Section>
 
-        <div className="divider" />
-
-        {/* Benchmark (collapsible) */}
-        <div>
-          <button
-            className="section-label flex items-center gap-1 cursor-pointer"
-            style={{ background: 'none', border: 'none', padding: '0.5rem 0' }}
-            type="button"
-            onClick={() => setBenchmarkOpen(!benchmarkOpen)}
-          >
-            <ChevronDown
-              size={12}
-              style={{
-                transition: 'transform 120ms ease',
-                transform: benchmarkOpen ? 'rotate(0deg)' : 'rotate(-90deg)',
-              }}
-            />
-            Insertion Benchmark
-          </button>
-          {benchmarkOpen && (
-            <div className="grid gap-2 mt-1">
-              <Field label="Test text" hint="Focus a disposable text field, then click run.">
-                <textarea
-                  className="field"
-                  style={{ minHeight: '5rem', resize: 'vertical' }}
-                  placeholder="Enter text to measure insertion speed."
-                  value={benchmarkText}
-                  onChange={(e) => setBenchmarkText(e.target.value)}
-                  aria-label="Benchmark text"
-                />
-              </Field>
-              <div className="flex items-center gap-2">
-                <button
-                  className="button-secondary"
-                  type="button"
-                  disabled={benchmarkRunning || benchmarkCountdown !== null}
-                  onClick={runInsertionBenchmark}
-                >
-                  {benchmarkCountdown !== null
-                    ? `Focus field in ${benchmarkCountdown}s`
-                    : benchmarkRunning
-                      ? 'Running…'
-                      : 'Run benchmark'}
-                </button>
-                <button className="button-ghost" type="button" onClick={resetBenchmarkText}>Reset text</button>
-              </div>
-              {benchmarkResult && (
-                <div className="surface-muted p-2.5 text-xs">
-                  <div style={{ color: 'var(--text-1)' }}>
-                    {benchmarkResult.charactersPerSecond.toFixed(1)} chars/s in {benchmarkResult.targetApp}
-                  </div>
-                  <div className="mt-1" style={{ color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>
-                    {benchmarkResult.graphemeCount} chars · {Math.round(benchmarkResult.durationMs)}ms · {benchmarkResult.mode} via {benchmarkResult.insertionMethod}
-                    {benchmarkResult.fallbackUsed ? ' · fallback' : ''}
-                  </div>
-                </div>
-              )}
-              {benchmarkError && (
-                <div className="p-2.5 text-xs" style={{ borderRadius: '0.4rem', border: '1px solid rgba(210,90,80,0.2)', background: 'rgba(210,90,80,0.06)', color: 'var(--status-error)' }}>
-                  {benchmarkError}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
       </div>
 
       {/* ── Right column: appearance + behavior toggles ── */}

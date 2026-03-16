@@ -6,7 +6,6 @@ import type {
   DeviceInfo,
   DictationAudioPayload,
   HistoryAudioAsset,
-  InsertionBenchmarkResult,
   OverlayViewModel,
   PermissionState,
   Settings,
@@ -54,11 +53,7 @@ contextBridge.exposeInMainWorld('ditado', {
     ipcRenderer.invoke(ipcChannels.dictation.recorderFailed, sessionId, reason),
   updateSettings: (patch: Partial<Settings>) => ipcRenderer.invoke(ipcChannels.settings.update, patch),
   setApiKey: (apiKey: string) => ipcRenderer.invoke(ipcChannels.settings.setApiKey, apiKey),
-  benchmarkInsertion: (
-    mode: Settings['insertionStreamingMode'],
-    text: string,
-  ): Promise<InsertionBenchmarkResult> => ipcRenderer.invoke(ipcChannels.settings.benchmarkInsertion, { mode, text }),
-  setHotkeyCaptureActive: (active: boolean) => ipcRenderer.invoke(ipcChannels.hotkeys.setCaptureMode, active),
+setHotkeyCaptureActive: (active: boolean) => ipcRenderer.invoke(ipcChannels.hotkeys.setCaptureMode, active),
   getShortcutStatus: (): Promise<{ captureActive: boolean; uiohookRunning: boolean }> => ipcRenderer.invoke(ipcChannels.hotkeys.getStatus),
   listMicrophones: async (): Promise<DeviceInfo[]> => {
     if (!navigator.mediaDevices?.enumerateDevices) {

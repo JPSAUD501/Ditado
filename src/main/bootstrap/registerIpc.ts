@@ -5,14 +5,12 @@ import {
   dashboardTabSchema,
   dictationAudioPayloadSchema,
   historyAudioRequestSchema,
-  insertionBenchmarkRequestSchema,
   sessionIdInputSchema,
   settingsPatchSchema,
 } from '../../shared/contracts.js'
 import { ipcChannels } from '../../shared/ipc.js'
 import type { DashboardTab } from '../../shared/contracts.js'
 import type { PermissionService } from '../services/permissions/permissionService.js'
-import type { InsertionBenchmarkService } from '../services/insertion/insertionBenchmarkService.js'
 import type { DictationSessionOrchestrator } from '../services/session/dictationSessionOrchestrator.js'
 import type { AppStore } from '../services/store/appStore.js'
 import type { TelemetryService } from '../services/telemetry/telemetryService.js'
@@ -24,7 +22,6 @@ interface RegisterIpcOptions {
   permissions: PermissionService
   telemetry: TelemetryService
   updates: UpdateService
-  benchmark: InsertionBenchmarkService
   setHotkeyCaptureActive: (active: boolean) => void
   getShortcutStatus: () => { captureActive: boolean; uiohookRunning: boolean }
   onSettingsChanged: () => Promise<void>
@@ -38,7 +35,6 @@ export const registerIpc = ({
   permissions,
   telemetry,
   updates,
-  benchmark,
   setHotkeyCaptureActive,
   getShortcutStatus,
   onSettingsChanged,
@@ -93,10 +89,6 @@ export const registerIpc = ({
     await onSettingsChanged()
     return settings
   })
-  ipcMain.handle(ipcChannels.settings.benchmarkInsertion, (_event, request) =>
-    benchmark.run(insertionBenchmarkRequestSchema.parse(request)),
-  )
-
   let captureAutoResetTimer: NodeJS.Timeout | null = null
   ipcMain.handle(ipcChannels.hotkeys.setCaptureMode, (_event, active: boolean) => {
     if (captureAutoResetTimer) {

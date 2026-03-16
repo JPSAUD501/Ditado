@@ -639,6 +639,8 @@ button:disabled {
   display: flex;
   align-items: center;
   justify-content: center;
+  -webkit-app-region: drag;
+  app-region: drag;
 }
 
 .wizard-card {
@@ -648,6 +650,8 @@ button:disabled {
   border-radius: 0.875rem;
   padding: 2rem 2rem 1.5rem;
   position: relative;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
 }
 
 .wizard-progress {

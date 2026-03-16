@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { motion, useReducedMotion } from 'framer-motion'
 import { Clock, LayoutDashboard, Settings2 } from 'lucide-react'
 
-import type { DashboardTab, InsertionBenchmarkResult, Settings } from '@shared/contracts'
+import type { DashboardTab, Settings } from '@shared/contracts'
 import { StatusPill } from '@renderer/components/StatusPill'
 import { useDashboardBridge, useDictationRecorder } from '@renderer/hooks/useDitadoBridge'
 import { useThemeAndLanguage } from '@renderer/hooks/useThemeAndLanguage'
@@ -19,8 +19,6 @@ const navTabs: Array<{ id: DashboardTab; labelKey: string; Icon: React.FC<{ size
 ]
 
 const easeOutExpo = [0.16, 1, 0.3, 1] as const
-const defaultBenchmarkText =
-  'abcdefghijlmnopqrstuvxz abcdefghijlmnopqrstuvxz abcdefghijlmnopqrstuvxz abcdefghijlmnopqrstuvxz'
 const areSettingsEqual = (left: Settings, right: Settings): boolean => JSON.stringify(left) === JSON.stringify(right)
 
 export const DashboardWindow = ({ initialTab }: { initialTab: DashboardTab }) => {
@@ -31,11 +29,7 @@ export const DashboardWindow = ({ initialTab }: { initialTab: DashboardTab }) =>
   const [pendingApiKey, setPendingApiKey] = useState('')
   const [draftSettings, setDraftSettings] = useState<Settings | null>(null)
   const [microphoneRefreshKey, setMicrophoneRefreshKey] = useState(0)
-  const [benchmarkText, setBenchmarkText] = useState(defaultBenchmarkText)
-  const [benchmarkCountdown, setBenchmarkCountdown] = useState<number | null>(null)
-  const [benchmarkRunning, setBenchmarkRunning] = useState(false)
-  const [benchmarkResult, setBenchmarkResult] = useState<InsertionBenchmarkResult | null>(null)
-  const [benchmarkError, setBenchmarkError] = useState<string | null>(null)
+  const [forceOnboarding, setForceOnboarding] = useState(false)
   const latestStateSettings = useRef(state.settings)
   const latestSettingsMutationId = useRef(0)
   const { isRecording } = useDictationRecorder(state.session, state.settings.preferredMicrophoneId)
@@ -106,38 +100,7 @@ export const DashboardWindow = ({ initialTab }: { initialTab: DashboardTab }) =>
 
   const finishOnboarding = async (): Promise<void> => {
     await updateSettings({ onboardingCompleted: true })
-  }
-
-  const runInsertionBenchmark = (): void => {
-    if (benchmarkRunning || benchmarkCountdown !== null) return
-
-    const trimmed = benchmarkText.trim()
-    if (!trimmed) {
-      setBenchmarkResult(null)
-      setBenchmarkError('Enter benchmark text before running the test.')
-      return
-    }
-
-    setBenchmarkError(null)
-    setBenchmarkResult(null)
-    setBenchmarkCountdown(3)
-
-    let remaining = 3
-    const interval = window.setInterval(() => {
-      remaining -= 1
-      if (remaining > 0) {
-        setBenchmarkCountdown(remaining)
-        return
-      }
-      window.clearInterval(interval)
-      setBenchmarkCountdown(null)
-      setBenchmarkRunning(true)
-      void window.ditado
-        .benchmarkInsertion(settings.insertionStreamingMode, trimmed)
-        .then((result) => { setBenchmarkResult(result); setBenchmarkError(null) })
-        .catch((err: unknown) => { setBenchmarkError(err instanceof Error ? err.message : 'Benchmark failed.') })
-        .finally(() => { setBenchmarkRunning(false) })
-    }, 1000)
+    setForceOnboarding(false)
   }
 
   /* ── Auto-complete onboarding for existing users who already have an API key ── */
@@ -151,7 +114,7 @@ export const DashboardWindow = ({ initialTab }: { initialTab: DashboardTab }) =>
   }, [settings.onboardingCompleted, settings.apiKeyPresent])
 
   /* ── Onboarding wizard overlay ── */
-  if (!settings.onboardingCompleted && !settings.apiKeyPresent) {
+  if (forceOnboarding || (!settings.onboardingCompleted && !settings.apiKeyPresent)) {
     return (
       <OnboardingWizard
         settings={settings}
@@ -240,14 +203,7 @@ export const DashboardWindow = ({ initialTab }: { initialTab: DashboardTab }) =>
                 updateSettings={updateSettings}
                 microphoneRefreshKey={microphoneRefreshKey}
                 refreshMicrophones={refreshMicrophones}
-                benchmarkText={benchmarkText}
-                setBenchmarkText={setBenchmarkText}
-                resetBenchmarkText={() => setBenchmarkText(defaultBenchmarkText)}
-                benchmarkCountdown={benchmarkCountdown}
-                benchmarkRunning={benchmarkRunning}
-                benchmarkResult={benchmarkResult}
-                benchmarkError={benchmarkError}
-                runInsertionBenchmark={runInsertionBenchmark}
+                onRestartOnboarding={() => setForceOnboarding(true)}
                 reducedMotion={reducedMotion}
                 sectionMotion={sectionMotion}
               />

@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { DashboardWindow } from './DashboardWindow'
 import { defaultPermissionState, defaultSettings } from '@shared/defaults'
-import type { DashboardViewModel, InsertionBenchmarkResult, Settings } from '@shared/contracts'
+import type { DashboardViewModel, Settings } from '@shared/contracts'
 
 const onboardedSettings: Settings = { ...defaultSettings, onboardingCompleted: true }
 
@@ -56,18 +56,6 @@ const installDesktopApi = (
     return currentState.settings
   })
 
-  const benchmarkInsertion = vi.fn(async (mode: Settings['insertionStreamingMode'], text: string): Promise<InsertionBenchmarkResult> => ({
-    mode,
-    effectiveMode: mode,
-    targetApp: 'VS Code',
-    graphemeCount: Array.from(text).length,
-    durationMs: 1000,
-    charactersPerSecond: Array.from(text).length,
-    sampleText: text,
-    insertionMethod: mode === 'letter-by-letter' ? 'enigo-letter' : 'clipboard-all-at-once',
-    fallbackUsed: false,
-  }))
-
   const setHotkeyCaptureActive = vi.fn(async () => undefined)
   const listMicrophones = vi.fn(async () => microphones)
 
@@ -92,7 +80,6 @@ const installDesktopApi = (
     notifyRecorderFailed: vi.fn(async () => undefined),
     updateSettings,
     setApiKey,
-    benchmarkInsertion,
     setHotkeyCaptureActive,
     listMicrophones,
     requestMicrophoneAccess: vi.fn(async () => defaultPermissionState),
@@ -108,7 +95,6 @@ const installDesktopApi = (
   return {
     updateSettings,
     setApiKey,
-    benchmarkInsertion,
     setHotkeyCaptureActive,
     listMicrophones,
     publishState: (nextState: DashboardViewModel) => {
@@ -258,18 +244,6 @@ describe('DashboardWindow', () => {
     await waitFor(() => {
       expect(updateSettings).toHaveBeenCalledWith({ insertionStreamingMode: 'letter-by-letter' })
     })
-  })
-
-  it('does not run the benchmark with empty text and shows a local validation error', async () => {
-    const { benchmarkInsertion } = installDesktopApi()
-    render(<DashboardWindow initialTab="settings" />)
-
-    const textarea = await screen.findByRole('textbox', { name: /benchmark text/i })
-    await userEvent.clear(textarea)
-    await userEvent.click(screen.getByRole('button', { name: /run benchmark/i }))
-
-    expect(benchmarkInsertion).not.toHaveBeenCalled()
-    expect(await screen.findByText(/enter benchmark text before running the test/i)).toBeInTheDocument()
   })
 
   it('renders the newest history entry immediately when the dashboard state updates', async () => {

@@ -6,7 +6,6 @@ import type {
   DeviceInfo,
   DictationAudioPayload,
   HistoryAudioAsset,
-  InsertionBenchmarkResult,
   OverlayViewModel,
   PermissionState,
   Settings,
@@ -26,11 +25,7 @@ interface DitadoDesktopApi {
   notifyRecorderFailed: (sessionId: string, reason: string) => Promise<void>
   updateSettings: (patch: Partial<Settings>) => Promise<Settings>
   setApiKey: (apiKey: string) => Promise<Settings>
-  benchmarkInsertion: (
-    mode: Settings['insertionStreamingMode'],
-    text: string,
-  ) => Promise<InsertionBenchmarkResult>
-  setHotkeyCaptureActive: (active: boolean) => Promise<void>
+setHotkeyCaptureActive: (active: boolean) => Promise<void>
   getShortcutStatus: () => Promise<{ captureActive: boolean; uiohookRunning: boolean }>
   listMicrophones: () => Promise<DeviceInfo[]>
   requestMicrophoneAccess: () => Promise<PermissionState>
