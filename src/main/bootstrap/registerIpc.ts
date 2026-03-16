@@ -26,6 +26,7 @@ interface RegisterIpcOptions {
   updates: UpdateService
   benchmark: InsertionBenchmarkService
   setHotkeyCaptureActive: (active: boolean) => void
+  getShortcutStatus: () => { captureActive: boolean; uiohookRunning: boolean }
   onSettingsChanged: () => Promise<void>
   broadcastState: () => Promise<void>
   openDashboardTab: (tab: DashboardTab) => void
@@ -39,6 +40,7 @@ export const registerIpc = ({
   updates,
   benchmark,
   setHotkeyCaptureActive,
+  getShortcutStatus,
   onSettingsChanged,
   broadcastState,
   openDashboardTab,
@@ -95,9 +97,21 @@ export const registerIpc = ({
     benchmark.run(insertionBenchmarkRequestSchema.parse(request)),
   )
 
+  let captureAutoResetTimer: NodeJS.Timeout | null = null
   ipcMain.handle(ipcChannels.hotkeys.setCaptureMode, (_event, active: boolean) => {
+    if (captureAutoResetTimer) {
+      clearTimeout(captureAutoResetTimer)
+      captureAutoResetTimer = null
+    }
     setHotkeyCaptureActive(Boolean(active))
+    if (active) {
+      captureAutoResetTimer = setTimeout(() => {
+        captureAutoResetTimer = null
+        setHotkeyCaptureActive(false)
+      }, 10_000)
+    }
   })
+  ipcMain.handle(ipcChannels.hotkeys.getStatus, () => getShortcutStatus())
 
   ipcMain.handle(ipcChannels.permissions.requestMicrophone, () => permissions.requestMicrophoneAccess())
   ipcMain.handle(ipcChannels.permissions.get, () => permissions.getState())

@@ -1,7 +1,6 @@
 import { app, safeStorage } from 'electron'
 import { copyFile, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { z } from 'zod'
 
 import { defaultSettings } from '../../../shared/defaults.js'
 import {
@@ -15,10 +14,10 @@ import {
 } from '../../../shared/contracts.js'
 import { normalizeHotkey } from '../../../shared/hotkeys.js'
 
-const STORE_VERSION = 2
 const TELEMETRY_LIMIT = 500
 
-const persistedSettingsSchema = settingsSchema.omit({ apiKeyPresent: true })
+const persistedSettingsSchema = settingsSchema.omit({ apiKeyPresent: true }).partial()
+
 const readJsonFile = async (filePath: string): Promise<unknown | null> => {
   try {
     const content = await readFile(filePath, 'utf8')
@@ -50,56 +49,39 @@ const writeAtomicJson = async (filePath: string, payload: unknown): Promise<void
   await rename(tempPath, filePath)
 }
 
-const persistedSettingsFileSchema = persistedSettingsSchema.extend({
-  version: z.literal(STORE_VERSION),
-})
-
-const storedHistoryFileSchema = {
-  parse(input: unknown): HistoryEntry[] {
-    if (!input || typeof input !== 'object' || !('version' in input) || !('entries' in input)) {
-      throw new Error('Invalid history store')
-    }
-
-    const candidate = input as { version?: unknown; entries?: unknown }
-    if (candidate.version !== STORE_VERSION || !Array.isArray(candidate.entries)) {
-      throw new Error('Invalid history store version')
-    }
-
-    return candidate.entries
-      .map((entry) => historyEntrySchema.safeParse(entry))
-      .filter((entry) => entry.success)
-      .map((entry) => entry.data)
-  },
-}
-
 export class AppStore {
   private readonly rootDir = join(app.getPath('userData'), 'data')
-  private readonly settingsFile = join(this.rootDir, 'settings.v2.json')
-  private readonly historyFile = join(this.rootDir, 'history.v2.json')
+  private readonly settingsFile = join(this.rootDir, 'settings.json')
+  private readonly historyFile = join(this.rootDir, 'history.json')
   private readonly historyAudioDir = join(this.rootDir, 'history-audio')
   private readonly secretFile = join(this.rootDir, 'openrouter.secure.bin')
   private readonly telemetryFile = join(this.rootDir, 'telemetry.ndjson')
 
   private settings: Settings = defaultSettings
   private history: HistoryEntry[] = []
+  private writeQueue: Promise<void> = Promise.resolve()
 
   async initialize(): Promise<void> {
     await mkdir(this.rootDir, { recursive: true })
     await mkdir(this.historyAudioDir, { recursive: true })
 
     const settingsCandidate = await readJsonFile(this.settingsFile)
-    const persistedSettings = persistedSettingsCandidate(settingsCandidate)
+    const persistedSettings = parsePersistedSettings(settingsCandidate) ?? {}
 
     this.settings = settingsSchema.parse({
       ...defaultSettings,
       ...persistedSettings,
-      pushToTalkHotkey: normalizeHotkey(persistedSettings.pushToTalkHotkey ?? defaultSettings.pushToTalkHotkey) ?? defaultSettings.pushToTalkHotkey,
-      toggleHotkey: normalizeHotkey(persistedSettings.toggleHotkey ?? defaultSettings.toggleHotkey) ?? defaultSettings.toggleHotkey,
+      pushToTalkHotkey:
+        normalizeHotkey(persistedSettings.pushToTalkHotkey ?? defaultSettings.pushToTalkHotkey)
+        ?? defaultSettings.pushToTalkHotkey,
+      toggleHotkey:
+        normalizeHotkey(persistedSettings.toggleHotkey ?? defaultSettings.toggleHotkey)
+        ?? defaultSettings.toggleHotkey,
       apiKeyPresent: await this.hasStoredApiKey(),
     })
 
     const historyCandidate = await readJsonFile(this.historyFile)
-    this.history = parseHistoryCandidate(historyCandidate)
+    this.history = parseHistory(historyCandidate) ?? []
     await this.pruneHistory()
     await this.persistSettings()
     await this.persistHistory()
@@ -109,52 +91,65 @@ export class AppStore {
     return this.settings
   }
 
-  async updateSettings(patch: Partial<Settings>): Promise<Settings> {
-    const normalizedPatch = { ...patch }
-    if (typeof normalizedPatch.pushToTalkHotkey === 'string') {
-      normalizedPatch.pushToTalkHotkey =
-        normalizeHotkey(normalizedPatch.pushToTalkHotkey) ?? this.settings.pushToTalkHotkey
-    }
-    if (typeof normalizedPatch.toggleHotkey === 'string') {
-      normalizedPatch.toggleHotkey = normalizeHotkey(normalizedPatch.toggleHotkey) ?? this.settings.toggleHotkey
-    }
+  getHistory(): HistoryEntry[] {
+    return [...this.history].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  }
 
-    this.settings = settingsSchema.parse({
-      ...this.settings,
-      ...normalizedPatch,
-      apiKeyPresent: await this.hasStoredApiKey(),
+  async flush(): Promise<void> {
+    await this.writeQueue
+  }
+
+  async updateSettings(patch: Partial<Settings>): Promise<Settings> {
+    return this.enqueueMutation(async () => {
+      const normalizedPatch = { ...patch }
+      if (typeof normalizedPatch.pushToTalkHotkey === 'string') {
+        normalizedPatch.pushToTalkHotkey =
+          normalizeHotkey(normalizedPatch.pushToTalkHotkey) ?? this.settings.pushToTalkHotkey
+      }
+      if (typeof normalizedPatch.toggleHotkey === 'string') {
+        normalizedPatch.toggleHotkey =
+          normalizeHotkey(normalizedPatch.toggleHotkey) ?? this.settings.toggleHotkey
+      }
+
+      this.settings = settingsSchema.parse({
+        ...this.settings,
+        ...normalizedPatch,
+        apiKeyPresent: await this.hasStoredApiKey(),
+      })
+      await this.pruneHistory()
+      await this.persistSettings()
+      await this.persistHistory()
+      return this.settings
     })
-    await this.pruneHistory()
-    await this.persistSettings()
-    await this.persistHistory()
-    return this.settings
   }
 
   async setApiKey(apiKey: string): Promise<Settings> {
-    if (!apiKey.trim()) {
-      await rm(this.secretFile, { force: true })
+    return this.enqueueMutation(async () => {
+      if (!apiKey.trim()) {
+        await rm(this.secretFile, { force: true })
+        this.settings = settingsSchema.parse({
+          ...this.settings,
+          apiKeyPresent: false,
+        })
+        await this.persistSettings()
+        return this.settings
+      }
+
+      if (!safeStorage.isEncryptionAvailable()) {
+        throw new Error('Secure local storage is unavailable on this system.')
+      }
+
+      await ensureParentDir(this.secretFile)
+      const payload = safeStorage.encryptString(apiKey.trim())
+      await writeFile(this.secretFile, payload)
+
       this.settings = settingsSchema.parse({
         ...this.settings,
-        apiKeyPresent: false,
+        apiKeyPresent: true,
       })
       await this.persistSettings()
       return this.settings
-    }
-
-    if (!safeStorage.isEncryptionAvailable()) {
-      throw new Error('Secure local storage is unavailable on this system.')
-    }
-
-    await ensureParentDir(this.secretFile)
-    const payload = safeStorage.encryptString(apiKey.trim())
-    await writeFile(this.secretFile, payload)
-
-    this.settings = settingsSchema.parse({
-      ...this.settings,
-      apiKeyPresent: true,
     })
-    await this.persistSettings()
-    return this.settings
   }
 
   async getApiKey(): Promise<string | null> {
@@ -174,45 +169,45 @@ export class AppStore {
     }
   }
 
-  getHistory(): HistoryEntry[] {
-    return [...this.history].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  async appendHistory(entry: HistoryEntry): Promise<void> {
+    await this.enqueueMutation(async () => {
+      const parsedEntry = historyEntrySchema.parse(entry)
+      this.history = this.history.filter((historyEntry) => historyEntry.id !== parsedEntry.id)
+      this.history.unshift(parsedEntry)
+      await this.pruneHistory()
+      await this.persistHistory()
+    })
   }
 
-  async appendHistory(entry: HistoryEntry): Promise<void> {
-    const parsedEntry = historyEntrySchema.parse(entry)
-    this.history = this.history.filter((historyEntry) => historyEntry.id !== parsedEntry.id)
-    this.history.unshift(parsedEntry)
-    await this.pruneHistory()
-    await this.persistHistory()
+  async appendHistoryWithAudio(
+    entry: Omit<HistoryEntry, 'audioFilePath' | 'audioDurationMs' | 'audioMimeType' | 'audioBytes'>,
+    payload: DictationAudioPayload,
+  ): Promise<void> {
+    await this.enqueueMutation(async () => {
+      const audioMeta = await this.writeHistoryAudio(entry.id, payload)
+      const parsedEntry = historyEntrySchema.parse({
+        ...entry,
+        ...audioMeta,
+      })
+      this.history = this.history.filter((historyEntry) => historyEntry.id !== parsedEntry.id)
+      this.history.unshift(parsedEntry)
+      await this.pruneHistory()
+      await this.persistHistory()
+    })
   }
 
   async clearHistory(): Promise<void> {
-    const audioPaths = this.history
-      .map((entry) => entry.audioFilePath)
-      .filter((path): path is string => Boolean(path))
+    await this.enqueueMutation(async () => {
+      const audioPaths = this.history
+        .map((entry) => entry.audioFilePath)
+        .filter((path): path is string => Boolean(path))
 
-    this.history = []
-    await Promise.all(audioPaths.map((audioPath) => rm(audioPath, { force: true })))
-    await rm(this.historyAudioDir, { recursive: true, force: true })
-    await mkdir(this.historyAudioDir, { recursive: true })
-    await this.persistHistory()
-  }
-
-  async persistHistoryAudio(
-    entryId: string,
-    payload: DictationAudioPayload,
-  ): Promise<Pick<HistoryEntry, 'audioFilePath' | 'audioDurationMs' | 'audioMimeType' | 'audioBytes'>> {
-    const filePath = join(this.historyAudioDir, `${entryId}.wav`)
-    await mkdir(this.historyAudioDir, { recursive: true })
-    const buffer = Buffer.from(payload.wavBase64, 'base64')
-    await writeFile(filePath, buffer)
-
-    return {
-      audioFilePath: filePath,
-      audioDurationMs: payload.durationMs,
-      audioMimeType: payload.mimeType,
-      audioBytes: buffer.byteLength,
-    }
+      this.history = []
+      await Promise.all(audioPaths.map((audioPath) => rm(audioPath, { force: true })))
+      await rm(this.historyAudioDir, { recursive: true, force: true })
+      await mkdir(this.historyAudioDir, { recursive: true })
+      await this.persistHistory()
+    })
   }
 
   async getHistoryAudioAsset(entryId: string): Promise<{ mimeType: string; base64: string } | null> {
@@ -233,12 +228,14 @@ export class AppStore {
   }
 
   async appendTelemetry(record: TelemetryRecord): Promise<void> {
-    const parsed = telemetryRecordSchema.parse(record)
-    await ensureParentDir(this.telemetryFile)
-    const existing = await this.readTelemetryTail(TELEMETRY_LIMIT)
-    const nextEntries = [parsed, ...existing].slice(0, TELEMETRY_LIMIT)
-    const serialized = nextEntries.map((entry) => JSON.stringify(entry)).join('\n')
-    await writeFile(this.telemetryFile, serialized ? `${serialized}\n` : '', 'utf8')
+    await this.enqueueMutation(async () => {
+      const parsed = telemetryRecordSchema.parse(record)
+      await ensureParentDir(this.telemetryFile)
+      const existing = await this.readTelemetryTail(TELEMETRY_LIMIT)
+      const nextEntries = [parsed, ...existing].slice(0, TELEMETRY_LIMIT)
+      const serialized = nextEntries.map((entry) => JSON.stringify(entry)).join('\n')
+      await writeFile(this.telemetryFile, serialized ? `${serialized}\n` : '', 'utf8')
+    })
   }
 
   async readTelemetryTail(limit = 30): Promise<TelemetryRecord[]> {
@@ -256,25 +253,42 @@ export class AppStore {
     }
   }
 
-  private async persistSettings(): Promise<void> {
+  private persistSettings(): Promise<void> {
     const { apiKeyPresent, ...persistedSettings } = this.settings
     void apiKeyPresent
-    await writeAtomicJson(this.settingsFile, {
-      version: STORE_VERSION,
-      ...persistedSettings,
-    })
+    return writeAtomicJson(this.settingsFile, persistedSettings)
   }
 
-  private async persistHistory(): Promise<void> {
-    await writeAtomicJson(this.historyFile, {
-      version: STORE_VERSION,
-      entries: this.history,
-    })
+  private persistHistory(): Promise<void> {
+    return writeAtomicJson(this.historyFile, this.history)
   }
 
   private async hasStoredApiKey(): Promise<boolean> {
     const apiKey = await this.getApiKey()
     return Boolean(apiKey)
+  }
+
+  private enqueueMutation<T>(operation: () => Promise<T>): Promise<T> {
+    const nextOperation = this.writeQueue.then(operation, operation)
+    this.writeQueue = nextOperation.then(() => undefined, () => undefined)
+    return nextOperation
+  }
+
+  private async writeHistoryAudio(
+    entryId: string,
+    payload: DictationAudioPayload,
+  ): Promise<Pick<HistoryEntry, 'audioFilePath' | 'audioDurationMs' | 'audioMimeType' | 'audioBytes'>> {
+    const filePath = join(this.historyAudioDir, `${entryId}.wav`)
+    await mkdir(this.historyAudioDir, { recursive: true })
+    const buffer = Buffer.from(payload.wavBase64, 'base64')
+    await writeFile(filePath, buffer)
+
+    return {
+      audioFilePath: filePath,
+      audioDurationMs: payload.durationMs,
+      audioMimeType: payload.mimeType,
+      audioBytes: buffer.byteLength,
+    }
   }
 
   private async pruneHistory(): Promise<void> {
@@ -312,23 +326,22 @@ export class AppStore {
   }
 }
 
-const persistedSettingsCandidate = (settingsCandidate: unknown): Partial<Settings> => {
-  if (!settingsCandidate || typeof settingsCandidate !== 'object') {
-    return defaultSettings
-  }
-
-  const candidate = persistedSettingsFileSchema.safeParse(settingsCandidate)
+const parsePersistedSettings = (settingsCandidate: unknown): Partial<Settings> | null => {
+  const candidate = persistedSettingsSchema.safeParse(settingsCandidate)
   if (!candidate.success) {
-    return defaultSettings
+    return null
   }
 
   return candidate.data
 }
 
-const parseHistoryCandidate = (historyCandidate: unknown): HistoryEntry[] => {
-  try {
-    return storedHistoryFileSchema.parse(historyCandidate)
-  } catch {
-    return []
+const parseHistory = (historyCandidate: unknown): HistoryEntry[] | null => {
+  if (!Array.isArray(historyCandidate)) {
+    return null
   }
+
+  return historyCandidate
+    .map((entry) => historyEntrySchema.safeParse(entry))
+    .filter((entry) => entry.success)
+    .map((entry) => entry.data)
 }

@@ -7,6 +7,8 @@ import { formatAudioDuration, formatDate, summarizeContext } from './formatters'
 
 const easeOutExpo = [0.16, 1, 0.3, 1] as const
 
+/* ── Hotkey capture field ──────────────────────────────────────────── */
+
 export const HotkeyField = ({
   label,
   value,
@@ -23,23 +25,14 @@ export const HotkeyField = ({
   const visibleValue = isCapturing ? draft : value
 
   useEffect(() => {
-    return () => {
-      void window.ditado.setHotkeyCaptureActive(false)
-    }
+    return () => { void window.ditado.setHotkeyCaptureActive(false) }
   }, [])
 
-  const stopCapture = (): void => {
-    setIsCapturing(false)
-    void window.ditado.setHotkeyCaptureActive(false)
-  }
-
-  const startCapture = (): void => {
-    setIsCapturing(true)
-    void window.ditado.setHotkeyCaptureActive(true)
-  }
+  const stopCapture = (): void => { setIsCapturing(false); void window.ditado.setHotkeyCaptureActive(false) }
+  const startCapture = (): void => { setIsCapturing(true); void window.ditado.setHotkeyCaptureActive(true) }
 
   return (
-    <div className="grid gap-2">
+    <div className="grid gap-1">
       <button
         className="field flex items-center justify-between gap-3 text-left"
         type="button"
@@ -50,49 +43,36 @@ export const HotkeyField = ({
         onKeyDown={(event) => {
           event.preventDefault()
           event.stopPropagation()
-
-          if (event.key === 'Escape') {
-            setDraft(value)
-            stopCapture()
-            return
-          }
-
+          if (event.key === 'Escape') { setDraft(value); stopCapture(); return }
           const next = hotkeyFromKeyboardEvent(event)
-          if (!next || !isSupportedHotkey(next)) {
-            return
-          }
-
+          if (!next || !isSupportedHotkey(next)) return
           const normalized = normalizeHotkey(next)
-          if (!normalized) {
-            return
-          }
-
+          if (!normalized) return
           setDraft(normalized)
           stopCapture()
           void onCommit(normalized)
         }}
       >
-        <span className={visibleValue ? 'text-[var(--text-1)]' : 'text-[var(--text-3)]'}>
-          {isCapturing ? 'Press the combo now' : visibleValue}
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: visibleValue ? 'var(--text-1)' : 'var(--text-3)' }}>
+          {isCapturing ? 'Press combo…' : visibleValue}
         </span>
-        <span className="text-[11px] uppercase tracking-[0.2em] text-[var(--text-3)]">
+        <span style={{ fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.12em', color: isCapturing ? 'var(--accent)' : 'var(--text-3)', flexShrink: 0 }}>
           {isCapturing ? 'capturing' : label}
         </span>
       </button>
       <button
-        className="button-ghost min-h-0 justify-start px-0 py-0 text-xs"
+        className="button-ghost"
+        style={{ height: 'auto', padding: 0, fontSize: '0.68rem', justifyContent: 'flex-start', color: 'var(--text-3)' }}
         type="button"
-        onClick={() => {
-          setDraft(fallbackValue)
-          stopCapture()
-          void onCommit(fallbackValue)
-        }}
+        onClick={() => { setDraft(fallbackValue); stopCapture(); void onCommit(fallbackValue) }}
       >
         Reset to {fallbackValue}
       </button>
     </div>
   )
 }
+
+/* ── Toggle row ────────────────────────────────────────────────────── */
 
 export const ToggleRow = ({
   label,
@@ -104,48 +84,42 @@ export const ToggleRow = ({
   description: string
   value: boolean
   onChange: (value: boolean) => void
-}) => (
-  <div className="surface-muted rounded-[1.45rem] px-4 py-4">
-    <div className="flex items-start justify-between gap-4">
+}) => {
+  const thumbX = value ? 16 : 0
+
+  return (
+    <div className="flex items-start justify-between gap-3 py-1">
       <div className="min-w-0">
-        <div className="text-sm font-medium text-[var(--text-1)]">{label}</div>
-        <p className="copy-muted mt-2 text-sm">{description}</p>
+        <div className="text-xs font-medium" style={{ color: 'var(--text-1)' }}>{label}</div>
+        <p className="mt-0.5 text-xs" style={{ color: 'var(--text-3)', lineHeight: 1.45 }}>{description}</p>
       </div>
       <button
-        className="relative inline-flex h-8 w-14 shrink-0 rounded-full border border-[rgba(247,239,227,0.12)] bg-[rgba(255,248,240,0.06)]"
+        className="toggle-track"
+        data-on={value}
         type="button"
         aria-label={label}
         aria-pressed={value}
         onClick={() => onChange(!value)}
       >
         <motion.span
-          animate={{ x: value ? 24 : 0 }}
-          transition={{ duration: 0.22, ease: easeOutExpo }}
-          className="pointer-events-none absolute left-1 top-1 h-6 w-6 rounded-full bg-[linear-gradient(180deg,rgba(244,238,230,1),rgba(214,194,162,0.94))]"
+          className="toggle-thumb"
+          initial={{ x: thumbX }}
+          animate={{ x: thumbX }}
+          transition={{ duration: 0.16, ease: easeOutExpo }}
+          style={{ background: value ? 'var(--accent)' : 'var(--text-3)' }}
         />
       </button>
     </div>
-  </div>
-)
+  )
+}
+
+/* ── Microphone selector ───────────────────────────────────────────── */
 
 const enumerateBrowserMicrophones = async (): Promise<Array<{ deviceId: string; label: string }>> => {
-  if (!navigator.mediaDevices?.enumerateDevices) {
-    return window.ditado.listMicrophones()
-  }
-
+  if (!navigator.mediaDevices?.enumerateDevices) return window.ditado.listMicrophones()
   const devices = await navigator.mediaDevices.enumerateDevices()
-  const microphones = devices
-    .filter((device) => device.kind === 'audioinput')
-    .map((device) => ({
-      deviceId: device.deviceId,
-      label: device.label || 'System microphone',
-    }))
-
-  if (microphones.length > 0) {
-    return microphones
-  }
-
-  return window.ditado.listMicrophones()
+  const mics = devices.filter((d) => d.kind === 'audioinput').map((d) => ({ deviceId: d.deviceId, label: d.label || 'System microphone' }))
+  return mics.length > 0 ? mics : window.ditado.listMicrophones()
 }
 
 export const MicrophoneSelect = ({
@@ -162,149 +136,108 @@ export const MicrophoneSelect = ({
   useEffect(() => {
     let mounted = true
     void enumerateBrowserMicrophones()
-      .then((result) => {
-        if (mounted) {
-          setDevices(result)
-        }
-      })
-      .catch(() => {
-        if (mounted) {
-          setDevices([])
-        }
-      })
-
-    return () => {
-      mounted = false
-    }
+      .then((r) => { if (mounted) setDevices(r) })
+      .catch(() => { if (mounted) setDevices([]) })
+    return () => { mounted = false }
   }, [refreshKey])
 
   return (
-    <select
-      className="field"
-      value={selected ?? ''}
-      onChange={(event) => onSelect(event.target.value || null)}
-      aria-label="Preferred microphone"
-    >
+    <select className="field" value={selected ?? ''} onChange={(e) => onSelect(e.target.value || null)} aria-label="Preferred microphone">
       <option value="">System default</option>
       {devices.length === 0 ? <option value="" disabled>No microphones detected</option> : null}
-      {devices.map((device) => (
-        <option key={device.deviceId} value={device.deviceId}>
-          {device.label}
-        </option>
-      ))}
+      {devices.map((d) => <option key={d.deviceId} value={d.deviceId}>{d.label}</option>)}
     </select>
   )
 }
 
-export const HistoryAudioPlayer = ({
-  entryId,
-  hasAudio,
-}: {
-  entryId: string
-  hasAudio: boolean
-}) => {
+/* ── History audio player ──────────────────────────────────────────── */
+
+export const HistoryAudioPlayer = ({ entryId, hasAudio }: { entryId: string; hasAudio: boolean }) => {
   const [src, setSrc] = useState<string | null>(null)
   const [loadFailed, setLoadFailed] = useState(false)
 
   useEffect(() => {
     let mounted = true
     let objectUrl: string | null = null
-    if (!hasAudio) {
-      return () => {
-        mounted = false
-      }
-    }
+    if (!hasAudio) return () => { mounted = false }
 
     void window.ditado.getHistoryAudio(entryId)
       .then((value) => {
-        if (!mounted || !value) {
-          if (mounted) {
-            setLoadFailed(true)
-          }
-          return
-        }
-
+        if (!mounted || !value) { if (mounted) setLoadFailed(true); return }
         const binary = atob(value.base64)
-        const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0))
+        const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0))
         objectUrl = URL.createObjectURL(new Blob([bytes], { type: value.mimeType }))
         setSrc(objectUrl)
         setLoadFailed(false)
       })
-      .catch(() => {
-        if (mounted) {
-          setLoadFailed(true)
-        }
-      })
+      .catch(() => { if (mounted) setLoadFailed(true) })
 
-    return () => {
-      mounted = false
-      if (objectUrl) {
-        URL.revokeObjectURL(objectUrl)
-      }
-    }
+    return () => { mounted = false; if (objectUrl) URL.revokeObjectURL(objectUrl) }
   }, [entryId, hasAudio])
 
-  if (!hasAudio) {
-    return null
-  }
-
-  if (loadFailed) {
-    return <div className="mt-4 text-xs text-[var(--danger)]">Audio unavailable for this entry.</div>
-  }
-
-  if (!src) {
-    return <div className="mt-4 text-xs text-[var(--text-3)]">Loading audio...</div>
-  }
-
-  return <audio className="mt-4 w-full max-w-[22rem]" controls preload="metadata" src={src} />
+  if (!hasAudio) return null
+  if (loadFailed) return <div className="mt-2 text-xs" style={{ color: 'var(--status-error)' }}>Audio unavailable.</div>
+  if (!src) return <div className="mt-2 text-xs" style={{ color: 'var(--text-3)' }}>Loading audio…</div>
+  return <audio className="mt-2 w-full" style={{ maxWidth: '20rem', height: '28px' }} controls preload="metadata" src={src} />
 }
 
+/* ── History row ───────────────────────────────────────────────────── */
+
 export const HistoryRow = ({ entry, index }: { entry: HistoryEntry; index: number }) => (
-  <div className="surface-muted rounded-[1.45rem] px-5 py-5">
-    <div className="grid gap-4 lg:grid-cols-[4.2rem_minmax(0,1fr)_auto] lg:items-start">
-      <div className="font-[var(--font-display)] text-[2.1rem] leading-none tracking-[-0.06em] text-[rgba(239,226,205,0.5)]">
+  <div className="surface-panel p-3">
+    {/* Header */}
+    <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
+      <span className="text-xs font-mono" style={{ color: 'var(--text-3)', width: '1.5rem', flexShrink: 0 }}>
         {String(index + 1).padStart(2, '0')}
-      </div>
-      <div className="wrap-safe min-w-0">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm font-medium text-[var(--text-1)]">{entry.appName}</span>
-          <span
-            className={
-              entry.outcome === 'error'
-                ? 'rounded-full border border-[rgba(255,120,120,0.22)] bg-[rgba(255,94,94,0.1)] px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-[var(--danger)]'
-                : 'rounded-full border border-[rgba(127,220,170,0.18)] bg-[rgba(93,181,127,0.1)] px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-[rgba(166,230,192,0.92)]'
-            }
-          >
-            {entry.outcome === 'error' ? 'Error' : 'Done'}
-          </span>
-          <span className="text-xs uppercase tracking-[0.2em] text-[var(--text-3)]">{entry.modelId}</span>
-          {entry.audioDurationMs > 0 ? (
-            <span className="text-xs uppercase tracking-[0.2em] text-[var(--text-3)]">
-              Audio {formatAudioDuration(entry.audioDurationMs)}
-            </span>
-          ) : null}
-        </div>
-        {entry.errorMessage ? (
-          <p className="wrap-safe mt-3 text-sm leading-7 text-[var(--danger)]">{entry.errorMessage}</p>
-        ) : null}
-        <p className="wrap-safe line-clamp-3 mt-3 text-sm leading-7 text-[var(--text-2)]">
-          {entry.outputText || (entry.outcome === 'error' ? 'No text was inserted before the failure.' : '')}
-        </p>
-        <p className="copy-muted mt-3 text-xs">
-          Requested {entry.requestedMode}, effective {entry.effectiveMode}, method {entry.insertionMethod}.
-        </p>
-        <HistoryAudioPlayer entryId={entry.id} hasAudio={Boolean(entry.audioFilePath)} />
-        <details className="mt-4 rounded-[1rem] border border-[rgba(247,239,227,0.08)] bg-[rgba(255,248,240,0.035)] px-4 py-3">
-          <summary className="cursor-pointer text-xs uppercase tracking-[0.18em] text-[var(--text-3)]">
-            Model context
-          </summary>
-          <p className="wrap-safe mt-3 text-sm leading-6 text-[var(--text-2)]">{summarizeContext(entry)}</p>
-        </details>
-      </div>
-      <div className="text-left lg:text-right">
-        <div className="eyebrow">Captured</div>
-        <div className="mt-2 text-sm text-[var(--text-2)]">{formatDate(entry.createdAt)}</div>
-      </div>
+      </span>
+      <span className="text-sm font-medium" style={{ color: 'var(--text-1)' }}>{entry.appName}</span>
+      <span
+        style={{
+          display: 'inline-flex', alignItems: 'center', height: '1rem',
+          padding: '0 0.35rem', borderRadius: '999px', fontSize: '0.58rem', fontWeight: 600,
+          letterSpacing: '0.08em', textTransform: 'uppercase' as const,
+          border: entry.outcome === 'error' ? '1px solid rgba(210,90,80,0.22)' : '1px solid rgba(112,192,134,0.2)',
+          background: entry.outcome === 'error' ? 'rgba(210,90,80,0.06)' : 'rgba(112,192,134,0.06)',
+          color: entry.outcome === 'error' ? 'var(--status-error)' : 'var(--status-ok)',
+        }}
+      >
+        {entry.outcome === 'error' ? 'err' : 'ok'}
+      </span>
+      <span className="text-xs" style={{ color: 'var(--text-3)', fontFamily: 'var(--font-mono)', fontSize: '0.65rem' }}>
+        {entry.modelId.split('/').at(-1) ?? entry.modelId}
+      </span>
+      {entry.audioDurationMs > 0 && (
+        <span className="text-xs" style={{ color: 'var(--text-3)', fontFamily: 'var(--font-mono)', fontSize: '0.65rem' }}>
+          {formatAudioDuration(entry.audioDurationMs)}
+        </span>
+      )}
+      <span className="text-xs ml-auto" style={{ color: 'var(--text-3)', fontFamily: 'var(--font-mono)', fontSize: '0.62rem' }}>
+        {formatDate(entry.createdAt)}
+      </span>
     </div>
+
+    {/* Body */}
+    {entry.errorMessage && (
+      <p className="text-xs mb-1" style={{ color: 'var(--status-error)', lineHeight: 1.45 }}>{entry.errorMessage}</p>
+    )}
+    <p className="text-sm line-clamp-3 wrap-safe" style={{ color: 'var(--text-2)', lineHeight: 1.5 }}>
+      {entry.outputText || (entry.outcome === 'error' ? 'No text inserted.' : '')}
+    </p>
+
+    {/* Meta */}
+    <div className="mt-1.5 text-xs" style={{ color: 'var(--text-3)', fontFamily: 'var(--font-mono)', fontSize: '0.62rem' }}>
+      {entry.requestedMode} · {entry.effectiveMode} · {entry.insertionMethod}
+    </div>
+
+    <HistoryAudioPlayer entryId={entry.id} hasAudio={Boolean(entry.audioFilePath)} />
+
+    <details className="mt-2">
+      <summary className="cursor-pointer text-xs" style={{ textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--text-3)', fontSize: '0.62rem' }}>
+        Context
+      </summary>
+      <p className="mt-1.5 text-xs wrap-safe" style={{ color: 'var(--text-2)', lineHeight: 1.45 }}>
+        {summarizeContext(entry)}
+      </p>
+    </details>
   </div>
 )

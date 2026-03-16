@@ -11,8 +11,7 @@ export class HistoryService {
     audio: DictationAudioPayload,
     execution: InsertionExecutionReport,
   ): Promise<void> {
-    const audioHistory = await this.store.persistHistoryAudio(session.id, audio)
-    await this.store.appendHistory({
+    await this.store.appendHistoryWithAudio({
       id: session.id,
       createdAt: session.finishedAt ?? new Date().toISOString(),
       outcome: 'completed',
@@ -22,7 +21,6 @@ export class HistoryService {
       modelId: this.store.getSettings().modelId,
       outputText: response.text,
       errorMessage: null,
-      ...audioHistory,
       submittedContext: {
         ...session.context,
       },
@@ -33,7 +31,7 @@ export class HistoryService {
       effectiveMode: execution.effectiveMode,
       insertionMethod: execution.insertionMethod,
       fallbackUsed: execution.fallbackUsed,
-    })
+    }, audio)
   }
 
   async appendFailedSession(
@@ -41,8 +39,7 @@ export class HistoryService {
     audio: DictationAudioPayload,
     execution?: InsertionExecutionReport,
   ): Promise<void> {
-    const audioHistory = await this.store.persistHistoryAudio(session.id, audio)
-    await this.store.appendHistory({
+    await this.store.appendHistoryWithAudio({
       id: session.id,
       createdAt: session.finishedAt ?? new Date().toISOString(),
       outcome: 'error',
@@ -52,7 +49,6 @@ export class HistoryService {
       modelId: this.store.getSettings().modelId,
       outputText: session.partialText || session.finalText || '',
       errorMessage: session.errorMessage,
-      ...audioHistory,
       submittedContext: {
         ...session.context,
       },
@@ -63,6 +59,6 @@ export class HistoryService {
       effectiveMode: execution?.effectiveMode ?? this.store.getSettings().insertionStreamingMode,
       insertionMethod: execution?.insertionMethod ?? 'clipboard-all-at-once',
       fallbackUsed: execution?.fallbackUsed ?? false,
-    })
+    }, audio)
   }
 }

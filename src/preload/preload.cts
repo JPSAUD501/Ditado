@@ -59,6 +59,7 @@ contextBridge.exposeInMainWorld('ditado', {
     text: string,
   ): Promise<InsertionBenchmarkResult> => ipcRenderer.invoke(ipcChannels.settings.benchmarkInsertion, { mode, text }),
   setHotkeyCaptureActive: (active: boolean) => ipcRenderer.invoke(ipcChannels.hotkeys.setCaptureMode, active),
+  getShortcutStatus: (): Promise<{ captureActive: boolean; uiohookRunning: boolean }> => ipcRenderer.invoke(ipcChannels.hotkeys.getStatus),
   listMicrophones: async (): Promise<DeviceInfo[]> => {
     if (!navigator.mediaDevices?.enumerateDevices) {
       return []

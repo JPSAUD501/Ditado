@@ -80,6 +80,7 @@ beforeEach(() => {
     setApiKey: vi.fn(),
     benchmarkInsertion: vi.fn(),
     setHotkeyCaptureActive: vi.fn(),
+    getShortcutStatus: vi.fn(async () => ({ captureActive: false, uiohookRunning: true })),
     listMicrophones: vi.fn(),
     requestMicrophoneAccess: vi.fn(),
     getPermissions: vi.fn(),

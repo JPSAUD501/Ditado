@@ -78,6 +78,7 @@ const installOverlayApi = (session: DictationSession | null): void => {
       fallbackUsed: false,
     })),
     setHotkeyCaptureActive: vi.fn(async () => undefined),
+    getShortcutStatus: vi.fn(async () => ({ captureActive: false, uiohookRunning: true })),
     listMicrophones: vi.fn(async () => []),
     requestMicrophoneAccess: vi.fn(async () => defaultPermissionState),
     getPermissions: vi.fn(async () => defaultPermissionState),
@@ -106,15 +107,19 @@ describe('OverlayWindow', () => {
     render(<OverlayWindow />)
 
     expect(await screen.findByText(/toggle: shift\+alt/i)).toBeInTheDocument()
-    expect(screen.getByText(/tip/i)).toBeInTheDocument()
-    expect(screen.getByText('Hold')).toBeInTheDocument()
+    const chip = document.querySelector('.overlay-chip')
+    expect(chip).toHaveAttribute('data-mode', 'push-to-talk')
+    expect(chip).toHaveAttribute('data-status', 'notice')
   })
 
-  it('shows a distinct mode label for toggle dictation', async () => {
+  it('shows a distinct mode indicator for toggle dictation', async () => {
     installOverlayApi(toggleSession)
     render(<OverlayWindow />)
 
-    expect(await screen.findByText('Toggle')).toBeInTheDocument()
-    expect(screen.getByText(/listening/i)).toBeInTheDocument()
+    await waitFor(() => {
+      const chip = document.querySelector('.overlay-chip')
+      expect(chip).toHaveAttribute('data-mode', 'toggle')
+      expect(chip).toHaveAttribute('data-status', 'listening')
+    })
   })
 })

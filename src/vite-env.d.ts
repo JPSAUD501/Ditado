@@ -31,6 +31,7 @@ interface DitadoDesktopApi {
     text: string,
   ) => Promise<InsertionBenchmarkResult>
   setHotkeyCaptureActive: (active: boolean) => Promise<void>
+  getShortcutStatus: () => Promise<{ captureActive: boolean; uiohookRunning: boolean }>
   listMicrophones: () => Promise<DeviceInfo[]>
   requestMicrophoneAccess: () => Promise<PermissionState>
   getPermissions: () => Promise<PermissionState>

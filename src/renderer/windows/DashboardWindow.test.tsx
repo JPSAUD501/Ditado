@@ -6,7 +6,9 @@ import { DashboardWindow } from './DashboardWindow'
 import { defaultPermissionState, defaultSettings } from '@shared/defaults'
 import type { DashboardViewModel, InsertionBenchmarkResult, Settings } from '@shared/contracts'
 
-const createState = (settings: Settings = defaultSettings): DashboardViewModel => ({
+const onboardedSettings: Settings = { ...defaultSettings, onboardingCompleted: true }
+
+const createState = (settings: Settings = onboardedSettings): DashboardViewModel => ({
   session: null,
   settings,
   history: [],
@@ -21,7 +23,7 @@ const createState = (settings: Settings = defaultSettings): DashboardViewModel =
 })
 
 const installDesktopApi = (
-  initialSettings: Settings = defaultSettings,
+  initialSettings: Settings = onboardedSettings,
   microphones: Array<{ deviceId: string; label: string; kind: 'audioinput' }> = [],
 ) => {
   let currentState = createState(initialSettings)
@@ -87,10 +89,11 @@ const installDesktopApi = (
     getPermissions: vi.fn(async () => defaultPermissionState),
     openDashboardTab: vi.fn(async () => undefined),
     clearHistory: vi.fn(async () => undefined),
-    getHistoryAudio: vi.fn(async () => null),
-    getTelemetryTail: vi.fn(async () => []),
-    checkForUpdates: vi.fn(async () => undefined),
-  }
+  getHistoryAudio: vi.fn(async () => null),
+  getTelemetryTail: vi.fn(async () => []),
+  checkForUpdates: vi.fn(async () => undefined),
+  getShortcutStatus: vi.fn(async () => ({ captureActive: false, uiohookRunning: true })),
+}
 
   return {
     updateSettings,
@@ -125,7 +128,7 @@ describe('DashboardWindow', () => {
     const { updateSettings } = installDesktopApi()
     render(<DashboardWindow initialTab="settings" />)
 
-    const toggle = await screen.findByRole('button', { name: /receive beta builds/i })
+    const toggle = await screen.findByRole('button', { name: /beta channel/i })
     expect(toggle).toHaveAttribute('aria-pressed', 'false')
 
     await userEvent.click(toggle)
@@ -163,18 +166,18 @@ describe('DashboardWindow', () => {
 
     const input = await screen.findByPlaceholderText('sk-or-v1-...')
     await userEvent.type(input, 'sk-or-v1-demo')
-    await userEvent.click(screen.getByRole('button', { name: /save key/i }))
+    await userEvent.click(screen.getByRole('button', { name: /^save$/i }))
 
     await waitFor(() => {
       expect(setApiKey).toHaveBeenCalledWith('sk-or-v1-demo')
     })
     await waitFor(() => {
-      expect(screen.getByPlaceholderText('Saved key')).toHaveValue('')
+      expect(screen.getByPlaceholderText('Key saved')).toHaveValue('')
     })
   })
 
   it('loads detected microphones into the selector', async () => {
-    installDesktopApi(defaultSettings, [
+    installDesktopApi(onboardedSettings, [
       { deviceId: 'mic-1', label: 'USB Mic', kind: 'audioinput' },
       { deviceId: 'mic-2', label: 'Headset Mic', kind: 'audioinput' },
     ])

@@ -32,11 +32,13 @@ const windows: Windows = {
 }
 let isQuitting = false
 let hotkeyCaptureActive = false
+let uiohookRunning = false
 let overlayHideTimer: NodeJS.Timeout | null = null
 let overlayLoaded = false
 const OVERLAY_WIDTH = 280
 const OVERLAY_HEIGHT = 54
 const STARTUP_UPDATE_CHECK_DELAY_MS = 12_000
+const STABLE_USER_DATA_DIR_NAME = 'Ditado'
 
 const preloadPath = join(app.getAppPath(), 'dist-electron', 'preload', 'preload', 'preload.cjs')
 
@@ -69,7 +71,7 @@ const createOverlayWindow = (): BrowserWindow => {
       preload: preloadPath,
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true,
+      sandbox: false,
     },
   })
   window.setAlwaysOnTop(true, 'screen-saver')
@@ -103,7 +105,7 @@ const createDashboardWindow = (tab: DashboardTab = 'overview'): BrowserWindow =>
       preload: preloadPath,
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true,
+      sandbox: false,
     },
   })
 
@@ -193,6 +195,7 @@ const broadcastState = async (
 }
 
 void app.whenReady().then(async () => {
+  app.setPath('userData', join(app.getPath('appData'), STABLE_USER_DATA_DIR_NAME))
   configureMediaPermissions(session.defaultSession)
 
   const store = new AppStore()
@@ -216,8 +219,10 @@ void app.whenReady().then(async () => {
 
   windows.overlay = createOverlayWindow()
   windows.dashboard = createDashboardWindow(store.getSettings().onboardingCompleted ? 'overview' : 'onboarding')
+  windows.dashboard.on('blur', () => { hotkeyCaptureActive = false })
+  windows.dashboard.on('hide', () => { hotkeyCaptureActive = false })
 
-  const refreshShortcuts = registerShortcuts(store, orchestrator, () => hotkeyCaptureActive)
+  const refreshShortcuts = registerShortcuts(store, orchestrator, () => hotkeyCaptureActive, (running) => { uiohookRunning = running })
 
   registerTray({
     openOverview: () => showDashboard('overview'),
@@ -239,6 +244,7 @@ void app.whenReady().then(async () => {
     setHotkeyCaptureActive: (active) => {
       hotkeyCaptureActive = active
     },
+    getShortcutStatus: () => ({ captureActive: hotkeyCaptureActive, uiohookRunning }),
     onSettingsChanged: async () => {
       app.setLoginItemSettings({ openAtLogin: store.getSettings().launchOnLogin })
       updates.syncFromSettings()
@@ -276,8 +282,21 @@ void app.whenReady().then(async () => {
     showDashboard(store.getSettings().onboardingCompleted ? 'overview' : 'onboarding')
   })
 
-  app.on('before-quit', () => {
-    void insertion.dispose()
+  let shutdownInFlight = false
+  app.on('before-quit', (event) => {
+    if (shutdownInFlight) {
+      return
+    }
+
+    shutdownInFlight = true
+    event.preventDefault()
+    void Promise.allSettled([
+      store.flush(),
+      insertion.dispose(),
+    ]).finally(() => {
+      isQuitting = true
+      app.quit()
+    })
   })
 
   await broadcastState(store, orchestrator, permissions, telemetry, updates)

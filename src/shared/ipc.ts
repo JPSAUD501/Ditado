@@ -22,6 +22,7 @@ export const ipcChannels = {
   },
   hotkeys: {
     setCaptureMode: 'hotkeys:setCaptureMode',
+    getStatus: 'hotkeys:getStatus',
   },
   history: {
     clear: 'history:clear',

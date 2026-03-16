@@ -5,8 +5,8 @@ const listeners = {
   keyup: new Set<(event: { keycode: number; ctrlKey: boolean; altKey: boolean; shiftKey: boolean; metaKey: boolean }) => void>(),
 }
 
-const registerShortcut = vi.fn(() => true)
-const unregisterShortcut = vi.fn(() => undefined)
+const registerShortcut = vi.fn<(accelerator: string, callback: () => void) => boolean>(() => true)
+const unregisterShortcut = vi.fn<(accelerator: string) => void>(() => undefined)
 
 vi.mock('electron', () => ({
   globalShortcut: {
@@ -49,8 +49,10 @@ const emit = (
 beforeEach(() => {
   listeners.keydown.clear()
   listeners.keyup.clear()
-  registerShortcut.mockClear()
-  unregisterShortcut.mockClear()
+  registerShortcut.mockReset()
+  registerShortcut.mockImplementation(() => true)
+  unregisterShortcut.mockReset()
+  unregisterShortcut.mockImplementation(() => undefined)
   vi.resetModules()
 })
 
@@ -209,7 +211,53 @@ describe('registerShortcuts', () => {
     expect(orchestrator.requestStop).toHaveBeenCalledWith('push-to-talk')
   })
 
-  it('falls back to uiohook for key-based toggle when the low-level event arrives first', async () => {
+  it('does not double-trigger push-to-talk when a key-based accelerator also emits a hook event', async () => {
+    vi.useFakeTimers()
+    const { registerShortcuts } = await import('./registerShortcuts.js')
+    const orchestrator = {
+      startCapture: vi.fn(async () => undefined),
+      toggleCapture: vi.fn(async () => undefined),
+      requestStop: vi.fn(),
+      showShortPressHint: vi.fn(async () => undefined),
+      getSession: vi
+        .fn()
+        .mockReturnValueOnce({
+          status: 'arming',
+          activationMode: 'push-to-talk',
+        })
+        .mockReturnValue({
+          status: 'listening',
+          activationMode: 'push-to-talk',
+        }),
+    }
+    const store = {
+      getSettings: () => ({
+        pushToTalkHotkey: 'Alt+D',
+        toggleHotkey: 'Shift+Alt',
+      }),
+    }
+
+    registerShortcuts(store as never, orchestrator as never, () => false)
+
+    const pushCall = (registerShortcut.mock.calls as Array<unknown[]>).find((call) => call[0] === 'Alt+D')
+    const pushCallback = pushCall?.[1]
+    if (typeof pushCallback !== 'function') {
+      throw new Error('Expected push callback to be registered')
+    }
+
+    await pushCallback()
+    emit('keydown', { keycode: 56, ctrlKey: false, altKey: true, shiftKey: false, metaKey: false })
+    emit('keydown', { keycode: 32, ctrlKey: false, altKey: true, shiftKey: false, metaKey: false })
+    vi.advanceTimersByTime(650)
+    emit('keyup', { keycode: 32, ctrlKey: false, altKey: true, shiftKey: false, metaKey: false })
+
+    expect(orchestrator.startCapture).toHaveBeenCalledTimes(1)
+    expect(orchestrator.requestStop).toHaveBeenCalledTimes(1)
+    vi.useRealTimers()
+  })
+
+  it('falls back to uiohook for key-based toggle when the global accelerator cannot be registered', async () => {
+    registerShortcut.mockImplementation((accelerator: string) => accelerator !== 'CommandOrControl+D')
     const { registerShortcuts } = await import('./registerShortcuts.js')
     const orchestrator = {
       startCapture: vi.fn(async () => undefined),

@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion'
+import { Check, Mic, Shield, X } from 'lucide-react'
 
 import { StatusPill } from '@renderer/components/StatusPill'
 import type { DashboardViewModel } from '@shared/contracts'
@@ -6,36 +6,30 @@ import { formatDate } from './formatters'
 
 const updateStatusCopy = {
   idle: 'Up to date',
-  checking: 'Checking for updates',
+  checking: 'Checking…',
   available: 'Update available',
-  downloading: 'Downloading update',
-  downloaded: 'Ready on next quit',
-  disabled: 'Updates disabled',
-  error: 'Update check failed',
-  unsupported: 'Packaged builds only',
+  downloading: 'Downloading…',
+  downloaded: 'Ready on restart',
+  disabled: 'Disabled',
+  error: 'Check failed',
+  unsupported: 'Dev build',
 } as const
 
-const StatBlock = ({
-  label,
-  value,
-  description,
-}: {
-  label: string
-  value: string
-  description: string
-}) => (
-  <div className="stat-block">
-    <span className="eyebrow">{label}</span>
-    <span className="stat-value mt-3">{value}</span>
-    <p className="copy-muted mt-3 text-sm">{description}</p>
-  </div>
-)
+const stageCopy: Record<string, string> = {
+  idle: 'Standing by',
+  arming: 'Opening mic',
+  listening: 'Capturing speech',
+  processing: 'Drafting text',
+  streaming: 'Writing output',
+  completed: 'Insertion done',
+  notice: 'Notice',
+  'permission-required': 'Permission blocked',
+  error: 'Error',
+}
 
 export const OverviewPanel = ({
   state,
   isRecording,
-  reducedMotion,
-  sectionMotion,
   openSettings,
 }: {
   state: DashboardViewModel
@@ -48,152 +42,149 @@ export const OverviewPanel = ({
   }
   openSettings: () => void
 }) => {
-  const history = state.history
-  const latestEntry = history[0] ?? null
+  const latestEntry = state.history[0] ?? null
   const sessionStatus = state.session?.status ?? 'idle'
+  const stageLabel = stageCopy[sessionStatus] ?? 'Unknown'
+  const telemetrySample = state.telemetryTail.slice(0, 5)
+  const modelShort = state.settings.modelId.split('/').at(-1) ?? state.settings.modelId
+  const micOk = state.permissions.microphone === 'granted'
+  const accOk = state.permissions.accessibility === 'granted'
+  const apiOk = state.settings.apiKeyPresent
 
-  const stageLabel =
-    sessionStatus === 'idle'
-      ? 'Standing by'
-      : sessionStatus === 'arming'
-        ? 'Mic is opening'
-        : sessionStatus === 'listening'
-          ? 'Capturing speech'
-      : sessionStatus === 'processing'
-        ? 'Drafting final text'
-      : sessionStatus === 'streaming'
-        ? 'Writing into field'
-      : sessionStatus === 'completed'
-        ? 'Last insertion landed'
-      : sessionStatus === 'notice'
-        ? 'Quick-tip guidance'
-      : sessionStatus === 'permission-required'
-        ? 'Permission blocked'
-      : 'Needs attention'
-
-  const telemetrySample = state.telemetryTail.slice(0, 4)
+  const StatusIcon = ({ ok }: { ok: boolean }) =>
+    ok ? <Check size={12} style={{ color: 'var(--status-ok)' }} /> : <X size={12} style={{ color: 'var(--status-error)' }} />
 
   return (
-    <motion.div {...(reducedMotion ? {} : sectionMotion)} className="grid gap-6">
-      <section className="surface-panel surface-glow overflow-hidden px-5 py-5 md:px-7 md:py-7">
-        <div className="grid gap-8 xl:grid-cols-[minmax(0,1.4fr)_minmax(20rem,0.8fr)]">
-          <div className="min-w-0">
-            <div className="eyebrow">Desktop control room</div>
-            <h1 className="display-title mt-4">Resident. Quiet. Ready.</h1>
-            <p className="copy-soft mt-5 max-w-[42rem] text-[0.98rem] md:text-[1.04rem]">
-              Ditado behaves like a desktop utility. You call it, speak naturally, and it returns final writing with a local recovery trail.
-            </p>
-
-            <div className="mt-8 flex flex-wrap gap-3">
-              <button className="button-primary" type="button" onClick={() => void window.ditado.toggleDictation()}>
-                Start toggle dictation
-              </button>
-              <button className="button-secondary" type="button" onClick={() => void window.ditado.startPushToTalk()}>
-                Arm push-to-talk
-              </button>
-              <button className="button-ghost" type="button" onClick={openSettings}>
-                Open settings
-              </button>
-            </div>
-
-            <div className="mt-10 grid gap-6 md:grid-cols-3">
-              <StatBlock
-                label="Current mode"
-                value={isRecording ? 'Hot mic' : 'Ready'}
-                description="Capture begins from global shortcuts instead of pulling you into a separate editor."
-              />
-              <StatBlock
-                label="Context"
-                value={state.settings.sendContextAutomatically ? 'Selection-aware' : 'Audio only'}
-                description="The model receives foreground metadata and selected text only when available."
-              />
-              <StatBlock
-                label="Model"
-                value={state.settings.modelId.split('/').at(-1) ?? state.settings.modelId}
-                description="User-owned OpenRouter key, editable model id, and silence blocked before a request is sent."
-              />
-            </div>
-          </div>
-
-          <aside className="surface-muted grid gap-4 rounded-[1.6rem] p-4 md:p-5">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <div className="eyebrow">Live stage</div>
-                <div className="mt-2 text-xl font-semibold tracking-[-0.04em] text-[var(--text-1)]">{stageLabel}</div>
-              </div>
+    <div className="grid gap-3">
+      {/* Row 1: Status + Quick actions */}
+      <div className="grid gap-3" style={{ gridTemplateColumns: '1fr auto' }}>
+        <div className="surface-panel p-4">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div className="flex items-center gap-2">
               <StatusPill status={sessionStatus} />
+              <span className="text-sm font-semibold" style={{ color: 'var(--text-1)' }}>{stageLabel}</span>
             </div>
-            <div className="ornament-line" />
-            <div className="grid gap-3">
-              <div className="text-sm font-medium text-[var(--text-1)]">
-                {state.session?.targetApp ?? 'Foreground app'}
-              </div>
-              <p className="copy-soft wrap-safe text-sm">
-                {state.session?.partialText?.trim() ||
-                  'When the next dictation starts, this panel will show where the text is heading and how the system is responding.'}
-              </p>
+            <span className="text-xs" style={{ color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>
+              {state.session?.targetApp ?? '—'}
+            </span>
+          </div>
+          {state.session?.partialText ? (
+            <div className="surface-muted p-2.5 text-sm wrap-safe" style={{ color: 'var(--text-2)', lineHeight: 1.5 }}>
+              {state.session.partialText}
             </div>
-            <div className="surface-muted rounded-[1.2rem] px-4 py-3">
-              <div className="eyebrow">Last update check</div>
-              <div className="mt-2 text-sm text-[var(--text-1)]">{formatDate(state.updateState.lastCheckedAt)}</div>
-              <div className="mt-1 text-sm text-[var(--text-3)]">{updateStatusCopy[state.updateState.status]}</div>
+          ) : (
+            <div className="text-xs" style={{ color: 'var(--text-3)' }}>
+              Use a shortcut to begin dictating into the focused application.
             </div>
-          </aside>
+          )}
         </div>
-      </section>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)]">
-        <section className="surface-panel px-5 py-5 md:px-7 md:py-6">
-          <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(15rem,24rem)] md:items-end">
-            <div className="min-w-0">
-              <div className="eyebrow">Operational signals</div>
-              <h2 className="section-title mt-3">The UI stays calm while the system stays explicit.</h2>
-            </div>
-            <p className="copy-soft min-w-0 text-sm md:text-[0.98rem]">
-              The dashboard avoids becoming an editor. It shows state, route-to-recovery, and only the details that change trust.
-            </p>
-          </div>
-          <div className="ornament-line my-6" />
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div className="surface-muted rounded-[1.45rem] p-4">
-              <div className="eyebrow">Permissions</div>
-              <div className="mt-3 text-lg font-semibold text-[var(--text-1)]">{state.permissions.microphone}</div>
-              <p className="copy-soft mt-3 text-sm">
-                Accessibility is {state.permissions.accessibility}. Ditado keeps the context model simple: app, window and selected text when available.
-              </p>
-            </div>
-            <div className="surface-muted rounded-[1.45rem] p-4">
-              <div className="eyebrow">Last output</div>
-              <div className="mt-3 text-lg font-semibold text-[var(--text-1)]">{latestEntry?.appName ?? 'No entries yet'}</div>
-              <p className="copy-soft wrap-safe mt-3 text-sm">
-                {latestEntry?.outputText ||
-                  'The history rail will store recent insertions locally, giving you a recoverable trail without turning Ditado into a transcript archive.'}
-              </p>
-            </div>
-          </div>
-        </section>
-
-        <section className="surface-panel px-5 py-5">
-          <div className="eyebrow">Telemetry tail</div>
-          <h2 className="section-title mt-3">Minimal technical trace.</h2>
-          <div className="ornament-line my-5" />
-          <div className="grid gap-3">
-            {telemetrySample.length === 0 ? (
-              <div className="copy-soft text-sm">No technical events captured yet.</div>
-            ) : (
-              telemetrySample.map((event) => (
-                <div key={event.id} className="surface-muted rounded-[1.2rem] px-4 py-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="text-sm font-medium text-[var(--text-1)]">{event.name}</div>
-                    <div className="text-xs uppercase tracking-[0.2em] text-[var(--text-3)]">{event.kind}</div>
-                  </div>
-                  <div className="mt-2 text-xs text-[var(--text-3)]">{formatDate(event.timestamp)}</div>
-                </div>
-              ))
-            )}
-          </div>
-        </section>
+        <div className="surface-panel p-4 grid gap-2 content-start" style={{ width: '160px' }}>
+          <button className="button-primary w-full" type="button" onClick={() => void window.ditado.toggleDictation()}>
+            Toggle
+          </button>
+          <button className="button-secondary w-full" type="button" onClick={() => void window.ditado.startPushToTalk()}>
+            Push-to-talk
+          </button>
+          <button className="button-ghost w-full" type="button" onClick={openSettings}>
+            Settings
+          </button>
+        </div>
       </div>
-    </motion.div>
+
+      {/* Row 2: Metrics */}
+      <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+        <div className="metric-card">
+          <div className="metric-label">Status</div>
+          <div className="metric-value">{isRecording ? 'Recording' : 'Idle'}</div>
+        </div>
+        <div className="metric-card">
+          <div className="metric-label">Context</div>
+          <div className="metric-value">{state.settings.sendContextAutomatically ? 'Auto' : 'Off'}</div>
+        </div>
+        <div className="metric-card">
+          <div className="metric-label">Model</div>
+          <div className="metric-value" title={state.settings.modelId}>{modelShort}</div>
+        </div>
+        <div className="metric-card">
+          <div className="metric-label">Reveal</div>
+          <div className="metric-value">
+            {state.settings.insertionStreamingMode === 'letter-by-letter' ? 'Stream' : 'Instant'}
+          </div>
+        </div>
+      </div>
+
+      {/* Row 3: Health + Last output + Telemetry */}
+      <div className="grid gap-3" style={{ gridTemplateColumns: '200px 1fr 260px' }}>
+        {/* Health */}
+        <div className="surface-panel p-4">
+          <div className="eyebrow mb-3">
+            <Shield size={10} className="inline -mt-px mr-1" />System health
+          </div>
+          <div className="health-row">
+            <span className="health-label">API key</span>
+            <StatusIcon ok={apiOk} />
+          </div>
+          <div className="health-row">
+            <span className="health-label"><Mic size={11} className="inline -mt-px mr-0.5" /> Microphone</span>
+            <StatusIcon ok={micOk} />
+          </div>
+          <div className="health-row">
+            <span className="health-label">Accessibility</span>
+            <StatusIcon ok={accOk} />
+          </div>
+          <div className="health-row">
+            <span className="health-label">Updates</span>
+            <span className="health-value" style={{ color: 'var(--text-2)', fontSize: '0.68rem' }}>
+              {updateStatusCopy[state.updateState.status]}
+            </span>
+          </div>
+        </div>
+
+        {/* Last output */}
+        <div className="surface-panel p-4">
+          <div className="eyebrow mb-2">Last output</div>
+          {latestEntry ? (
+            <>
+              <div className="flex items-center gap-2 mb-1.5">
+                <span className="text-sm font-medium" style={{ color: 'var(--text-1)' }}>{latestEntry.appName}</span>
+                <span className="text-xs" style={{ color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>
+                  {latestEntry.modelId.split('/').at(-1)}
+                </span>
+              </div>
+              <p className="text-sm wrap-safe line-clamp-3" style={{ color: 'var(--text-2)', lineHeight: 1.55 }}>
+                {latestEntry.outputText || 'No text inserted.'}
+              </p>
+              <div className="mt-2 text-xs" style={{ color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>
+                {formatDate(latestEntry.createdAt)}
+              </div>
+            </>
+          ) : (
+            <p className="text-xs" style={{ color: 'var(--text-3)' }}>No dictation history yet.</p>
+          )}
+        </div>
+
+        {/* Telemetry */}
+        <div className="surface-panel p-4">
+          <div className="eyebrow mb-2">Events</div>
+          {telemetrySample.length === 0 ? (
+            <p className="text-xs" style={{ color: 'var(--text-3)' }}>No events captured.</p>
+          ) : (
+            <div className="grid gap-1">
+              {telemetrySample.map((event) => (
+                <div key={event.id} className="flex items-center justify-between gap-2" style={{ padding: '0.2rem 0' }}>
+                  <span className="text-xs" style={{ color: 'var(--text-2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {event.name}
+                  </span>
+                  <span className="text-xs" style={{ color: 'var(--text-3)', fontFamily: 'var(--font-mono)', flexShrink: 0, fontSize: '0.62rem' }}>
+                    {event.kind}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   )
 }

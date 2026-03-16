@@ -90,6 +90,7 @@ export const ensureMockDesktopApi = (): void => {
       return dashboardState.settings
     },
     setHotkeyCaptureActive: async () => undefined,
+    getShortcutStatus: async () => ({ captureActive: false, uiohookRunning: true }),
     benchmarkInsertion: async (mode, text): Promise<InsertionBenchmarkResult> => ({
       mode,
       effectiveMode: mode,

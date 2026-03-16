@@ -185,6 +185,7 @@ export const registerShortcuts = (
   store: AppStore,
   orchestrator: DictationSessionOrchestrator,
   isCaptureSuspended: () => boolean,
+  onHookStatus?: (running: boolean) => void,
 ): (() => void) => {
   let parsedPushHotkey = parseHotkey(store.getSettings().pushToTalkHotkey)
   let parsedToggleHotkey = parseHotkey(store.getSettings().toggleHotkey)
@@ -227,14 +228,16 @@ export const registerShortcuts = (
     pressedKeys.add(event.keycode)
     const pushMatches = matchesHotkeyFromEvent(event, pressedKeys, parsedPushHotkey)
     const toggleMatches = matchesHotkeyFromEvent(event, pressedKeys, parsedToggleHotkey)
+    const shouldStartPushFromHook = !parsedPushHotkey?.mainKey || !registeredPushAccelerator
+    const shouldToggleFromHook = !parsedToggleHotkey?.mainKey || !registeredToggleAccelerator
 
-    if (!pushActive && pushMatches) {
+    if (shouldStartPushFromHook && !pushActive && pushMatches) {
       pushActive = true
       pushStartedAt = Date.now()
       void orchestrator.startCapture('push-to-talk')
     }
 
-    if (!toggleActive && toggleMatches) {
+    if (shouldToggleFromHook && !toggleActive && toggleMatches) {
       toggleActive = true
       triggerToggle()
     }
@@ -352,8 +355,10 @@ export const registerShortcuts = (
 
   uIOhook.on('keydown', keydownHandler)
   uIOhook.on('keyup', keyupHandler)
+
   try {
     uIOhook.start()
+    onHookStatus?.(true)
     if (process.env.DITADO_DEBUG_SHORTCUTS === '1') {
       console.log('[ditado][shortcut] hook started')
       console.log(
@@ -365,6 +370,7 @@ export const registerShortcuts = (
       )
     }
   } catch (error) {
+    onHookStatus?.(false)
     console.error('[ditado][shortcut] failed to start hook', error)
   }
   syncPushRegistration()
