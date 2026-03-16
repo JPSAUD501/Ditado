@@ -194,7 +194,7 @@ export const updateStateSchema = z.object({
   enabled: z.boolean(),
   channel: z.enum(['stable', 'beta']),
   lastCheckedAt: z.string().nullable(),
-  status: z.enum(['idle', 'checking', 'ready', 'disabled']),
+  status: z.enum(['idle', 'checking', 'available', 'downloading', 'downloaded', 'disabled', 'error', 'unsupported']),
 })
 
 export type UpdateState = z.infer<typeof updateStateSchema>

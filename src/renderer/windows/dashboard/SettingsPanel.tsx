@@ -155,7 +155,7 @@ export const SettingsPanel = ({
               </select>
             </Field>
 
-            <Field label="Permission refresh" hint="Re-check microphone access without leaving the app.">
+            <Field label="Permission refresh" hint="Re-check microphone access and packaged-app updates without leaving the app.">
               <div className="flex flex-wrap gap-3">
                 <button
                   className="button-secondary"

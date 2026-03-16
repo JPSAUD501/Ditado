@@ -3,6 +3,10 @@
   "private": true,
   "version": "0.1.0",
   "description": "Universal AI dictation overlay for desktop apps.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/JPSAUD501/Ditado.git"
+  },
   "type": "module",
   "main": "dist-electron/main/main/main.js",
   "scripts": {
@@ -24,11 +28,13 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "preview": "vite preview",
-    "package": "npm run build && electron-builder"
+    "package": "npm run build && electron-builder",
+    "release:github": "npm run build && electron-builder --publish always"
   },
   "build": {
     "appId": "ai.ditado.app",
     "productName": "Ditado",
+    "electronUpdaterCompatibility": ">=2.16",
     "directories": {
       "output": "release"
     },
@@ -44,7 +50,32 @@
         "to": "native"
       }
     ],
-    "asar": true
+    "asar": true,
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "JPSAUD501",
+        "repo": "Ditado"
+      }
+    ],
+    "generateUpdatesFilesForAllChannels": true,
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ]
+    }
   },
   "dependencies": {
     "@openrouter/sdk": "^0.9.11",

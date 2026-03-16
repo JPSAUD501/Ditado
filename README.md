@@ -24,9 +24,25 @@ Ditado is a desktop dictation overlay for writing into other apps. It captures a
 - `npm run lint`: run ESLint
 - `npm run build`: create production renderer and Electron bundles
 - `npm run package`: build the app and package it with `electron-builder`
+- `npm run release:github -- --win nsis`: build and publish a Windows NSIS release to GitHub Releases
+- `npm run release:github -- --mac dmg zip`: build and publish a macOS DMG + ZIP release to GitHub Releases
+- `npm run release:github -- --linux AppImage deb`: build and publish a Linux AppImage + DEB release to GitHub Releases
 - `npm run clean`: remove renderer, preload, main, and release artifacts while preserving native outputs
 - `npm run clean:native`: remove generated native addon outputs and Rust target directories
 
 ## Native addon note
 
 `scripts/build-native-automation.mjs` always writes the JS fallback module and then tries to build the native addon. If the addon output file is locked on Windows, the build fails with a clear error instead of silently keeping a stale `.node` binary. Close any running Ditado or Node process that may have loaded the addon before rebuilding.
+
+## GitHub Actions
+
+- `.github/workflows/ci.yml` runs lint, tests, typecheck, and build validation on Windows, macOS, and Linux for pushes to `main` and pull requests.
+- `.github/workflows/release.yml` publishes Windows, macOS, and Linux artifacts when you push a tag that matches `package.json`, for example `v0.1.0` or `v0.2.0-beta.1`.
+- Stable tags publish to the `latest` auto-update channel. Tags containing `-beta` publish as GitHub prereleases on the `beta` channel.
+
+## Auto-update
+
+- Releases are published through GitHub Releases and consumed in the packaged app through `electron-updater`.
+- The app checks for updates after startup, honors the `stable` or `beta` update channel from settings, downloads updates automatically when enabled, and installs them on the next app quit after the download completes.
+- Windows uses the NSIS updater feed, macOS uses the ZIP alongside the DMG, and Linux release metadata is generated for the AppImage and DEB targets published by `electron-builder`.
+- macOS auto-update in production requires signed builds. Configure `CSC_LINK`, `CSC_KEY_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, and `APPLE_TEAM_ID` in GitHub Actions before relying on updater delivery there.

@@ -36,6 +36,7 @@ let overlayHideTimer: NodeJS.Timeout | null = null
 let overlayLoaded = false
 const OVERLAY_WIDTH = 280
 const OVERLAY_HEIGHT = 54
+const STARTUP_UPDATE_CHECK_DELAY_MS = 12_000
 
 const preloadPath = join(app.getAppPath(), 'dist-electron', 'preload', 'preload', 'preload.cjs')
 
@@ -199,7 +200,6 @@ void app.whenReady().then(async () => {
 
   const permissions = new PermissionService()
   const telemetry = new TelemetryService(store)
-  const updates = new UpdateService(store)
   const clipboardService = new ClipboardService()
   const automation = new AutomationService()
   const context = new ActiveContextService(clipboardService)
@@ -207,6 +207,10 @@ void app.whenReady().then(async () => {
   const benchmark = new InsertionBenchmarkService(insertion, context)
   const llm = new OpenRouterService(store)
   const orchestrator = new DictationSessionOrchestrator(store, context, insertion, llm, telemetry, permissions)
+  const updates = new UpdateService(store, () => {
+    void broadcastState(store, orchestrator, permissions, telemetry, updates)
+  })
+  await updates.initialize()
 
   app.setLoginItemSettings({ openAtLogin: store.getSettings().launchOnLogin })
 
@@ -277,4 +281,7 @@ void app.whenReady().then(async () => {
   })
 
   await broadcastState(store, orchestrator, permissions, telemetry, updates)
+  setTimeout(() => {
+    void updates.checkForUpdates()
+  }, STARTUP_UPDATE_CHECK_DELAY_MS)
 })

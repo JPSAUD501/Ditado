@@ -4,6 +4,17 @@ import { StatusPill } from '@renderer/components/StatusPill'
 import type { DashboardViewModel } from '@shared/contracts'
 import { formatDate } from './formatters'
 
+const updateStatusCopy = {
+  idle: 'Up to date',
+  checking: 'Checking for updates',
+  available: 'Update available',
+  downloading: 'Downloading update',
+  downloaded: 'Ready on next quit',
+  disabled: 'Updates disabled',
+  error: 'Update check failed',
+  unsupported: 'Packaged builds only',
+} as const
+
 const StatBlock = ({
   label,
   value,
@@ -125,7 +136,7 @@ export const OverviewPanel = ({
             <div className="surface-muted rounded-[1.2rem] px-4 py-3">
               <div className="eyebrow">Last update check</div>
               <div className="mt-2 text-sm text-[var(--text-1)]">{formatDate(state.updateState.lastCheckedAt)}</div>
-              <div className="mt-1 text-sm text-[var(--text-3)]">{state.updateState.status}</div>
+              <div className="mt-1 text-sm text-[var(--text-3)]">{updateStatusCopy[state.updateState.status]}</div>
             </div>
           </aside>
         </div>
