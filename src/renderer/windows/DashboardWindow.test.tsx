@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { DashboardWindow } from './DashboardWindow'
 import { defaultPermissionState, defaultSettings } from '@shared/defaults'
-import type { DashboardViewModel, Settings } from '@shared/contracts'
+import type { DashboardViewModel, InsertionBenchmarkResult, Settings } from '@shared/contracts'
 
 const createState = (settings: Settings = defaultSettings): DashboardViewModel => ({
   session: null,
@@ -44,6 +44,17 @@ const installDesktopApi = (
     return currentState.settings
   })
 
+  const benchmarkInsertion = vi.fn(async (mode: Settings['insertionStreamingMode'], text: string): Promise<InsertionBenchmarkResult> => ({
+    mode,
+    targetApp: 'VS Code',
+    graphemeCount: Array.from(text).length,
+    durationMs: 1000,
+    charactersPerSecond: Array.from(text).length,
+    sampleText: text,
+    insertionMethod: mode === 'letter-by-letter' ? 'sendinput-unicode' : mode === 'all-at-once' ? 'clipboard-normal' : 'clipboard-protected',
+    fallbackUsed: false,
+  }))
+
   const setHotkeyCaptureActive = vi.fn(async () => undefined)
   const listMicrophones = vi.fn(async () => microphones)
 
@@ -65,8 +76,10 @@ const installDesktopApi = (
     toggleDictation: vi.fn(async () => undefined),
     cancelDictation: vi.fn(async () => undefined),
     notifyRecorderStarted: vi.fn(async () => undefined),
+    notifyRecorderFailed: vi.fn(async () => undefined),
     updateSettings,
     setApiKey,
+    benchmarkInsertion,
     setHotkeyCaptureActive,
     listMicrophones,
     requestMicrophoneAccess: vi.fn(async () => defaultPermissionState),
@@ -81,6 +94,7 @@ const installDesktopApi = (
   return {
     updateSettings,
     setApiKey,
+    benchmarkInsertion,
     setHotkeyCaptureActive,
     listMicrophones,
     publishState: (nextState: DashboardViewModel) => {
@@ -166,6 +180,18 @@ describe('DashboardWindow', () => {
     })
   })
 
+  it('does not run the benchmark with empty text and shows a local validation error', async () => {
+    const { benchmarkInsertion } = installDesktopApi()
+    render(<DashboardWindow initialTab="settings" />)
+
+    const textarea = await screen.findByRole('textbox', { name: /benchmark text/i })
+    await userEvent.clear(textarea)
+    await userEvent.click(screen.getByRole('button', { name: /run benchmark/i }))
+
+    expect(benchmarkInsertion).not.toHaveBeenCalled()
+    expect(await screen.findByText(/enter benchmark text before running the test/i)).toBeInTheDocument()
+  })
+
   it('renders the newest history entry immediately when the dashboard state updates', async () => {
     const { publishState } = installDesktopApi()
     render(<DashboardWindow initialTab="history" />)
@@ -179,11 +205,13 @@ describe('DashboardWindow', () => {
           {
             id: 'entry-1',
             createdAt: new Date().toISOString(),
+            outcome: 'completed',
             appName: 'VS Code',
             windowTitle: 'prompt.ts',
             activationMode: 'toggle',
             modelId: 'google/gemini-3-flash-preview',
             outputText: 'most recent output',
+            errorMessage: null,
             audioFilePath: null,
             audioDurationMs: 0,
             audioMimeType: null,
@@ -192,6 +220,8 @@ describe('DashboardWindow', () => {
             usedContext: false,
             latencyMs: 120,
             insertionStrategy: 'insert-at-cursor',
+            insertionMethod: 'clipboard-protected',
+            fallbackUsed: false,
           },
         ],
       })

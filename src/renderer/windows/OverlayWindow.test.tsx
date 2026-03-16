@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { OverlayWindow } from './OverlayWindow'
 import { defaultPermissionState, defaultSettings } from '@shared/defaults'
-import type { DictationSession } from '@shared/contracts'
+import type { DictationSession, InsertionBenchmarkResult } from '@shared/contracts'
 
 const noticeSession: DictationSession = {
   id: 'session-1',
@@ -63,8 +63,19 @@ const installOverlayApi = (session: DictationSession | null): void => {
     toggleDictation: vi.fn(async () => undefined),
     cancelDictation: vi.fn(async () => undefined),
     notifyRecorderStarted: vi.fn(async () => undefined),
+    notifyRecorderFailed: vi.fn(async () => undefined),
     updateSettings: vi.fn(async () => defaultSettings),
     setApiKey: vi.fn(async () => defaultSettings),
+    benchmarkInsertion: vi.fn(async (mode: 'chunks' | 'letter-by-letter' | 'all-at-once', text: string): Promise<InsertionBenchmarkResult> => ({
+      mode,
+      targetApp: 'VS Code',
+      graphemeCount: Array.from(text).length,
+      durationMs: 1000,
+      charactersPerSecond: Array.from(text).length,
+      sampleText: text,
+      insertionMethod: mode === 'letter-by-letter' ? 'sendinput-unicode' : mode === 'all-at-once' ? 'clipboard-normal' : 'clipboard-protected',
+      fallbackUsed: false,
+    })),
     setHotkeyCaptureActive: vi.fn(async () => undefined),
     listMicrophones: vi.fn(async () => []),
     requestMicrophoneAccess: vi.fn(async () => defaultPermissionState),

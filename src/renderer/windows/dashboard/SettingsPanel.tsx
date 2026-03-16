@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { motion } from 'framer-motion'
 
-import type { Settings } from '@shared/contracts'
+import type { InsertionBenchmarkResult, Settings } from '@shared/contracts'
 import { HotkeyField, MicrophoneSelect, ToggleRow } from './controls'
 
 const requestBrowserMicrophonePermission = async (): Promise<void> => {
@@ -39,6 +39,14 @@ export const SettingsPanel = ({
   updateSettings,
   microphoneRefreshKey,
   refreshMicrophones,
+  benchmarkText,
+  setBenchmarkText,
+  resetBenchmarkText,
+  benchmarkCountdown,
+  benchmarkRunning,
+  benchmarkResult,
+  benchmarkError,
+  runInsertionBenchmark,
   reducedMotion,
   sectionMotion,
 }: {
@@ -49,6 +57,14 @@ export const SettingsPanel = ({
   updateSettings: (patch: Partial<Settings>) => Promise<Settings>
   microphoneRefreshKey: number
   refreshMicrophones: () => void
+  benchmarkText: string
+  setBenchmarkText: (value: string) => void
+  resetBenchmarkText: () => void
+  benchmarkCountdown: number | null
+  benchmarkRunning: boolean
+  benchmarkResult: InsertionBenchmarkResult | null
+  benchmarkError: string | null
+  runInsertionBenchmark: () => void
   reducedMotion: boolean | null
   sectionMotion: {
     initial: { opacity: number; y: number }
@@ -159,6 +175,60 @@ export const SettingsPanel = ({
                 <button className="button-ghost" type="button" onClick={() => void window.ditado.checkForUpdates()}>
                   Check updates
                 </button>
+              </div>
+            </Field>
+
+            <Field
+              label="Insertion benchmark"
+              hint="Click once, focus a disposable text field, and the app will measure real writing speed for the current reveal mode."
+            >
+              <div className="grid gap-3">
+                <textarea
+                  className="field min-h-[8rem] resize-y"
+                  placeholder="Type the text you want to measure."
+                  value={benchmarkText}
+                  onChange={(event) => setBenchmarkText(event.target.value)}
+                  aria-label="Benchmark text"
+                />
+                <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    className="button-secondary"
+                    type="button"
+                    disabled={benchmarkRunning || benchmarkCountdown !== null}
+                    onClick={runInsertionBenchmark}
+                  >
+                    {benchmarkCountdown !== null
+                      ? `Focus field in ${benchmarkCountdown}s`
+                      : benchmarkRunning
+                        ? 'Benchmarking...'
+                      : 'Run benchmark'}
+                  </button>
+                  <button className="button-ghost" type="button" onClick={resetBenchmarkText}>
+                    Reset text
+                  </button>
+                  <span className="copy-muted text-xs">
+                    Writes into the foreground app and leaves the sample text there.
+                  </span>
+                </div>
+                {benchmarkResult ? (
+                  <div className="surface-muted rounded-[1.2rem] px-4 py-3 text-sm">
+                    <div className="text-[var(--text-1)]">
+                      {benchmarkResult.charactersPerSecond.toFixed(1)} chars/s in {benchmarkResult.targetApp}
+                    </div>
+                    <div className="copy-muted mt-1 text-xs">
+                      {benchmarkResult.graphemeCount} chars in {Math.round(benchmarkResult.durationMs)} ms using{' '}
+                      {benchmarkResult.mode} via {benchmarkResult.insertionMethod}.
+                    </div>
+                    {benchmarkResult.fallbackUsed ? (
+                      <div className="copy-muted mt-1 text-xs">Fallback was used during this run.</div>
+                    ) : null}
+                  </div>
+                ) : null}
+                {benchmarkError ? (
+                  <div className="rounded-[1.2rem] border border-[rgba(255,120,120,0.22)] bg-[rgba(255,94,94,0.08)] px-4 py-3 text-sm text-[var(--danger)]">
+                    {benchmarkError}
+                  </div>
+                ) : null}
               </div>
             </Field>
           </div>

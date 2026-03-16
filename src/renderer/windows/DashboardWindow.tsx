@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 
-import type { DashboardTab, Settings } from '@shared/contracts'
+import type { DashboardTab, InsertionBenchmarkResult, Settings } from '@shared/contracts'
 import { StatusPill } from '@renderer/components/StatusPill'
 import { useDashboardBridge, useDictationRecorder } from '@renderer/hooks/useDitadoBridge'
 import { HistoryPanel } from './dashboard/HistoryPanel'
@@ -17,6 +17,8 @@ const tabs: Array<{ id: DashboardTab; label: string; kicker: string }> = [
 ]
 
 const easeOutExpo = [0.16, 1, 0.3, 1] as const
+const defaultBenchmarkText =
+  'abcdefghijlmnopqrstuvxz abcdefghijlmnopqrstuvxz abcdefghijlmnopqrstuvxz abcdefghijlmnopqrstuvxz'
 
 export const DashboardWindow = ({ initialTab }: { initialTab: DashboardTab }) => {
   const state = useDashboardBridge()
@@ -25,6 +27,11 @@ export const DashboardWindow = ({ initialTab }: { initialTab: DashboardTab }) =>
   const [pendingApiKey, setPendingApiKey] = useState('')
   const [draftSettings, setDraftSettings] = useState<Settings | null>(null)
   const [microphoneRefreshKey, setMicrophoneRefreshKey] = useState(0)
+  const [benchmarkText, setBenchmarkText] = useState(defaultBenchmarkText)
+  const [benchmarkCountdown, setBenchmarkCountdown] = useState<number | null>(null)
+  const [benchmarkRunning, setBenchmarkRunning] = useState(false)
+  const [benchmarkResult, setBenchmarkResult] = useState<InsertionBenchmarkResult | null>(null)
+  const [benchmarkError, setBenchmarkError] = useState<string | null>(null)
   const { isRecording } = useDictationRecorder(state.session, state.settings.preferredMicrophoneId)
   const settings = draftSettings ?? state.settings
   const sessionStatus = state.session?.status ?? 'idle'
@@ -71,6 +78,49 @@ export const DashboardWindow = ({ initialTab }: { initialTab: DashboardTab }) =>
     void updateSettings({ onboardingCompleted: true }).then(() => {
       setActiveTab('overview')
     })
+  }
+
+  const runInsertionBenchmark = (): void => {
+    if (benchmarkRunning || benchmarkCountdown !== null) {
+      return
+    }
+
+    const trimmedBenchmarkText = benchmarkText.trim()
+    if (!trimmedBenchmarkText) {
+      setBenchmarkResult(null)
+      setBenchmarkError('Enter benchmark text before running the test.')
+      return
+    }
+
+    setBenchmarkError(null)
+    setBenchmarkResult(null)
+    setBenchmarkCountdown(3)
+
+    let remaining = 3
+    const interval = window.setInterval(() => {
+      remaining -= 1
+      if (remaining > 0) {
+        setBenchmarkCountdown(remaining)
+        return
+      }
+
+      window.clearInterval(interval)
+      setBenchmarkCountdown(null)
+      setBenchmarkRunning(true)
+
+      void window.ditado
+        .benchmarkInsertion(settings.insertionStreamingMode, trimmedBenchmarkText)
+        .then((result) => {
+          setBenchmarkResult(result)
+          setBenchmarkError(null)
+        })
+        .catch((error: unknown) => {
+          setBenchmarkError(error instanceof Error ? error.message : 'Benchmark failed.')
+        })
+        .finally(() => {
+          setBenchmarkRunning(false)
+        })
+    }, 1000)
   }
 
   return (
@@ -163,6 +213,14 @@ export const DashboardWindow = ({ initialTab }: { initialTab: DashboardTab }) =>
               updateSettings={updateSettings}
               microphoneRefreshKey={microphoneRefreshKey}
               refreshMicrophones={refreshMicrophones}
+              benchmarkText={benchmarkText}
+              setBenchmarkText={setBenchmarkText}
+              resetBenchmarkText={() => setBenchmarkText(defaultBenchmarkText)}
+              benchmarkCountdown={benchmarkCountdown}
+              benchmarkRunning={benchmarkRunning}
+              benchmarkResult={benchmarkResult}
+              benchmarkError={benchmarkError}
+              runInsertionBenchmark={runInsertionBenchmark}
               reducedMotion={reducedMotion}
               sectionMotion={sectionMotion}
             />

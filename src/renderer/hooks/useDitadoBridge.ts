@@ -173,7 +173,10 @@ export const useDictationRecorder = (
         .catch(() => {
           setIsRecording(false)
           clearMaxDurationTimer()
-          void window.ditado.cancelDictation()
+          void window.ditado.notifyRecorderFailed(
+            session.id,
+            'Unable to start microphone capture.',
+          )
         })
       return
     }

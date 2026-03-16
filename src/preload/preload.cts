@@ -6,6 +6,7 @@ import type {
   DeviceInfo,
   DictationAudioPayload,
   HistoryAudioAsset,
+  InsertionBenchmarkResult,
   OverlayViewModel,
   PermissionState,
   Settings,
@@ -27,10 +28,12 @@ const ipcChannels = {
     toggle: 'dictation:toggle',
     cancel: 'dictation:cancel',
     recorderStarted: 'dictation:recorderStarted',
+    recorderFailed: 'dictation:recorderFailed',
   },
   settings: {
     update: 'settings:update',
     setApiKey: 'settings:setApiKey',
+    benchmarkInsertion: 'settings:benchmarkInsertion',
   },
   hotkeys: {
     setCaptureMode: 'hotkeys:setCaptureMode',
@@ -90,8 +93,14 @@ contextBridge.exposeInMainWorld('ditado', {
   toggleDictation: (payload?: DictationAudioPayload) => ipcRenderer.invoke(ipcChannels.dictation.toggle, payload),
   cancelDictation: () => ipcRenderer.invoke(ipcChannels.dictation.cancel),
   notifyRecorderStarted: (sessionId: string) => ipcRenderer.invoke(ipcChannels.dictation.recorderStarted, sessionId),
+  notifyRecorderFailed: (sessionId: string, reason: string) =>
+    ipcRenderer.invoke(ipcChannels.dictation.recorderFailed, sessionId, reason),
   updateSettings: (patch: Partial<Settings>) => ipcRenderer.invoke(ipcChannels.settings.update, patch),
   setApiKey: (apiKey: string) => ipcRenderer.invoke(ipcChannels.settings.setApiKey, apiKey),
+  benchmarkInsertion: (
+    mode: Settings['insertionStreamingMode'],
+    text: string,
+  ): Promise<InsertionBenchmarkResult> => ipcRenderer.invoke(ipcChannels.settings.benchmarkInsertion, { mode, text }),
   setHotkeyCaptureActive: (active: boolean) => ipcRenderer.invoke(ipcChannels.hotkeys.setCaptureMode, active),
   listMicrophones: async (): Promise<DeviceInfo[]> => {
     if (!navigator.mediaDevices?.enumerateDevices) {

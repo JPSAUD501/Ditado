@@ -2,6 +2,7 @@ import { defaultPermissionState, defaultSettings } from '@shared/defaults'
 import type {
   DashboardViewModel,
   DeviceInfo,
+  InsertionBenchmarkResult,
   OverlayViewModel,
   PermissionState,
   Settings,
@@ -79,6 +80,7 @@ export const ensureMockDesktopApi = (): void => {
     toggleDictation: noopDictation,
     cancelDictation: async () => undefined,
     notifyRecorderStarted: async () => undefined,
+    notifyRecorderFailed: async () => undefined,
     updateSettings,
     setApiKey: async () => {
       dashboardState.settings.apiKeyPresent = true
@@ -88,6 +90,16 @@ export const ensureMockDesktopApi = (): void => {
       return dashboardState.settings
     },
     setHotkeyCaptureActive: async () => undefined,
+    benchmarkInsertion: async (mode, text): Promise<InsertionBenchmarkResult> => ({
+      mode,
+      targetApp: 'Mock app',
+      graphemeCount: Array.from(text).length,
+      durationMs: 1000,
+      charactersPerSecond: Array.from(text).length,
+      sampleText: text,
+      insertionMethod: mode === 'all-at-once' ? 'clipboard-normal' : 'clipboard-protected',
+      fallbackUsed: false,
+    }),
     listMicrophones: noopDevices,
     requestMicrophoneAccess: noopPermission,
     getPermissions: noopPermission,

@@ -9,8 +9,11 @@ import { registerIpc } from './bootstrap/registerIpc.js'
 import { configureMediaPermissions } from './bootstrap/configureMediaPermissions.js'
 import { registerShortcuts } from './bootstrap/registerShortcuts.js'
 import { registerTray } from './bootstrap/registerTray.js'
+import { ClipboardService } from './services/clipboard/clipboardService.js'
 import { ActiveContextService } from './services/context/activeContextService.js'
+import { InputWorkerClient } from './services/input/inputWorkerClient.js'
 import { InsertionEngine } from './services/insertion/insertionEngine.js'
+import { InsertionBenchmarkService } from './services/insertion/insertionBenchmarkService.js'
 import { OpenRouterService } from './services/llm/openRouterService.js'
 import { PermissionService } from './services/permissions/permissionService.js'
 import { DictationSessionOrchestrator } from './services/session/dictationSessionOrchestrator.js'
@@ -197,8 +200,11 @@ void app.whenReady().then(async () => {
   const permissions = new PermissionService()
   const telemetry = new TelemetryService(store)
   const updates = new UpdateService(store)
-  const context = new ActiveContextService()
-  const insertion = new InsertionEngine()
+  const clipboardService = new ClipboardService()
+  const inputWorker = new InputWorkerClient()
+  const context = new ActiveContextService(clipboardService)
+  const insertion = new InsertionEngine(clipboardService, inputWorker)
+  const benchmark = new InsertionBenchmarkService(insertion, context)
   const llm = new OpenRouterService(store)
   const orchestrator = new DictationSessionOrchestrator(store, context, insertion, llm, telemetry, permissions)
 
@@ -225,6 +231,7 @@ void app.whenReady().then(async () => {
     permissions,
     telemetry,
     updates,
+    benchmark,
     setHotkeyCaptureActive: (active) => {
       hotkeyCaptureActive = active
     },
@@ -263,6 +270,10 @@ void app.whenReady().then(async () => {
 
   app.on('activate', () => {
     showDashboard(store.getSettings().onboardingCompleted ? 'overview' : 'onboarding')
+  })
+
+  app.on('before-quit', () => {
+    void insertion.dispose()
   })
 
   await broadcastState(store, orchestrator, permissions, telemetry, updates)

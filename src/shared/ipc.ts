@@ -14,10 +14,12 @@ export const ipcChannels = {
     cancel: 'dictation:cancel',
     submitAudio: 'dictation:submitAudio',
     recorderStarted: 'dictation:recorderStarted',
+    recorderFailed: 'dictation:recorderFailed',
   },
   settings: {
     update: 'settings:update',
     setApiKey: 'settings:setApiKey',
+    benchmarkInsertion: 'settings:benchmarkInsertion',
   },
   hotkeys: {
     setCaptureMode: 'hotkeys:setCaptureMode',

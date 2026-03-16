@@ -1,10 +1,10 @@
-import { clipboard } from 'electron'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 
 import { emptyContextSnapshot } from '../../../shared/defaults.js'
 import type { ContextSnapshot } from '../../../shared/contracts.js'
 import { createId, wait } from '../../../shared/utils.js'
+import { ProtectedClipboardUnavailableError, type ClipboardService } from '../clipboard/clipboardService.js'
 
 const execFileAsync = promisify(execFile)
 
@@ -70,6 +70,8 @@ const loadActiveWindow = async (): Promise<ActiveWindowResult | null> => {
 }
 
 export class ActiveContextService {
+  constructor(private readonly clipboardService: ClipboardService) {}
+
   async capture(sendContextAutomatically: boolean, includeSelection = true): Promise<ContextSnapshot> {
     const activeWindow = await loadActiveWindow()
     const base: ContextSnapshot = {
@@ -99,23 +101,37 @@ export class ActiveContextService {
 
   private async captureSelectedText(): Promise<string> {
     const sentinel = `__ditado_selection_${createId('capture')}__`
-    const previousClipboard = clipboard.readText()
-    clipboard.writeText(sentinel)
-    const copied = await runShortcut('copy')
+    const previousClipboard = await this.clipboardService.readCurrent()
+    let restoreMode: 'normal' | 'protected' = 'protected'
 
-    if (!copied) {
-      clipboard.writeText(previousClipboard)
-      return ''
+    try {
+      await this.clipboardService.writeProtected(sentinel)
+    } catch (error) {
+      if (!(error instanceof ProtectedClipboardUnavailableError)) {
+        throw error
+      }
+
+      restoreMode = 'normal'
+      await this.clipboardService.writeNormal(sentinel)
     }
 
-    await wait(140)
-    const selection = clipboard.readText()
-    clipboard.writeText(previousClipboard)
+    try {
+      const copied = await runShortcut('copy')
+      if (!copied) {
+        return ''
+      }
 
-    if (!selection || selection === sentinel) {
-      return ''
+      await wait(140)
+      const selectionSnapshot = await this.clipboardService.readCurrent()
+      const selection = selectionSnapshot.text
+
+      if (!selection || selection === sentinel) {
+        return ''
+      }
+
+      return selection
+    } finally {
+      await this.clipboardService.restore(previousClipboard, restoreMode)
     }
-
-    return selection
   }
 }

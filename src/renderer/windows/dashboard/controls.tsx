@@ -268,6 +268,15 @@ export const HistoryRow = ({ entry, index }: { entry: HistoryEntry; index: numbe
       <div className="wrap-safe min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-sm font-medium text-[var(--text-1)]">{entry.appName}</span>
+          <span
+            className={
+              entry.outcome === 'error'
+                ? 'rounded-full border border-[rgba(255,120,120,0.22)] bg-[rgba(255,94,94,0.1)] px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-[var(--danger)]'
+                : 'rounded-full border border-[rgba(127,220,170,0.18)] bg-[rgba(93,181,127,0.1)] px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-[rgba(166,230,192,0.92)]'
+            }
+          >
+            {entry.outcome === 'error' ? 'Error' : 'Done'}
+          </span>
           <span className="text-xs uppercase tracking-[0.2em] text-[var(--text-3)]">{entry.modelId}</span>
           {entry.audioDurationMs > 0 ? (
             <span className="text-xs uppercase tracking-[0.2em] text-[var(--text-3)]">
@@ -275,7 +284,12 @@ export const HistoryRow = ({ entry, index }: { entry: HistoryEntry; index: numbe
             </span>
           ) : null}
         </div>
-        <p className="wrap-safe line-clamp-3 mt-3 text-sm leading-7 text-[var(--text-2)]">{entry.outputText}</p>
+        {entry.errorMessage ? (
+          <p className="wrap-safe mt-3 text-sm leading-7 text-[var(--danger)]">{entry.errorMessage}</p>
+        ) : null}
+        <p className="wrap-safe line-clamp-3 mt-3 text-sm leading-7 text-[var(--text-2)]">
+          {entry.outputText || (entry.outcome === 'error' ? 'No text was inserted before the failure.' : '')}
+        </p>
         <HistoryAudioPlayer entryId={entry.id} hasAudio={Boolean(entry.audioFilePath)} />
         <details className="mt-4 rounded-[1rem] border border-[rgba(247,239,227,0.08)] bg-[rgba(255,248,240,0.035)] px-4 py-3">
           <summary className="cursor-pointer text-xs uppercase tracking-[0.18em] text-[var(--text-3)]">

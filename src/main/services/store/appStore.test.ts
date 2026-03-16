@@ -114,31 +114,39 @@ describe('AppStore', () => {
     await store.appendHistory({
       id: 'session-1',
       createdAt: new Date().toISOString(),
+      outcome: 'completed',
       appName: 'VS Code',
       windowTitle: 'prompt.ts',
       activationMode: 'toggle',
       modelId: 'google/gemini-3-flash-preview',
       outputText: 'primeiro texto',
+      errorMessage: null,
       ...audioMeta,
       submittedContext: null,
       usedContext: true,
       latencyMs: 180,
       insertionStrategy: 'replace-selection',
+      insertionMethod: 'clipboard-protected',
+      fallbackUsed: false,
     })
 
     await store.appendHistory({
       id: 'session-1',
       createdAt: new Date().toISOString(),
+      outcome: 'completed',
       appName: 'VS Code',
       windowTitle: 'prompt.ts',
       activationMode: 'toggle',
       modelId: 'google/gemini-3-flash-preview',
       outputText: 'texto final',
+      errorMessage: null,
       ...audioMeta,
       submittedContext: null,
       usedContext: true,
       latencyMs: 180,
       insertionStrategy: 'replace-selection',
+      insertionMethod: 'clipboard-protected',
+      fallbackUsed: false,
     })
 
     expect(store.getHistory()).toHaveLength(1)

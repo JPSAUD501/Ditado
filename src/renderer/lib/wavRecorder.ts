@@ -2,6 +2,9 @@ import type { DictationAudioPayload } from '@shared/contracts'
 
 export const MAX_RECORDING_DURATION_MS = 10 * 60 * 1000
 
+const RECORDER_WORKLET_NAME = 'ditado-recorder-worklet'
+const recorderWorkletUrl = new URL('./ditadoRecorderProcessor.js', import.meta.url)
+
 const mergeChunks = (chunks: Float32Array[]): Float32Array => {
   const length = chunks.reduce((sum, chunk) => sum + chunk.length, 0)
   const merged = new Float32Array(length)
@@ -98,7 +101,7 @@ export class WavRecorder {
   private audioContext: AudioContext | null = null
   private stream: MediaStream | null = null
   private source: MediaStreamAudioSourceNode | null = null
-  private processor: ScriptProcessorNode | null = null
+  private processor: AudioWorkletNode | null = null
   private sink: GainNode | null = null
   private chunks: Float32Array[] = []
   private recording = false
@@ -113,15 +116,30 @@ export class WavRecorder {
       audio: deviceId ? { deviceId: { exact: deviceId } } : true,
     })
     this.audioContext = new AudioContext()
+    await this.audioContext.audioWorklet.addModule(recorderWorkletUrl)
+    if (this.audioContext.state === 'suspended') {
+      await this.audioContext.resume()
+    }
     this.source = this.audioContext.createMediaStreamSource(this.stream)
-    this.processor = this.audioContext.createScriptProcessor(4096, 1, 1)
+    this.processor = new AudioWorkletNode(this.audioContext, RECORDER_WORKLET_NAME, {
+      numberOfInputs: 1,
+      numberOfOutputs: 1,
+      outputChannelCount: [1],
+      channelCount: 1,
+      channelCountMode: 'explicit',
+      channelInterpretation: 'speakers',
+    })
     this.sink = this.audioContext.createGain()
     this.sink.gain.value = 0
     this.chunks = []
     this.startedAtMs = Date.now()
 
-    this.processor.onaudioprocess = (event) => {
-      this.chunks.push(new Float32Array(event.inputBuffer.getChannelData(0)))
+    this.processor.port.onmessage = (event: MessageEvent<Float32Array>) => {
+      const chunk = event.data
+      if (!(chunk instanceof Float32Array) || chunk.length === 0) {
+        return
+      }
+      this.chunks.push(chunk)
     }
 
     this.source.connect(this.processor)

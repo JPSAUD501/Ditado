@@ -5,12 +5,14 @@ import {
   dashboardTabSchema,
   dictationAudioPayloadSchema,
   historyAudioRequestSchema,
+  insertionBenchmarkRequestSchema,
   sessionIdInputSchema,
   settingsPatchSchema,
 } from '../../shared/contracts.js'
 import { ipcChannels } from '../../shared/ipc.js'
 import type { DashboardTab } from '../../shared/contracts.js'
 import type { PermissionService } from '../services/permissions/permissionService.js'
+import type { InsertionBenchmarkService } from '../services/insertion/insertionBenchmarkService.js'
 import type { DictationSessionOrchestrator } from '../services/session/dictationSessionOrchestrator.js'
 import type { AppStore } from '../services/store/appStore.js'
 import type { TelemetryService } from '../services/telemetry/telemetryService.js'
@@ -22,6 +24,7 @@ interface RegisterIpcOptions {
   permissions: PermissionService
   telemetry: TelemetryService
   updates: UpdateService
+  benchmark: InsertionBenchmarkService
   setHotkeyCaptureActive: (active: boolean) => void
   onSettingsChanged: () => Promise<void>
   broadcastState: () => Promise<void>
@@ -34,6 +37,7 @@ export const registerIpc = ({
   permissions,
   telemetry,
   updates,
+  benchmark,
   setHotkeyCaptureActive,
   onSettingsChanged,
   broadcastState,
@@ -69,6 +73,12 @@ export const registerIpc = ({
   ipcMain.handle(ipcChannels.dictation.recorderStarted, (_event, sessionId: string) =>
     orchestrator.markRecorderStarted(sessionIdInputSchema.parse(sessionId)),
   )
+  ipcMain.handle(ipcChannels.dictation.recorderFailed, (_event, sessionId: string, reason: string) =>
+    orchestrator.markRecorderFailed(
+      sessionIdInputSchema.parse(sessionId),
+      typeof reason === 'string' ? reason : 'Unable to start microphone capture.',
+    ),
+  )
 
   ipcMain.handle(ipcChannels.settings.update, async (_event, patch) => {
     const settings = await store.updateSettings(settingsPatchSchema.parse(patch))
@@ -81,6 +91,9 @@ export const registerIpc = ({
     await onSettingsChanged()
     return settings
   })
+  ipcMain.handle(ipcChannels.settings.benchmarkInsertion, (_event, request) =>
+    benchmark.run(insertionBenchmarkRequestSchema.parse(request)),
+  )
 
   ipcMain.handle(ipcChannels.hotkeys.setCaptureMode, (_event, active: boolean) => {
     setHotkeyCaptureActive(Boolean(active))

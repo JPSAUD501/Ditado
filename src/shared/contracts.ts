@@ -30,6 +30,14 @@ export const insertionStreamingModeSchema = z.enum([
 
 export type InsertionStreamingMode = z.infer<typeof insertionStreamingModeSchema>
 
+export const insertionMethodSchema = z.enum([
+  'sendinput-unicode',
+  'clipboard-protected',
+  'clipboard-normal',
+])
+
+export type InsertionMethod = z.infer<typeof insertionMethodSchema>
+
 export const contextSnapshotSchema = z.object({
   appName: z.string(),
   windowTitle: z.string().nullable(),
@@ -70,19 +78,23 @@ export type DictationSession = z.infer<typeof dictationSessionSchema>
 export const historyEntrySchema = z.object({
   id: z.string(),
   createdAt: z.string(),
+  outcome: z.enum(['completed', 'error']).default('completed'),
   appName: z.string(),
   windowTitle: z.string().nullable(),
   activationMode: activationModeSchema,
   modelId: z.string(),
   outputText: z.string(),
+  errorMessage: z.string().nullable().default(null),
   audioFilePath: z.string().nullable().default(null),
   audioDurationMs: z.number().int().nonnegative().default(0),
   audioMimeType: z.string().nullable().default(null),
   audioBytes: z.number().int().nonnegative().default(0),
   submittedContext: contextSnapshotSchema.nullable().default(null),
   usedContext: z.boolean(),
-  latencyMs: z.number().nonnegative(),
+  latencyMs: z.number().nonnegative().default(0),
   insertionStrategy: insertionStrategySchema,
+  insertionMethod: insertionMethodSchema.default('clipboard-protected'),
+  fallbackUsed: z.boolean().default(false),
 })
 
 export type HistoryEntry = z.infer<typeof historyEntrySchema>
@@ -156,6 +168,26 @@ export const historyAudioAssetSchema = z.object({
 })
 
 export type HistoryAudioAsset = z.infer<typeof historyAudioAssetSchema>
+
+export const insertionBenchmarkResultSchema = z.object({
+  mode: insertionStreamingModeSchema,
+  targetApp: z.string(),
+  graphemeCount: z.number().int().positive(),
+  durationMs: z.number().nonnegative(),
+  charactersPerSecond: z.number().nonnegative(),
+  sampleText: z.string(),
+  insertionMethod: insertionMethodSchema,
+  fallbackUsed: z.boolean().default(false),
+})
+
+export type InsertionBenchmarkResult = z.infer<typeof insertionBenchmarkResultSchema>
+
+export const insertionBenchmarkRequestSchema = z.object({
+  mode: insertionStreamingModeSchema,
+  text: z.string().trim().min(1).max(2_000),
+})
+
+export type InsertionBenchmarkRequest = z.infer<typeof insertionBenchmarkRequestSchema>
 
 export const updateStateSchema = z.object({
   enabled: z.boolean(),
