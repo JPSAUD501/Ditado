@@ -1,7 +1,7 @@
 {
   "name": "ditado",
   "private": true,
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Universal AI dictation overlay for desktop apps.",
   "repository": {
     "type": "git",
