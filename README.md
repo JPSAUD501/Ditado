@@ -36,10 +36,10 @@ Ditado is a desktop dictation overlay for writing into other apps. It captures a
 ## GitHub Actions
 
 - `.github/workflows/ci.yml` runs lint, tests, typecheck, and build validation on Windows, macOS, and Linux for pushes to `main` and pull requests.
-- `.github/workflows/release.yml` now watches branch pushes instead of manual tags.
-- A push to `beta` publishes a new GitHub prerelease when `package.json` changes to a new version containing `-beta`.
-- A push to `main` publishes a new stable GitHub release when `package.json` changes to a new version without a prerelease suffix.
-- The workflow creates the matching `v<version>` tag automatically, so release cadence follows branch promotion instead of a manual tagging step.
+- `.github/workflows/release.yml` watches pushes to `beta` and `main` and bumps the app version automatically.
+- A push to `beta` creates the next prerelease version, commits it back to `beta`, creates the matching `v<version>` tag, and publishes a GitHub prerelease.
+- A push to `main` promotes the latest beta line to a stable release when one exists; otherwise it bumps the stable patch version, commits it back to `main`, tags it, and publishes a GitHub release.
+- Release artifacts are built from the auto-generated release commit, so the packaged app version matches the Git tag and GitHub Release exactly.
 
 ## Auto-update
 
