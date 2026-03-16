@@ -37,15 +37,18 @@ export const DashboardWindow = ({ initialTab }: { initialTab: DashboardTab }) =>
   const [benchmarkResult, setBenchmarkResult] = useState<InsertionBenchmarkResult | null>(null)
   const [benchmarkError, setBenchmarkError] = useState<string | null>(null)
   const latestStateSettings = useRef(state.settings)
-  // Always keep in sync during render — never rely on useEffect for this ref,
-  // because effects run *after* paint and a fast second mutation would read stale data.
-  latestStateSettings.current = draftSettings ?? state.settings
   const latestSettingsMutationId = useRef(0)
   const { isRecording } = useDictationRecorder(state.session, state.settings.preferredMicrophoneId)
   const { t } = useTranslation()
   const settings = draftSettings ?? state.settings
   useThemeAndLanguage(settings)
   const sessionStatus = state.session?.status ?? 'idle'
+
+  // Keep the ref in sync with the current settings (draft or state).
+  // This must run after every render to ensure async operations have the latest value.
+  useEffect(() => {
+    latestStateSettings.current = draftSettings ?? state.settings
+  }, [draftSettings, state.settings])
 
   useEffect(() => {
     // When the server confirms a new state, clear the optimistic draft only if it
@@ -144,6 +147,7 @@ export const DashboardWindow = ({ initialTab }: { initialTab: DashboardTab }) =>
       autoOnboardingDone.current = true
       void updateSettings({ onboardingCompleted: true }).catch(() => undefined)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- updateSettings is stable for this onboarding check
   }, [settings.onboardingCompleted, settings.apiKeyPresent])
 
   /* ── Onboarding wizard overlay ── */

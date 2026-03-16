@@ -12,10 +12,10 @@ import {
   type ReadableLogRecord,
 } from '@opentelemetry/sdk-logs'
 import {
-  AggregationTemporality,
   MeterProvider,
   PeriodicExportingMetricReader,
   type AggregationOption,
+  type AggregationTemporality,
   type InstrumentType,
   type PushMetricExporter,
   type ResourceMetrics,
