@@ -66,12 +66,17 @@ jobs:
             node scripts/release-version.mjs --branch "${BRANCH}" --apply > release-metadata.json
             VERSION="$(node -p "JSON.parse(require('node:fs').readFileSync('release-metadata.json', 'utf8')).version")"
 
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add package.json package-lock.json
-            git commit -m "chore(release): ${VERSION}" -m "Source-Commit: ${SOURCE_SHA}"
-            git push origin "HEAD:${BRANCH}"
-            EXISTING_RELEASE_SHA="$(git rev-parse HEAD)"
+            if git diff --quiet -- package.json package-lock.json; then
+              echo "Computed release version ${VERSION} does not change tracked manifests. Reusing source commit ${SOURCE_SHA}."
+              EXISTING_RELEASE_SHA="${SOURCE_SHA}"
+            else
+              git config user.name "github-actions[bot]"
+              git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+              git add package.json package-lock.json
+              git commit -m "chore(release): ${VERSION}" -m "Source-Commit: ${SOURCE_SHA}"
+              git push origin "HEAD:${BRANCH}"
+              EXISTING_RELEASE_SHA="$(git rev-parse HEAD)"
+            fi
           fi
 
           write_output "version" "JSON.parse(require('node:fs').readFileSync('release-metadata.json', 'utf8')).version"
