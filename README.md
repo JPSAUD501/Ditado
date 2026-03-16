@@ -1,5 +1,7 @@
 # Ditado
 
+<img width="1920" height="1020" alt="image" src="https://github.com/user-attachments/assets/c2976a62-5891-4049-992e-0e4a1e491868" />
+
 Ditado is a desktop dictation overlay for writing into other apps. It captures audio in the renderer, coordinates dictation in Electron's main process, and inserts text into the focused app through a native automation addon with clipboard fallback behavior.
 
 ## Stack
