@@ -25,7 +25,9 @@ const dashboardState: DashboardViewModel = {
     channel: 'stable',
     lastCheckedAt: null,
     status: 'idle',
+    downloadProgress: null,
   },
+  appVersion: '0.0.0-mock',
 }
 
 const overlayListeners = new Set<(state: OverlayViewModel) => void>()
@@ -98,8 +100,14 @@ export const ensureMockDesktopApi = (): void => {
       dashboardState.history = []
       notifyDashboard()
     },
+    deleteHistoryEntry: async (entryId: string) => {
+      dashboardState.history = dashboardState.history.filter((e) => e.id !== entryId)
+      notifyDashboard()
+    },
     getHistoryAudio: async () => null,
     getTelemetryTail: noopTelemetry,
     checkForUpdates: async () => undefined,
+    downloadUpdate: async () => undefined,
+    installUpdate: async () => undefined,
   }
 }

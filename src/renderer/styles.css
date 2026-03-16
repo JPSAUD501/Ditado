@@ -6,10 +6,10 @@
   --font-mono: "Cascadia Code", "JetBrains Mono", "Consolas", monospace;
 
   /* Backgrounds */
-  --bg-0: oklch(0.098 0.008 255);
-  --bg-1: oklch(0.132 0.01 256);
-  --bg-2: oklch(0.168 0.012 254);
-  --bg-3: oklch(0.205 0.014 252);
+  --bg-0: oklch(0.160 0.013 255);
+  --bg-1: oklch(0.195 0.014 256);
+  --bg-2: oklch(0.228 0.016 254);
+  --bg-3: oklch(0.265 0.018 252);
 
   /* Text */
   --text-1: rgba(255, 252, 248, 0.93);
@@ -41,10 +41,10 @@
 [data-theme="light"],
 [data-theme="light"] :root {
   color-scheme: light;
-  --bg-0: oklch(0.975 0.004 255);
-  --bg-1: oklch(0.955 0.005 256);
-  --bg-2: oklch(0.925 0.007 254);
-  --bg-3: oklch(0.885 0.009 252);
+  --bg-0: oklch(0.920 0.008 255);
+  --bg-1: oklch(0.895 0.010 256);
+  --bg-2: oklch(0.862 0.012 254);
+  --bg-3: oklch(0.825 0.014 252);
 
   --text-1: rgba(20, 22, 28, 0.90);
   --text-2: rgba(40, 44, 55, 0.58);
@@ -339,6 +339,128 @@ textarea {
   color: var(--text-3);
   text-align: center;
   line-height: 1;
+}
+
+/* ─── Update widget ────────────────────────────────────────────────── */
+
+.sidebar-update-widget {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  width: 100%;
+}
+
+.sidebar-version {
+  font-size: 0.52rem;
+  font-family: var(--font-mono);
+  color: var(--text-3);
+  letter-spacing: 0.04em;
+  line-height: 1;
+  text-align: center;
+}
+
+.sidebar-update-row {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.sidebar-update-label {
+  font-size: 0.5rem;
+  color: var(--text-3);
+  letter-spacing: 0.04em;
+  line-height: 1;
+}
+
+.sidebar-update-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.22rem;
+  width: 100%;
+  padding: 0.28rem 0.4rem;
+  border-radius: 0.3rem;
+  border: 1px solid transparent;
+  font-size: 0.5rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease, opacity 150ms ease;
+  line-height: 1;
+}
+
+.sidebar-update-btn--download {
+  background: var(--accent-muted);
+  border-color: rgba(210, 175, 110, 0.22);
+  color: var(--accent);
+}
+.sidebar-update-btn--download:hover {
+  background: rgba(210, 175, 110, 0.18);
+}
+
+.sidebar-update-btn--install {
+  background: rgba(112, 192, 134, 0.1);
+  border-color: rgba(112, 192, 134, 0.22);
+  color: var(--status-ok);
+}
+.sidebar-update-btn--install:hover {
+  background: rgba(112, 192, 134, 0.18);
+}
+
+.sidebar-update-btn--error {
+  background: rgba(210, 90, 80, 0.07);
+  border-color: rgba(210, 90, 80, 0.18);
+  color: var(--status-error);
+}
+.sidebar-update-btn--error:hover {
+  background: rgba(210, 90, 80, 0.13);
+}
+
+.sidebar-update-btn--idle {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-3);
+  padding: 0.2rem;
+  width: auto;
+  opacity: 0.5;
+}
+.sidebar-update-btn--idle:hover {
+  opacity: 1;
+  color: var(--text-2);
+}
+
+.sidebar-update-progress-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  width: 100%;
+}
+
+.sidebar-update-progress-bar {
+  width: 100%;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--bg-3);
+  overflow: hidden;
+}
+
+.sidebar-update-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.update-spinner {
+  animation: spin 1s linear infinite;
+  color: var(--text-3);
 }
 
 /* ─── Main content ─────────────────────────────────────────────────── */
@@ -706,6 +828,57 @@ button:disabled {
   justify-content: space-between;
   gap: 0.5rem;
   margin-top: 1.5rem;
+}
+
+/* ─── Confirm modal ────────────────────────────────────────────────── */
+
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+.confirm-card {
+  width: min(100%, 360px);
+  background: var(--bg-1);
+  border: 1px solid var(--border-strong);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  display: grid;
+  gap: 1.25rem;
+}
+
+.btn-danger {
+  border: 1px solid rgba(210, 90, 80, 0.3);
+  background: rgba(210, 90, 80, 0.08);
+  color: var(--status-error);
+}
+.btn-danger:hover {
+  background: rgba(210, 90, 80, 0.16);
+  border-color: rgba(210, 90, 80, 0.45);
+}
+
+.history-row-delete {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0 0.625rem;
+  color: var(--text-3);
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  flex-shrink: 0;
+  transition: color 120ms ease;
+}
+.history-row-delete:hover {
+  color: var(--status-error);
 }
 
 /* ─── Helpers ──────────────────────────────────────────────────────── */

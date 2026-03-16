@@ -47,13 +47,13 @@ const DASHBOARD_TITLEBAR_HEIGHT = 36
 
 const dashboardChrome = {
   dark: {
-    backgroundColor: '#0d0e14',
-    overlayColor: '#0d0e14',
-    symbolColor: '#8a8578',
+    backgroundColor: '#0a0e13', // --bg-0: oklch(0.160 0.013 255)
+    overlayColor: '#11151b',    // --bg-1: oklch(0.195 0.014 256)
+    symbolColor: '#9a9490',
   },
   light: {
-    backgroundColor: '#f2f2f4',
-    overlayColor: '#f2f2f4',
+    backgroundColor: '#e1e5ea', // --bg-0: oklch(0.920 0.008 255)
+    overlayColor: '#d8dde3',    // --bg-1: oklch(0.895 0.010 256)
     symbolColor: '#2f3440',
   },
 } as const
@@ -237,6 +237,7 @@ const broadcastState = async (
     telemetryTail: await telemetry.tail(),
     permissions: permissionState,
     updateState: updates.getState(),
+    appVersion: app.getVersion(),
   }
 
   windows.overlay?.webContents.send(ipcChannels.overlay.state, overlayState)
@@ -339,6 +340,10 @@ void app.whenReady().then(async () => {
         hideOverlay()
       }, session.status === 'notice' ? 1600 : 1200)
     }
+  })
+
+  orchestrator.subscribeHistoryUpdated(() => {
+    void broadcastState(store, orchestrator, permissions, telemetry, updates)
   })
 
   app.on('activate', () => {

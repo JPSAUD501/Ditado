@@ -51,6 +51,7 @@ export const defaultUpdateState: UpdateState = {
   channel: 'stable',
   lastCheckedAt: null,
   status: 'idle',
+  downloadProgress: null,
 }
 
 export const createIdleSession = (): DictationSession => ({

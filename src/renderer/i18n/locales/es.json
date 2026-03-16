@@ -72,7 +72,12 @@
       "allAtOnce": "Portapapeles",
       "keyboard": "Teclado",
       "clipboard": "Portapapeles"
-    }
+    },
+    "deleteEntry": "Eliminar entrada",
+    "confirmDeleteEntry": "Eliminar esta entrada?",
+    "confirmDeleteEntryDesc": "Esto eliminara permanentemente la entrada y su grabacion de audio.",
+    "confirmClearAll": "Limpiar todo el historial?",
+    "confirmClearAllDesc": "Esto eliminara permanentemente todas las {{count}} entradas y sus grabaciones de audio."
   },
   "settings": {
     "title": "Configuracion",
@@ -115,5 +120,12 @@
     "disabled": "Desactivado",
     "error": "Fallo en la verificacion",
     "unsupported": "Build de dev"
+  },
+  "updateWidget": {
+    "downloadUpdate": "Descargar",
+    "installing": "Instalar y reiniciar",
+    "retry": "Reintentar",
+    "downloading": "Descargando {{percent}}%",
+    "checkForUpdates": "Buscar actualizaciones"
   }
 }

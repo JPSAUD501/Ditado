@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion, useReducedMotion } from 'framer-motion'
-import { Clock, LayoutDashboard, Settings2 } from 'lucide-react'
+import { AlertCircle, ArrowDown, Clock, Loader2, LayoutDashboard, PackageCheck, RotateCcw, Settings2 } from 'lucide-react'
 
-import type { DashboardTab, Settings } from '@shared/contracts'
+import type { DashboardTab, Settings, UpdateState } from '@shared/contracts'
 import { StatusPill } from '@renderer/components/StatusPill'
 import { useDashboardBridge, useDictationRecorder } from '@renderer/hooks/useDitadoBridge'
 import { useThemeAndLanguage } from '@renderer/hooks/useThemeAndLanguage'
@@ -11,6 +11,85 @@ import { HistoryPanel } from './dashboard/HistoryPanel'
 import { OnboardingWizard } from './dashboard/OnboardingWizard'
 import { OverviewPanel } from './dashboard/OverviewPanel'
 import { SettingsPanel } from './dashboard/SettingsPanel'
+
+const UpdateWidget = ({ updateState, appVersion }: { updateState: UpdateState; appVersion: string }) => {
+  const { t } = useTranslation()
+  const { status, downloadProgress } = updateState
+
+  return (
+    <div className="sidebar-update-widget">
+      <span className="sidebar-version">v{appVersion}</span>
+
+      {status === 'checking' && (
+        <div className="sidebar-update-row">
+          <Loader2 size={10} className="update-spinner" />
+          <span className="sidebar-update-label">{t('updateStatus.checking')}</span>
+        </div>
+      )}
+
+      {status === 'available' && (
+        <button
+          type="button"
+          className="sidebar-update-btn sidebar-update-btn--download"
+          onClick={() => { void window.ditado.downloadUpdate() }}
+          title={t('updateWidget.downloadUpdate')}
+        >
+          <ArrowDown size={10} strokeWidth={2.2} />
+          <span>{t('updateWidget.downloadUpdate')}</span>
+        </button>
+      )}
+
+      {status === 'downloading' && (
+        <div className="sidebar-update-progress-wrap" title={t('updateWidget.downloading', { percent: downloadProgress ?? 0 })}>
+          <div className="sidebar-update-progress-bar">
+            <motion.div
+              className="sidebar-update-progress-fill"
+              initial={{ width: '0%' }}
+              animate={{ width: `${downloadProgress ?? 0}%` }}
+              transition={{ duration: 0.4, ease: 'easeOut' }}
+            />
+          </div>
+          <span className="sidebar-update-label">{downloadProgress ?? 0}%</span>
+        </div>
+      )}
+
+      {status === 'downloaded' && (
+        <button
+          type="button"
+          className="sidebar-update-btn sidebar-update-btn--install"
+          onClick={() => { void window.ditado.installUpdate() }}
+          title={t('updateWidget.installing')}
+        >
+          <PackageCheck size={10} strokeWidth={2.2} />
+          <span>{t('updateWidget.installing')}</span>
+        </button>
+      )}
+
+      {status === 'error' && (
+        <button
+          type="button"
+          className="sidebar-update-btn sidebar-update-btn--error"
+          onClick={() => { void window.ditado.checkForUpdates() }}
+          title={t('updateWidget.retry')}
+        >
+          <AlertCircle size={10} strokeWidth={2.2} />
+          <span>{t('updateWidget.retry')}</span>
+        </button>
+      )}
+
+      {status === 'idle' && (
+        <button
+          type="button"
+          className="sidebar-update-btn sidebar-update-btn--idle"
+          onClick={() => { void window.ditado.checkForUpdates() }}
+          title={t('updateWidget.checkForUpdates')}
+        >
+          <RotateCcw size={9} strokeWidth={2.2} />
+        </button>
+      )}
+    </div>
+  )
+}
 
 const navTabs: Array<{ id: DashboardTab; labelKey: string; Icon: React.FC<{ size?: number; strokeWidth?: number }> }> = [
   { id: 'overview', labelKey: 'common.overview', Icon: LayoutDashboard },
@@ -160,10 +239,7 @@ export const DashboardWindow = ({ initialTab }: { initialTab: DashboardTab }) =>
           ))}
         </div>
         <div className="sidebar-footer">
-          <div className="session-dot" data-status={sessionStatus} title={sessionStatus} />
-          <span className="sidebar-label">
-            {sessionStatus === 'idle' ? t('common.idle') : sessionStatus === 'listening' ? t('sidebar.rec') : sessionStatus}
-          </span>
+          <UpdateWidget updateState={state.updateState} appVersion={state.appVersion} />
         </div>
       </nav>
 

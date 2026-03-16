@@ -21,7 +21,9 @@ const initialDashboardState: DashboardViewModel = {
     channel: 'stable',
     lastCheckedAt: null,
     status: 'idle',
+    downloadProgress: null,
   },
+  appVersion: '',
 }
 
 export const useOverlayBridge = (): OverlayViewModel => {

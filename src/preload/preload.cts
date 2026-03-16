@@ -92,7 +92,10 @@ setHotkeyCaptureActive: (active: boolean) => ipcRenderer.invoke(ipcChannels.hotk
   getPermissions: (): Promise<PermissionState> => ipcRenderer.invoke(ipcChannels.permissions.get),
   openDashboardTab: (tab: DashboardTab) => ipcRenderer.invoke(ipcChannels.dashboardNavigation.openTab, tab),
   clearHistory: () => ipcRenderer.invoke(ipcChannels.history.clear),
+  deleteHistoryEntry: (entryId: string) => ipcRenderer.invoke(ipcChannels.history.deleteEntry, entryId),
   getHistoryAudio: (entryId: string): Promise<HistoryAudioAsset | null> => ipcRenderer.invoke(ipcChannels.history.audio, entryId),
   getTelemetryTail: (): Promise<TelemetryRecord[]> => ipcRenderer.invoke(ipcChannels.telemetry.tail),
   checkForUpdates: () => ipcRenderer.invoke(ipcChannels.updates.check),
+  downloadUpdate: () => ipcRenderer.invoke(ipcChannels.updates.download),
+  installUpdate: () => ipcRenderer.invoke(ipcChannels.updates.install),
 })

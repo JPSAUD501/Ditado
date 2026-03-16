@@ -19,8 +19,9 @@ const applyTheme = (theme: Settings['theme']): void => {
   }
 }
 
-export const useThemeAndLanguage = (settings: Pick<Settings, 'theme' | 'language'>): void => {
+export const useThemeAndLanguage = (settings: Pick<Settings, 'theme' | 'language'>, options?: { skipTheme?: boolean }): void => {
   useEffect(() => {
+    if (options?.skipTheme) return
     applyTheme(settings.theme)
 
     if (settings.theme === 'system') {

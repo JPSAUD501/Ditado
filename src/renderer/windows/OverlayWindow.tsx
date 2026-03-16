@@ -71,7 +71,7 @@ const chipEnter = { type: 'spring' as const, stiffness: 500, damping: 32, mass: 
 export const OverlayWindow = () => {
   const reducedMotion = useReducedMotion()
   const state = useOverlayBridge()
-  useThemeAndLanguage(state.settings)
+  useThemeAndLanguage(state.settings, { skipTheme: true })
   const session = state.session
   const status: DictationStatus = session?.status ?? 'idle'
   const appName = session?.context.appName || session?.targetApp || 'Ditado'

@@ -1,8 +1,9 @@
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Trash2 } from 'lucide-react'
 
 import type { HistoryEntry } from '@shared/contracts'
-import { HistoryRow } from './controls'
+import { ConfirmModal, HistoryRow } from './controls'
 
 export const HistoryPanel = ({
   history,
@@ -18,6 +19,7 @@ export const HistoryPanel = ({
   }
 }) => {
   const { t } = useTranslation()
+  const [confirmClear, setConfirmClear] = useState(false)
 
   return (
     <div className="grid gap-3">
@@ -27,7 +29,7 @@ export const HistoryPanel = ({
           <span className="text-xs" style={{ color: 'var(--text-3)' }}>·</span>
           <span className="text-xs" style={{ color: 'var(--text-3)' }}>{t('history.retention', { days: retentionDays })}</span>
         </div>
-        <button className="button-ghost" type="button" onClick={() => void window.ditado.clearHistory()}>
+        <button className="button-ghost" type="button" onClick={() => setConfirmClear(true)}>
           <Trash2 size={13} /> {t('common.clear')}
         </button>
       </div>
@@ -42,6 +44,15 @@ export const HistoryPanel = ({
         <div className="grid gap-1.5">
           {history.map((entry, index) => <HistoryRow key={entry.id} entry={entry} index={index} />)}
         </div>
+      )}
+
+      {confirmClear && (
+        <ConfirmModal
+          title={t('history.confirmClearAll')}
+          desc={t('history.confirmClearAllDesc', { count: history.length })}
+          onConfirm={() => { void window.ditado.clearHistory(); setConfirmClear(false) }}
+          onCancel={() => setConfirmClear(false)}
+        />
       )}
     </div>
   )

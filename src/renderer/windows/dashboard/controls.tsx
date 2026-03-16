@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ChevronDown, Pause, Play } from 'lucide-react'
+import { ChevronDown, Pause, Play, Trash2 } from 'lucide-react'
 
 import type { HistoryEntry } from '@shared/contracts'
 import { hotkeyFromKeyboardEvent, isSupportedHotkey, normalizeHotkey } from '@shared/hotkeys'
@@ -253,67 +253,122 @@ export const HistoryAudioPlayer = ({ entryId, hasAudio }: { entryId: string; has
   )
 }
 
+/* ── Confirm modal ────────────────────────────────────────────────── */
+
+export const ConfirmModal = ({
+  title,
+  desc,
+  confirmLabel,
+  onConfirm,
+  onCancel,
+}: {
+  title: string
+  desc: string
+  confirmLabel?: string
+  onConfirm: () => void
+  onCancel: () => void
+}) => {
+  const { t } = useTranslation()
+  return (
+    <div className="confirm-overlay" onClick={onCancel}>
+      <div className="confirm-card" onClick={(e) => e.stopPropagation()}>
+        <div>
+          <p className="text-sm font-medium" style={{ color: 'var(--text-1)' }}>{title}</p>
+          <p className="mt-1.5 text-xs" style={{ color: 'var(--text-3)', lineHeight: 1.5 }}>{desc}</p>
+        </div>
+        <div className="flex gap-2 justify-end">
+          <button className="button-ghost" type="button" onClick={onCancel}>{t('common.cancel')}</button>
+          <button className="button-ghost btn-danger" type="button" onClick={onConfirm}>{confirmLabel ?? t('common.clear')}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /* ── History row (expandable) ─────────────────────────────────────── */
 
 export const HistoryRow = ({ entry, index }: { entry: HistoryEntry; index: number }) => {
   const { t } = useTranslation()
   const [expanded, setExpanded] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const outputPreview = entry.outputText || (entry.outcome === 'error' ? t('history.noTextInserted') : '')
 
   return (
     <div className="surface-panel" style={{ overflow: 'hidden' }}>
-      {/* Clickable header (always visible) */}
-      <button
-        type="button"
-        className="w-full text-left"
-        style={{
-          padding: '0.625rem 0.75rem',
-          background: 'transparent',
-          border: 'none',
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.5rem',
-        }}
-        onClick={() => setExpanded(!expanded)}
-        aria-expanded={expanded}
-      >
-        <span className="text-xs" style={{ color: 'var(--text-3)', fontFamily: 'var(--font-mono)', width: '1.5rem', flexShrink: 0 }}>
-          {String(index + 1).padStart(2, '0')}
-        </span>
-        <span className="text-sm font-medium" style={{ color: 'var(--text-1)', flexShrink: 0 }}>{entry.appName}</span>
-        <span
+      {/* Header row: expand button + delete button as siblings */}
+      <div style={{ display: 'flex', alignItems: 'stretch' }}>
+        <button
+          type="button"
+          className="text-left"
           style={{
-            display: 'inline-flex', alignItems: 'center', height: '1rem',
-            padding: '0 0.35rem', borderRadius: '999px', fontSize: '0.58rem', fontWeight: 600,
-            letterSpacing: '0.08em', textTransform: 'uppercase' as const, flexShrink: 0,
-            border: entry.outcome === 'error' ? '1px solid rgba(210,90,80,0.22)' : '1px solid rgba(112,192,134,0.2)',
-            background: entry.outcome === 'error' ? 'rgba(210,90,80,0.06)' : 'rgba(112,192,134,0.06)',
-            color: entry.outcome === 'error' ? 'var(--status-error)' : 'var(--status-ok)',
+            flex: 1, minWidth: 0,
+            padding: '0.625rem 0.75rem',
+            background: 'transparent',
+            border: 'none',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
           }}
+          onClick={() => setExpanded(!expanded)}
+          aria-expanded={expanded}
         >
-          {entry.outcome === 'error' ? t('history.err') : t('history.ok')}
-        </span>
-        <span
-          className="text-xs"
-          style={{
-            color: 'var(--text-2)', flex: 1, minWidth: 0,
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-          }}
+          <span className="text-xs" style={{ color: 'var(--text-3)', fontFamily: 'var(--font-mono)', width: '1.5rem', flexShrink: 0 }}>
+            {String(index + 1).padStart(2, '0')}
+          </span>
+          <span className="text-sm font-medium" style={{ color: 'var(--text-1)', flexShrink: 0 }}>{entry.appName}</span>
+          <span
+            style={{
+              display: 'inline-flex', alignItems: 'center', height: '1rem',
+              padding: '0 0.35rem', borderRadius: '999px', fontSize: '0.58rem', fontWeight: 600,
+              letterSpacing: '0.08em', textTransform: 'uppercase' as const, flexShrink: 0,
+              border: entry.outcome === 'error' ? '1px solid rgba(210,90,80,0.22)' : '1px solid rgba(112,192,134,0.2)',
+              background: entry.outcome === 'error' ? 'rgba(210,90,80,0.06)' : 'rgba(112,192,134,0.06)',
+              color: entry.outcome === 'error' ? 'var(--status-error)' : 'var(--status-ok)',
+            }}
+          >
+            {entry.outcome === 'error' ? t('history.err') : t('history.ok')}
+          </span>
+          <span
+            className="text-xs"
+            style={{
+              color: 'var(--text-2)', flex: 1, minWidth: 0,
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}
+          >
+            {outputPreview}
+          </span>
+          <span className="text-xs" style={{ color: 'var(--text-3)', fontFamily: 'var(--font-mono)', fontSize: '0.6rem', flexShrink: 0 }}>
+            {formatDate(entry.createdAt)}
+          </span>
+          <motion.span
+            animate={{ rotate: expanded ? 180 : 0 }}
+            transition={{ duration: 0.2, ease: easeOutExpo }}
+            style={{ flexShrink: 0, color: 'var(--text-3)' }}
+          >
+            <ChevronDown size={14} />
+          </motion.span>
+        </button>
+        <button
+          type="button"
+          className="history-row-delete"
+          aria-label={t('history.deleteEntry')}
+          title={t('history.deleteEntry')}
+          onClick={() => setConfirmDelete(true)}
         >
-          {outputPreview}
-        </span>
-        <span className="text-xs" style={{ color: 'var(--text-3)', fontFamily: 'var(--font-mono)', fontSize: '0.6rem', flexShrink: 0 }}>
-          {formatDate(entry.createdAt)}
-        </span>
-        <motion.span
-          animate={{ rotate: expanded ? 180 : 0 }}
-          transition={{ duration: 0.2, ease: easeOutExpo }}
-          style={{ flexShrink: 0, color: 'var(--text-3)' }}
-        >
-          <ChevronDown size={14} />
-        </motion.span>
-      </button>
+          <Trash2 size={13} />
+        </button>
+      </div>
+
+      {confirmDelete && (
+        <ConfirmModal
+          title={t('history.confirmDeleteEntry')}
+          desc={t('history.confirmDeleteEntryDesc')}
+          confirmLabel={t('history.deleteEntry')}
+          onConfirm={() => { void window.ditado.deleteHistoryEntry(entry.id); setConfirmDelete(false) }}
+          onCancel={() => setConfirmDelete(false)}
+        />
+      )}
 
       {/* Expandable details */}
       <AnimatePresence initial={false}>

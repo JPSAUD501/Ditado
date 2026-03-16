@@ -16,6 +16,7 @@ type ProgressiveInsertionSession = ReturnType<InsertionEngine['createProgressive
 export class DictationSessionOrchestrator {
   private readonly sessions = new SessionStore()
   private readonly history: HistoryService
+  private readonly historyListeners = new Set<() => void>()
   private submittingSessionId: string | null = null
   private activeInsertionSession: { sessionId: string; insertion: ProgressiveInsertionSession } | null = null
   private cancelledSessionIds = new Set<string>()
@@ -34,6 +35,17 @@ export class DictationSessionOrchestrator {
 
   subscribe(listener: SessionListener): () => void {
     return this.sessions.subscribe(listener)
+  }
+
+  subscribeHistoryUpdated(listener: () => void): () => void {
+    this.historyListeners.add(listener)
+    return () => { this.historyListeners.delete(listener) }
+  }
+
+  private notifyHistoryUpdated(): void {
+    for (const listener of this.historyListeners) {
+      listener()
+    }
   }
 
   getSession(): DictationSession | null {
@@ -402,6 +414,7 @@ export class DictationSessionOrchestrator {
       })
       try {
         await this.history.appendCompletedSession(completedSession, response, payload, execution)
+        this.notifyHistoryUpdated()
       } catch {
         // History persistence must not delay or mask a successful dictation.
       }
@@ -434,6 +447,7 @@ export class DictationSessionOrchestrator {
 
       try {
         await this.history.appendFailedSession(erroredSession, payload, execution)
+        this.notifyHistoryUpdated()
       } catch {
         // History persistence must not mask the primary dictation failure.
       }

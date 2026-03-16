@@ -72,7 +72,12 @@
       "allAtOnce": "Clipboard",
       "keyboard": "Teclado",
       "clipboard": "Clipboard"
-    }
+    },
+    "deleteEntry": "Excluir entrada",
+    "confirmDeleteEntry": "Excluir esta entrada?",
+    "confirmDeleteEntryDesc": "Isso removera permanentemente a entrada e sua gravacao de audio.",
+    "confirmClearAll": "Limpar todo o historico?",
+    "confirmClearAllDesc": "Isso excluira permanentemente todas as {{count}} entradas e suas gravacoes de audio."
   },
   "settings": {
     "title": "Configuracoes",
@@ -115,5 +120,12 @@
     "disabled": "Desativado",
     "error": "Falha na verificacao",
     "unsupported": "Build de dev"
+  },
+  "updateWidget": {
+    "downloadUpdate": "Baixar atualizacao",
+    "installing": "Instalar e reiniciar",
+    "retry": "Tentar novamente",
+    "downloading": "Baixando {{percent}}%",
+    "checkForUpdates": "Verificar atualizacoes"
   }
 }

@@ -19,7 +19,9 @@ const createState = (settings: Settings = onboardedSettings): DashboardViewModel
     channel: 'stable',
     lastCheckedAt: null,
     status: 'idle',
+    downloadProgress: null,
   },
+  appVersion: '0.0.0-test',
 })
 
 const createDeferred = <T,>() => {
@@ -86,9 +88,12 @@ const installDesktopApi = (
     getPermissions: vi.fn(async () => defaultPermissionState),
     openDashboardTab: vi.fn(async () => undefined),
     clearHistory: vi.fn(async () => undefined),
+    deleteHistoryEntry: vi.fn(async () => undefined),
   getHistoryAudio: vi.fn(async () => null),
   getTelemetryTail: vi.fn(async () => []),
   checkForUpdates: vi.fn(async () => undefined),
+  downloadUpdate: vi.fn(async () => undefined),
+  installUpdate: vi.fn(async () => undefined),
   getShortcutStatus: vi.fn(async () => ({ captureActive: false, uiohookRunning: true })),
 }
 

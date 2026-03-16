@@ -26,6 +26,7 @@ export const ipcChannels = {
   history: {
     clear: 'history:clear',
     audio: 'history:audio',
+    deleteEntry: 'history:deleteEntry',
   },
   telemetry: {
     tail: 'telemetry:tail',
@@ -39,5 +40,7 @@ export const ipcChannels = {
   },
   updates: {
     check: 'updates:check',
+    download: 'updates:download',
+    install: 'updates:install',
   },
 } as const

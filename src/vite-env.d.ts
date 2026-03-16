@@ -32,9 +32,12 @@ setHotkeyCaptureActive: (active: boolean) => Promise<void>
   getPermissions: () => Promise<PermissionState>
   openDashboardTab: (tab: DashboardTab) => Promise<void>
   clearHistory: () => Promise<void>
+  deleteHistoryEntry: (entryId: string) => Promise<void>
   getHistoryAudio: (entryId: string) => Promise<HistoryAudioAsset | null>
   getTelemetryTail: () => Promise<TelemetryRecord[]>
   checkForUpdates: () => Promise<void>
+  downloadUpdate: () => Promise<void>
+  installUpdate: () => Promise<void>
 }
 
 declare global {

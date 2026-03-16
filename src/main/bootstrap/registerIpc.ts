@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { app, ipcMain } from 'electron'
 
 import {
   apiKeyInputSchema,
@@ -54,6 +54,7 @@ export const registerIpc = ({
     telemetryTail: await telemetry.tail(),
     permissions: await permissions.getState(),
     updateState: updates.getState(),
+    appVersion: app.getVersion(),
   }))
 
   ipcMain.handle(ipcChannels.dictation.startPushToTalk, () => orchestrator.startCapture('push-to-talk'))
@@ -114,6 +115,10 @@ export const registerIpc = ({
   ipcMain.handle(ipcChannels.history.audio, (_event, entryId: string) =>
     store.getHistoryAudioAsset(historyAudioRequestSchema.parse(entryId)),
   )
+  ipcMain.handle(ipcChannels.history.deleteEntry, async (_event, entryId: string) => {
+    await store.deleteHistoryEntry(historyAudioRequestSchema.parse(entryId))
+    await broadcastState()
+  })
   ipcMain.handle(ipcChannels.telemetry.tail, () => telemetry.tail())
   ipcMain.handle(ipcChannels.dashboardNavigation.openTab, (_event, tab: DashboardTab) =>
     openDashboardTab(dashboardTabSchema.parse(tab)),
@@ -121,5 +126,12 @@ export const registerIpc = ({
   ipcMain.handle(ipcChannels.updates.check, async () => {
     await updates.checkForUpdates()
     await broadcastState()
+  })
+  ipcMain.handle(ipcChannels.updates.download, async () => {
+    await updates.downloadUpdate()
+    await broadcastState()
+  })
+  ipcMain.handle(ipcChannels.updates.install, () => {
+    updates.installUpdate()
   })
 }

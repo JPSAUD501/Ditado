@@ -212,6 +212,18 @@ export class AppStore {
     })
   }
 
+  async deleteHistoryEntry(entryId: string): Promise<void> {
+    await this.enqueueMutation(async () => {
+      const entry = this.history.find((h) => h.id === entryId)
+      if (!entry) return
+      if (entry.audioFilePath) {
+        await rm(entry.audioFilePath, { force: true })
+      }
+      this.history = this.history.filter((h) => h.id !== entryId)
+      await this.persistHistory()
+    })
+  }
+
   async getHistoryAudioAsset(entryId: string): Promise<{ mimeType: string; base64: string } | null> {
     const entry = this.history.find((historyEntry) => historyEntry.id === entryId)
     if (!entry?.audioFilePath || !entry.audioMimeType) {

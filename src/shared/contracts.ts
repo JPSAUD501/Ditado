@@ -210,6 +210,7 @@ export const updateStateSchema = z.object({
   channel: z.enum(['stable', 'beta']),
   lastCheckedAt: z.string().nullable(),
   status: z.enum(['idle', 'checking', 'available', 'downloading', 'downloaded', 'disabled', 'error', 'unsupported']),
+  downloadProgress: z.number().nullable(),
 })
 
 export type UpdateState = z.infer<typeof updateStateSchema>
@@ -240,6 +241,7 @@ export const dashboardViewModelSchema = z.object({
   telemetryTail: z.array(telemetryRecordSchema),
   permissions: permissionStateSchema,
   updateState: updateStateSchema,
+  appVersion: z.string(),
 })
 
 export type DashboardViewModel = z.infer<typeof dashboardViewModelSchema>

@@ -40,7 +40,7 @@ export class UpdateService {
     const enabled = settings.autoUpdateEnabled
     const channel = settings.updateChannel
 
-    this.updater.autoDownload = enabled
+    this.updater.autoDownload = false
     this.updater.autoInstallOnAppQuit = true
     this.updater.allowPrerelease = channel === 'beta' || isPrereleaseVersion(this.appVersion)
     ;(this.updater as AppUpdater & { channel?: string }).channel = getTargetChannel(channel)
@@ -87,6 +87,23 @@ export class UpdateService {
     return this.state
   }
 
+  async downloadUpdate(): Promise<void> {
+    if (!this.isPackaged) return
+    if (this.state.status !== 'available') return
+    try {
+      await this.updater.downloadUpdate()
+    } catch {
+      this.setState({
+        status: 'error',
+        lastCheckedAt: new Date().toISOString(),
+      })
+    }
+  }
+
+  installUpdate(): void {
+    this.updater.quitAndInstall()
+  }
+
   private bindUpdaterEvents(): void {
     this.updater.on('checking-for-update', () => {
       this.setState({
@@ -99,6 +116,7 @@ export class UpdateService {
       this.setState({
         status: 'available',
         lastCheckedAt: new Date().toISOString(),
+        downloadProgress: null,
       })
     })
 
@@ -106,12 +124,14 @@ export class UpdateService {
       this.setState({
         status: 'idle',
         lastCheckedAt: new Date().toISOString(),
+        downloadProgress: null,
       })
     })
 
-    this.updater.on('download-progress', () => {
+    this.updater.on('download-progress', (info) => {
       this.setState({
         status: 'downloading',
+        downloadProgress: Math.round(info.percent),
       })
     })
 
@@ -119,6 +139,7 @@ export class UpdateService {
       this.setState({
         status: 'downloaded',
         lastCheckedAt: new Date().toISOString(),
+        downloadProgress: null,
       })
     })
 
@@ -126,6 +147,7 @@ export class UpdateService {
       this.setState({
         status: 'error',
         lastCheckedAt: new Date().toISOString(),
+        downloadProgress: null,
       })
     })
   }
