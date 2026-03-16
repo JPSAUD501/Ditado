@@ -259,6 +259,12 @@ export const SettingsPanel = ({
             value={settings.autoUpdateEnabled}
             onChange={(value) => void updateSettings({ autoUpdateEnabled: value })}
           />
+          <ToggleRow
+            label="Receive beta builds"
+            description="Use prerelease updates from the beta channel instead of stable releases."
+            value={settings.updateChannel === 'beta'}
+            onChange={(value) => void updateSettings({ updateChannel: value ? 'beta' : 'stable' })}
+          />
         </aside>
       </div>
     </section>

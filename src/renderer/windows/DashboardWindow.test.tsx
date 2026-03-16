@@ -121,6 +121,21 @@ describe('DashboardWindow', () => {
     })
   })
 
+  it('switches the update channel to beta from the settings toggle', async () => {
+    const { updateSettings } = installDesktopApi()
+    render(<DashboardWindow initialTab="settings" />)
+
+    const toggle = await screen.findByRole('button', { name: /receive beta builds/i })
+    expect(toggle).toHaveAttribute('aria-pressed', 'false')
+
+    await userEvent.click(toggle)
+
+    expect(toggle).toHaveAttribute('aria-pressed', 'true')
+    await waitFor(() => {
+      expect(updateSettings).toHaveBeenCalledWith({ updateChannel: 'beta' })
+    })
+  })
+
   it('captures a modifier-only hotkey, exits capture mode, and persists the normalized combo', async () => {
     const { updateSettings, setHotkeyCaptureActive } = installDesktopApi()
     render(<DashboardWindow initialTab="settings" />)

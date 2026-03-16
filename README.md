@@ -36,8 +36,10 @@ Ditado is a desktop dictation overlay for writing into other apps. It captures a
 ## GitHub Actions
 
 - `.github/workflows/ci.yml` runs lint, tests, typecheck, and build validation on Windows, macOS, and Linux for pushes to `main` and pull requests.
-- `.github/workflows/release.yml` currently publishes Windows and Linux artifacts when you push a tag that matches `package.json`, for example `v0.1.0` or `v0.2.0-beta.1`.
-- Stable tags publish to the `latest` auto-update channel. Tags containing `-beta` publish as GitHub prereleases on the `beta` channel.
+- `.github/workflows/release.yml` now watches branch pushes instead of manual tags.
+- A push to `beta` publishes a new GitHub prerelease when `package.json` changes to a new version containing `-beta`.
+- A push to `main` publishes a new stable GitHub release when `package.json` changes to a new version without a prerelease suffix.
+- The workflow creates the matching `v<version>` tag automatically, so release cadence follows branch promotion instead of a manual tagging step.
 
 ## Auto-update
 
@@ -45,3 +47,4 @@ Ditado is a desktop dictation overlay for writing into other apps. It captures a
 - The app checks for updates after startup, honors the `stable` or `beta` update channel from settings, downloads updates automatically when enabled, and installs them on the next app quit after the download completes.
 - Windows uses the NSIS updater feed and Linux release metadata is generated for the AppImage and DEB targets published by `electron-builder`.
 - macOS remains configured in `electron-builder`, but GitHub release publishing for Apple is disabled until signing is set up.
+- The dashboard settings include a `Receive beta builds` toggle. When it is off, the app follows stable releases from `main`. When it is on, the app follows prereleases from `beta`.
