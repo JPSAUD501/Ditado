@@ -29,14 +29,17 @@ export const useOverlayBridge = (): OverlayViewModel => {
 
   useEffect(() => {
     let mounted = true
-    void window.ditado.getOverlayState().then((value) => {
-      if (mounted) {
-        setState(value)
-      }
-    })
+    let receivedLiveState = false
 
     const unsubscribe = window.ditado.subscribeOverlayState((value) => {
+      receivedLiveState = true
       setState(value)
+    })
+
+    void window.ditado.getOverlayState().then((value) => {
+      if (mounted && !receivedLiveState) {
+        setState(value)
+      }
     })
 
     return () => {
