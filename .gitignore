@@ -15,6 +15,7 @@ coverage
 playwright-report
 test-results
 build-config
+build/
 native/target/
 native/target-wsl/
 *.local

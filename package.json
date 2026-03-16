@@ -13,6 +13,7 @@
     "clean": "node scripts/clean-build.mjs",
     "clean:native": "node scripts/clean-native-artifacts.mjs",
     "generate:icons": "electron scripts/generate-icons.mjs",
+    "generate:installer-assets": "node scripts/generate-installer-assets.mjs",
     "build:telemetry-config": "node scripts/generate-telemetry-build-config.mjs",
     "dev": "npm run generate:icons && npm run build:native-automation && npm run build:telemetry-config && concurrently -k -n MAIN,PRELOAD,RENDERER,ELECTRON -c blue,magenta,green,yellow \"npm:dev:main\" \"npm:dev:preload\" \"npm:dev:renderer\" \"npm:dev:electron\"",
     "dev:main": "tsc -p tsconfig.main.json --watch --preserveWatchOutput",
@@ -24,7 +25,7 @@
     "build:main": "tsc -p tsconfig.main.json",
     "build:preload": "tsc -p tsconfig.preload.json",
     "build:native-automation": "node scripts/build-native-automation.mjs",
-    "build": "npm run clean && npm run generate:icons && npm run build:telemetry-config && npm run typecheck && npm run build:main && npm run build:preload && npm run build:native-automation && vite build",
+    "build": "npm run clean && npm run generate:installer-assets && npm run build:telemetry-config && npm run typecheck && npm run build:main && npm run build:preload && npm run build:native-automation && vite build",
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -38,6 +39,7 @@
     "productName": "Ditado",
     "electronUpdaterCompatibility": ">=2.16",
     "directories": {
+      "buildResources": "build",
       "output": "release"
     },
     "files": [
@@ -66,22 +68,48 @@
     ],
     "generateUpdatesFilesForAllChannels": true,
     "win": {
-      "icon": "public/app-icons/icon.ico",
+      "icon": "build/icon.ico",
       "target": [
         "nsis"
       ]
     },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico",
+      "installerSidebar": "build/installerSidebar.bmp",
+      "installerHeader": "build/installerHeader.bmp",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
     "mac": {
+      "icon": "build/icon.png",
       "target": [
         "dmg",
         "zip"
       ]
     },
+    "dmg": {
+      "background": "build/background.png",
+      "iconSize": 96,
+      "contents": [
+        { "x": 160, "y": 190, "type": "file" },
+        { "x": 380, "y": 190, "type": "link", "path": "/Applications" }
+      ]
+    },
     "linux": {
+      "icon": "build/icons",
       "target": [
         "AppImage",
         "deb"
-      ]
+      ],
+      "category": "Utility",
+      "desktop": {
+        "StartupWMClass": "Ditado",
+        "Comment": "Universal AI dictation overlay for desktop apps"
+      }
     }
   },
   "dependencies": {
@@ -131,6 +159,7 @@
     "globals": "^17.0.0",
     "jsdom": "^27.0.1",
     "rimraf": "^6.0.1",
+    "sharp": "^0.34.5",
     "tailwindcss": "^4.1.14",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.1",
