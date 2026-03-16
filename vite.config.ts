@@ -6,6 +6,7 @@ import tsconfigPaths from 'vite-tsconfig-paths'
 export default defineConfig({
   cacheDir: '.vite-cache/renderer',
   plugins: [react(), tsconfigPaths(), tailwindcss()],
+  base: './',
   build: {
     outDir: 'dist',
   },

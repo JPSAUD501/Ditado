@@ -7,8 +7,9 @@ import type { DictationStatus } from '@shared/contracts'
 
 /* ── Status-based colors ──────────────────────────────────────────── */
 
-const statusColor: Record<string, string> = {
-  listening: 'var(--status-listen)',
+/* toggle = azul (fluxo contínuo), push-to-talk = verde (ativo ao vivo) */
+const toggleStatusColor: Record<string, string> = {
+  listening: 'var(--status-write)',
   arming: 'var(--text-3)',
   processing: 'var(--status-process)',
   streaming: 'var(--status-write)',
@@ -19,14 +20,25 @@ const statusColor: Record<string, string> = {
   idle: 'var(--text-3)',
 }
 
+const pttStatusColor: Record<string, string> = {
+  ...toggleStatusColor,
+  listening: 'var(--status-listen)',
+  arming: 'var(--status-listen)',
+}
 
-const statusBorder: Record<string, string> = {
-  listening: 'rgba(112,192,134,0.25)',
+const toggleStatusBorder: Record<string, string> = {
+  listening: 'rgba(90,140,210,0.28)',
   processing: 'rgba(210,175,110,0.22)',
   streaming: 'rgba(90,140,210,0.22)',
   completed: 'rgba(112,192,134,0.18)',
   error: 'rgba(210,90,80,0.22)',
   'permission-required': 'rgba(210,90,80,0.22)',
+}
+
+const pttStatusBorder: Record<string, string> = {
+  ...toggleStatusBorder,
+  listening: 'rgba(112,192,134,0.28)',
+  arming: 'rgba(112,192,134,0.18)',
 }
 
 /* ── Animated icon with swap transition ───────────────────────────── */
@@ -67,10 +79,14 @@ export const OverlayWindow = () => {
   const mode = session?.activationMode ?? 'toggle'
   const isVisible = Boolean(session) && status !== 'idle'
 
+  const isPtt = mode === 'push-to-talk'
+  const colorMap = isPtt ? pttStatusColor : toggleStatusColor
+  const borderMap = isPtt ? pttStatusBorder : toggleStatusBorder
+
   const IconComponent = iconMap[status] ?? Mic
   const iconClass = reducedMotion ? '' : (iconAnimation[status] ?? '')
-  const color = statusColor[status] ?? 'var(--text-3)'
-  const border = statusBorder[status] ?? (mode === 'push-to-talk' ? 'rgba(210,175,110,0.28)' : 'rgba(110,165,210,0.22)')
+  const color = colorMap[status] ?? 'var(--text-3)'
+  const border = borderMap[status] ?? (isPtt ? 'rgba(210,175,110,0.28)' : 'rgba(110,165,210,0.22)')
 
   return (
     <div className="overlay-shell">
@@ -115,14 +131,19 @@ export const OverlayWindow = () => {
                 </motion.span>
               </AnimatePresence>
 
-              {/* Text with layout animation for reactive sizing */}
-              <motion.span
-                layout
-                className="overlay-app-name"
-                transition={{ type: 'spring', stiffness: 300, damping: 28 }}
-              >
-                {detail}
-              </motion.span>
+              {/* Text with fade transition to avoid font stretching during resize */}
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.span
+                  key={detail}
+                  className="overlay-app-name"
+                  initial={reducedMotion ? false : { opacity: 0 }}
+                  animate={reducedMotion ? undefined : { opacity: 1 }}
+                  exit={reducedMotion ? undefined : { opacity: 0 }}
+                  transition={{ duration: 0.12 }}
+                >
+                  {detail}
+                </motion.span>
+              </AnimatePresence>
 
             </motion.div>
           )}

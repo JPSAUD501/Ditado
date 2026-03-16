@@ -171,6 +171,7 @@ textarea {
   color: var(--text-1);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
+  overflow: hidden;
 }
 
 .overlay-icon {
