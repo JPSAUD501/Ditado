@@ -40,7 +40,7 @@ export class UpdateService {
     const enabled = settings.autoUpdateEnabled
     const channel = settings.updateChannel
 
-    this.updater.autoDownload = false
+    this.updater.autoDownload = enabled
     this.updater.autoInstallOnAppQuit = true
     this.updater.allowPrerelease = channel === 'beta' || isPrereleaseVersion(this.appVersion)
     ;(this.updater as AppUpdater & { channel?: string }).channel = getTargetChannel(channel)
@@ -131,7 +131,7 @@ export class UpdateService {
     this.updater.on('download-progress', (info) => {
       this.setState({
         status: 'downloading',
-        downloadProgress: Math.round(info.percent),
+        downloadProgress: info?.percent != null ? Math.round(info.percent) : null,
       })
     })
 
