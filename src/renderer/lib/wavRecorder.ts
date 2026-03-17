@@ -1,10 +1,10 @@
 import type { DictationAudioPayload } from '@shared/contracts'
+import recorderWorkletUrl from './ditadoRecorderProcessor.js?url&no-inline'
 
 export const MAX_RECORDING_DURATION_MS = 10 * 60 * 1000
 const MP3_MIME_CANDIDATES = ['audio/mpeg', 'audio/mp3'] as const
 
 const RECORDER_WORKLET_NAME = 'ditado-recorder-worklet'
-const recorderWorkletUrl = new URL('./ditadoRecorderProcessor.js', import.meta.url)
 
 const mergeChunks = (chunks: Float32Array[]): Float32Array => {
   const length = chunks.reduce((sum, chunk) => sum + chunk.length, 0)
