@@ -172,12 +172,17 @@ export const OnboardingWizard = ({
   }
 
   return (
-    <div className="wizard-backdrop">
+    <motion.div
+      className="wizard-backdrop"
+      initial={reducedMotion ? false : { opacity: 0 }}
+      animate={reducedMotion ? undefined : { opacity: 1 }}
+      transition={{ duration: 0.4, ease: 'easeOut' }}
+    >
       <motion.div
         className="wizard-card"
-        initial={reducedMotion ? false : { opacity: 0, y: 24, scale: 0.96 }}
+        initial={reducedMotion ? false : { opacity: 0, y: 30, scale: 0.94 }}
         animate={reducedMotion ? undefined : { opacity: 1, y: 0, scale: 1 }}
-        transition={{ duration: 0.38, ease: easeOutExpo }}
+        transition={{ duration: 0.45, ease: easeOutExpo, delay: 0.08 }}
       >
         {/* Progress dots */}
         <div className="wizard-progress">
@@ -274,7 +279,7 @@ export const OnboardingWizard = ({
           </div>
         </div>
       </motion.div>
-    </div>
+    </motion.div>
   )
 }
 

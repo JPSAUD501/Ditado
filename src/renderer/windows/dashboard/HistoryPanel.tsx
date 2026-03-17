@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { AnimatePresence } from 'framer-motion'
 import { Trash2 } from 'lucide-react'
 
 import type { HistoryEntry } from '@shared/contracts'
@@ -46,14 +47,16 @@ export const HistoryPanel = ({
         </div>
       )}
 
-      {confirmClear && (
-        <ConfirmModal
-          title={t('history.confirmClearAll')}
-          desc={t('history.confirmClearAllDesc', { count: history.length })}
-          onConfirm={() => { void window.ditado.clearHistory(); setConfirmClear(false) }}
-          onCancel={() => setConfirmClear(false)}
-        />
-      )}
+      <AnimatePresence>
+        {confirmClear && (
+          <ConfirmModal
+            title={t('history.confirmClearAll')}
+            desc={t('history.confirmClearAllDesc', { count: history.length })}
+            onConfirm={() => { void window.ditado.clearHistory(); setConfirmClear(false) }}
+            onCancel={() => setConfirmClear(false)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   )
 }

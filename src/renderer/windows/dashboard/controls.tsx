@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ChevronDown, Pause, Play, Trash2 } from 'lucide-react'
+import { Check, ChevronDown, Copy, Pause, Play, Trash2 } from 'lucide-react'
 
 import type { HistoryEntry } from '@shared/contracts'
 import { hotkeyFromKeyboardEvent, isSupportedHotkey, normalizeHotkey } from '@shared/hotkeys'
@@ -272,8 +272,22 @@ export const ConfirmModal = ({
 }) => {
   const { t } = useTranslation()
   return (
-    <div className="confirm-overlay" onClick={onCancel}>
-      <div className="confirm-card" onClick={(e) => e.stopPropagation()}>
+    <motion.div
+      className="confirm-overlay"
+      onClick={onCancel}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.18 }}
+    >
+      <motion.div
+        className="confirm-card"
+        onClick={(e) => e.stopPropagation()}
+        initial={{ opacity: 0, scale: 0.95, y: 8 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 8 }}
+        transition={{ duration: 0.2, ease: easeOutExpo }}
+      >
         <div>
           <p className="text-sm font-medium" style={{ color: 'var(--text-1)' }}>{title}</p>
           <p className="mt-1.5 text-xs" style={{ color: 'var(--text-3)', lineHeight: 1.5 }}>{desc}</p>
@@ -282,8 +296,8 @@ export const ConfirmModal = ({
           <button className="button-ghost" type="button" onClick={onCancel}>{t('common.cancel')}</button>
           <button className="button-ghost btn-danger" type="button" onClick={onConfirm}>{confirmLabel ?? t('common.clear')}</button>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   )
 }
 
@@ -293,7 +307,16 @@ export const HistoryRow = ({ entry, index }: { entry: HistoryEntry; index: numbe
   const { t } = useTranslation()
   const [expanded, setExpanded] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [copied, setCopied] = useState(false)
   const outputPreview = entry.outputText || (entry.outcome === 'error' ? t('history.noTextInserted') : '')
+
+  const handleCopy = useCallback(() => {
+    if (!entry.outputText) return
+    void navigator.clipboard.writeText(entry.outputText).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    })
+  }, [entry.outputText])
 
   return (
     <div className="surface-panel" style={{ overflow: 'hidden' }}>
@@ -351,6 +374,41 @@ export const HistoryRow = ({ entry, index }: { entry: HistoryEntry; index: numbe
             <ChevronDown size={14} />
           </motion.span>
         </button>
+        {entry.outputText && (
+          <button
+            type="button"
+            className="history-row-copy"
+            aria-label={t('history.copyText')}
+            title={copied ? t('history.copied') : t('history.copyText')}
+            onClick={handleCopy}
+          >
+            <AnimatePresence mode="wait" initial={false}>
+              {copied ? (
+                <motion.span
+                  key="check"
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  exit={{ scale: 0 }}
+                  transition={{ duration: 0.15, ease: easeOutExpo }}
+                  style={{ display: 'flex', color: 'var(--status-ok)' }}
+                >
+                  <Check size={13} />
+                </motion.span>
+              ) : (
+                <motion.span
+                  key="copy"
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  exit={{ scale: 0 }}
+                  transition={{ duration: 0.15, ease: easeOutExpo }}
+                  style={{ display: 'flex' }}
+                >
+                  <Copy size={13} />
+                </motion.span>
+              )}
+            </AnimatePresence>
+          </button>
+        )}
         <button
           type="button"
           className="history-row-delete"
@@ -362,15 +420,17 @@ export const HistoryRow = ({ entry, index }: { entry: HistoryEntry; index: numbe
         </button>
       </div>
 
-      {confirmDelete && (
-        <ConfirmModal
-          title={t('history.confirmDeleteEntry')}
-          desc={t('history.confirmDeleteEntryDesc')}
-          confirmLabel={t('history.deleteEntry')}
-          onConfirm={() => { void window.ditado.deleteHistoryEntry(entry.id); setConfirmDelete(false) }}
-          onCancel={() => setConfirmDelete(false)}
-        />
-      )}
+      <AnimatePresence>
+        {confirmDelete && (
+          <ConfirmModal
+            title={t('history.confirmDeleteEntry')}
+            desc={t('history.confirmDeleteEntryDesc')}
+            confirmLabel={t('history.deleteEntry')}
+            onConfirm={() => { void window.ditado.deleteHistoryEntry(entry.id); setConfirmDelete(false) }}
+            onCancel={() => setConfirmDelete(false)}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Expandable details */}
       <AnimatePresence initial={false}>

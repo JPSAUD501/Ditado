@@ -66,7 +66,20 @@
     "apiKey": "API key",
     "microphone": "Microphone",
     "accessibility": "Accessibility",
-    "updates": "Updates"
+    "updates": "Updates",
+    "dashboard": "Dashboard",
+    "totalDictations": "Dictations",
+    "minutesSpoken": "Minutes spoken",
+    "charactersWritten": "Characters",
+    "successRate": "Success rate",
+    "topApps": "Top apps",
+    "recentActivity": "Recent activity",
+    "avgLatency": "Avg. latency",
+    "noActivityYet": "No activity yet. Start dictating to see your stats here.",
+    "usageThisWeek": "This week",
+    "dictationsCount": "{{count}} dictations",
+    "welcome": "Welcome to Ditado",
+    "welcomeDesc": "Your AI-powered voice dictation assistant. Use your shortcuts to start dictating."
   },
   "history": {
     "entries": "{{count}} entries",
@@ -99,7 +112,9 @@
     "confirmDeleteEntry": "Delete this entry?",
     "confirmDeleteEntryDesc": "This will permanently remove the entry and its audio recording.",
     "confirmClearAll": "Clear all history?",
-    "confirmClearAllDesc": "This will permanently delete all {{count}} entries and their audio recordings."
+    "confirmClearAllDesc": "This will permanently delete all {{count}} entries and their audio recordings.",
+    "copied": "Copied!",
+    "copyText": "Copy text"
   },
   "settings": {
     "title": "Settings",

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { motion, useReducedMotion } from 'framer-motion'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import {  ArrowDown, Clock, Loader2, LayoutDashboard, PackageCheck, RotateCcw, Settings2 } from 'lucide-react'
 
 import type { DashboardTab, Settings, UpdateState } from '@shared/contracts'
@@ -124,7 +124,7 @@ export const DashboardWindow = ({ initialTab }: { initialTab: DashboardTab }) =>
   const [forceOnboarding, setForceOnboarding] = useState(false)
   const latestStateSettings = useRef(state.settings)
   const latestSettingsMutationId = useRef(0)
-  const { isRecording } = useDictationRecorder(state.session, state.settings.preferredMicrophoneId)
+  useDictationRecorder(state.session, state.settings.preferredMicrophoneId)
   const { t } = useTranslation()
   const settings = draftSettings ?? state.settings
   useThemeAndLanguage(settings)
@@ -272,42 +272,59 @@ export const DashboardWindow = ({ initialTab }: { initialTab: DashboardTab }) =>
         </div>
 
         <div className="content-area">
-          {activeTab === 'overview' && (
-            <motion.div key="overview" {...(reducedMotion ? {} : sectionMotion)}>
-              <OverviewPanel
-                state={{ ...state, settings, history: state.history }}
-                isRecording={isRecording}
-                reducedMotion={reducedMotion}
-                sectionMotion={sectionMotion}
-              />
-            </motion.div>
-          )}
-          {activeTab === 'settings' && (
-            <motion.div key="settings" {...(reducedMotion ? {} : sectionMotion)}>
-              <SettingsPanel
-                settings={settings}
-                pendingApiKey={pendingApiKey}
-                setPendingApiKey={setPendingApiKey}
-                saveApiKey={saveApiKey}
-                updateSettings={updateSettings}
-                microphoneRefreshKey={microphoneRefreshKey}
-                refreshMicrophones={refreshMicrophones}
-                onRestartOnboarding={() => setForceOnboarding(true)}
-                reducedMotion={reducedMotion}
-                sectionMotion={sectionMotion}
-              />
-            </motion.div>
-          )}
-          {activeTab === 'history' && (
-            <motion.div key="history" {...(reducedMotion ? {} : sectionMotion)}>
-              <HistoryPanel
-                history={state.history}
-                retentionDays={settings.historyRetentionDays}
-                reducedMotion={reducedMotion}
-                sectionMotion={sectionMotion}
-              />
-            </motion.div>
-          )}
+          <AnimatePresence mode="wait" initial={false}>
+            {activeTab === 'overview' && (
+              <motion.div
+                key="overview"
+                initial={reducedMotion ? false : { opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={reducedMotion ? undefined : { opacity: 0, y: -6 }}
+                transition={{ duration: 0.22, ease: easeOutExpo }}
+              >
+                <OverviewPanel
+                  state={{ ...state, settings, history: state.history }}
+                />
+              </motion.div>
+            )}
+            {activeTab === 'settings' && (
+              <motion.div
+                key="settings"
+                initial={reducedMotion ? false : { opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={reducedMotion ? undefined : { opacity: 0, y: -6 }}
+                transition={{ duration: 0.22, ease: easeOutExpo }}
+              >
+                <SettingsPanel
+                  settings={settings}
+                  pendingApiKey={pendingApiKey}
+                  setPendingApiKey={setPendingApiKey}
+                  saveApiKey={saveApiKey}
+                  updateSettings={updateSettings}
+                  microphoneRefreshKey={microphoneRefreshKey}
+                  refreshMicrophones={refreshMicrophones}
+                  onRestartOnboarding={() => setForceOnboarding(true)}
+                  reducedMotion={reducedMotion}
+                  sectionMotion={sectionMotion}
+                />
+              </motion.div>
+            )}
+            {activeTab === 'history' && (
+              <motion.div
+                key="history"
+                initial={reducedMotion ? false : { opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={reducedMotion ? undefined : { opacity: 0, y: -6 }}
+                transition={{ duration: 0.22, ease: easeOutExpo }}
+              >
+                <HistoryPanel
+                  history={state.history}
+                  retentionDays={settings.historyRetentionDays}
+                  reducedMotion={reducedMotion}
+                  sectionMotion={sectionMotion}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
     </div>
