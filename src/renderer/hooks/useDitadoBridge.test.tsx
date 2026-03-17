@@ -7,6 +7,7 @@ import { useDictationRecorder, useOverlayBridge } from './useDitadoBridge'
 
 const recorderState = {
   recording: false,
+  onAudioLevel: null as ((level: number) => void) | null,
   start: vi.fn(async () => {
     recorderState.recording = true
   }),
@@ -26,6 +27,10 @@ const recorderState = {
   cancel: vi.fn(async () => {
     recorderState.recording = false
   }),
+  warmup: vi.fn(async () => undefined),
+  setOnAudioLevel: vi.fn((listener: ((level: number) => void) | null) => {
+    recorderState.onAudioLevel = listener
+  }),
 }
 
 vi.mock('@renderer/lib/wavRecorder', () => ({
@@ -34,6 +39,8 @@ vi.mock('@renderer/lib/wavRecorder', () => ({
     start = recorderState.start
     stop = recorderState.stop
     cancel = recorderState.cancel
+    warmup = recorderState.warmup
+    setOnAudioLevel = recorderState.setOnAudioLevel
 
     isRecording(): boolean {
       return recorderState.recording
@@ -67,9 +74,12 @@ const buildSession = (overrides: Partial<DictationSession>): DictationSession =>
 
 beforeEach(() => {
   recorderState.recording = false
+  recorderState.onAudioLevel = null
   recorderState.start.mockClear()
   recorderState.stop.mockClear()
   recorderState.cancel.mockClear()
+  recorderState.warmup.mockClear()
+  recorderState.setOnAudioLevel.mockClear()
 
   window.ditado = {
     getOverlayState: vi.fn(),
