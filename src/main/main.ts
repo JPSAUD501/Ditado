@@ -62,6 +62,12 @@ const dashboardChrome = {
 
 const preloadPath = join(app.getAppPath(), 'dist-electron', 'preload', 'preload', 'preload.cjs')
 
+const hasSingleInstanceLock = app.requestSingleInstanceLock()
+
+if (!hasSingleInstanceLock) {
+  app.quit()
+}
+
 const createWindowUrl = (kind: WindowKind, tab?: DashboardTab): string => {
   const devServerUrl = process.env.VITE_DEV_SERVER_URL
   const query = kind === 'dashboard' && tab ? `?window=${kind}&tab=${tab}` : `?window=${kind}`
@@ -142,8 +148,8 @@ const createDashboardWindow = (tab: DashboardTab = 'overview', theme: Settings['
   const window = new BrowserWindow({
     width: 1180,
     height: 860,
-    minWidth: 1040,
-    minHeight: 760,
+    minWidth: 900,
+    minHeight: 620,
     titleBarStyle: isMac ? 'hiddenInset' : 'hidden',
     titleBarOverlay: isMac ? undefined : {
       color: chrome.overlayColor,
