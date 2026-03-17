@@ -43,6 +43,12 @@ const UpdateWidget = ({ updateState, appVersion }: { updateState: UpdateState; a
             </div>
           )}
 
+          {status === 'installing' && (
+            <div className="sidebar-update-icon-btn sidebar-update-icon-btn--checking" title={t('updateWidget.installing')}>
+              <Loader2 size={14} className="update-spinner" />
+            </div>
+          )}
+
           {status === 'available' && (
             <button
               type="button"

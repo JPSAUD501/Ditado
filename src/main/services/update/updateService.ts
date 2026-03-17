@@ -16,6 +16,7 @@ const getDefaultUpdater = (): AppUpdater => electronUpdater.autoUpdater
 export class UpdateService {
   private state: UpdateState = defaultUpdateState
   private initialized = false
+  private installingUpdate = false
 
   constructor(
     private readonly store: AppStore,
@@ -54,6 +55,10 @@ export class UpdateService {
 
   getState(): UpdateState {
     return this.state
+  }
+
+  isInstallingUpdate(): boolean {
+    return this.installingUpdate
   }
 
   async checkForUpdates(): Promise<UpdateState> {
@@ -101,7 +106,19 @@ export class UpdateService {
   }
 
   installUpdate(): void {
-    this.updater.quitAndInstall()
+    if (!this.isPackaged || this.state.status !== 'downloaded' || this.installingUpdate) {
+      return
+    }
+
+    this.installingUpdate = true
+    this.setState({
+      status: 'installing',
+      downloadProgress: null,
+    })
+
+    setTimeout(() => {
+      this.updater.quitAndInstall(false, true)
+    }, 120)
   }
 
   private bindUpdaterEvents(): void {
@@ -144,6 +161,7 @@ export class UpdateService {
     })
 
     this.updater.on('error', () => {
+      this.installingUpdate = false
       this.setState({
         status: 'error',
         lastCheckedAt: new Date().toISOString(),

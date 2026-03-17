@@ -44,6 +44,7 @@ const OVERLAY_WIDTH = 340
 const OVERLAY_HEIGHT = 54
 const OVERLAY_EXIT_DURATION_MS = 140
 const STARTUP_UPDATE_CHECK_DELAY_MS = 12_000
+const LETTER_INPUT_WARMUP_DELAY_MS = 1_800
 const STABLE_USER_DATA_DIR_NAME = 'Ditado'
 const DASHBOARD_TITLEBAR_HEIGHT = 36
 
@@ -310,15 +311,23 @@ void app.whenReady().then(async () => {
 
   const refreshShortcuts = registerShortcuts(store, orchestrator, () => hotkeyCaptureActive, (running) => { uiohookRunning = running })
 
-  registerTray({
-    openOverview: () => showDashboard('overview'),
-    openHistory: () => showDashboard('history'),
-    showOverlay: () => showOverlay(),
-    quit: () => {
-      isQuitting = true
-      app.quit()
+  const { refresh: refreshTray } = registerTray(
+    {
+      openOverview: () => showDashboard('overview'),
+      openHistory: () => showDashboard('history'),
+      quit: () => {
+        isQuitting = true
+        app.quit()
+      },
     },
-  })
+    () => {
+      const settings = store.getSettings()
+      return {
+        pushToTalkHotkey: settings.pushToTalkHotkey,
+        toggleHotkey: settings.toggleHotkey,
+      }
+    },
+  )
 
   registerIpc({
     store,
@@ -336,6 +345,7 @@ void app.whenReady().then(async () => {
       applyDashboardChrome(windows.dashboard, currentDashboardTheme)
       updates.syncFromSettings()
       refreshShortcuts()
+      refreshTray()
       await broadcastState(store, orchestrator, permissions, telemetry, updates)
     },
     broadcastState: async () => {
@@ -376,6 +386,11 @@ void app.whenReady().then(async () => {
 
   let shutdownInFlight = false
   app.on('before-quit', (event) => {
+    if (updates.isInstallingUpdate()) {
+      isQuitting = true
+      return
+    }
+
     if (shutdownInFlight) {
       return
     }
@@ -435,13 +450,28 @@ void app.whenReady().then(async () => {
     })
   }
 
-  setTimeout(() => {
+  const runLetterInputWarmup = (): void => {
+    if (isQuitting || updates.isInstallingUpdate()) {
+      return
+    }
+
     try {
       insertion.warmupLetterInput()
     } catch {
       // Warmup is best-effort; the live insertion path still handles fallback.
     }
-  }, 0)
+  }
+
+  const scheduleLetterInputWarmup = (): void => {
+    setTimeout(runLetterInputWarmup, LETTER_INPUT_WARMUP_DELAY_MS)
+  }
+
+  if (windows.dashboard?.webContents.isLoadingMainFrame()) {
+    windows.dashboard.webContents.once('did-finish-load', scheduleLetterInputWarmup)
+  } else {
+    scheduleLetterInputWarmup()
+  }
+
   setTimeout(() => {
     void updates.checkForUpdates()
   }, STARTUP_UPDATE_CHECK_DELAY_MS)

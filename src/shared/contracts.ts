@@ -215,7 +215,7 @@ export const updateStateSchema = z.object({
   enabled: z.boolean(),
   channel: z.enum(['stable', 'beta']),
   lastCheckedAt: z.string().nullable(),
-  status: z.enum(['idle', 'checking', 'available', 'downloading', 'downloaded', 'disabled', 'error', 'unsupported']),
+  status: z.enum(['idle', 'checking', 'available', 'downloading', 'downloaded', 'installing', 'disabled', 'error', 'unsupported']),
   downloadProgress: z.number().nullable(),
 })
 

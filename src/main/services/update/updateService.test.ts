@@ -10,6 +10,7 @@ class MockUpdater extends EventEmitter {
   allowPrerelease = false
   channel = 'latest'
   checkForUpdates = vi.fn(async () => undefined)
+  quitAndInstall = vi.fn(() => undefined)
 }
 
 vi.mock('electron', () => ({
@@ -77,5 +78,26 @@ describe('UpdateService', () => {
     updater.emit('update-downloaded')
     expect(service.getState().status).toBe('downloaded')
     expect(onStateChanged).toHaveBeenCalled()
+  })
+
+  it('marks install as in progress before delegating to quitAndInstall', async () => {
+    vi.useFakeTimers()
+    const updater = new MockUpdater()
+    const onStateChanged = vi.fn()
+    const service = new UpdateService(createStore(true), onStateChanged, updater as never, true, '0.1.0')
+
+    await service.initialize()
+    updater.emit('update-downloaded')
+
+    service.installUpdate()
+
+    expect(service.getState().status).toBe('installing')
+    expect(service.isInstallingUpdate()).toBe(true)
+    expect(updater.quitAndInstall).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(130)
+
+    expect(updater.quitAndInstall).toHaveBeenCalledWith(false, true)
+    vi.useRealTimers()
   })
 })
