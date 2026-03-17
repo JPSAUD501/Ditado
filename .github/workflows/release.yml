@@ -196,9 +196,10 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         run: |
           RELEASE_TAG="${{ needs.prepare-release.outputs.release_tag }}"
-          RELEASE_JSON="$(gh release view "${RELEASE_TAG}" --json isPrerelease,assets)"
+          RELEASE_JSON="$(gh release view "${RELEASE_TAG}" --repo "${GH_REPO}" --json isPrerelease,assets)"
 
           echo "${RELEASE_JSON}" | node -e '
             const release = JSON.parse(require("node:fs").readFileSync(0, "utf8"));
