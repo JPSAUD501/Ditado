@@ -1,7 +1,7 @@
 {
   "name": "ditado",
   "private": true,
-  "version": "0.1.17",
+  "version": "0.1.18",
   "description": "Universal AI dictation overlay for desktop apps.",
   "author": {
     "name": "JPSAUD501",
