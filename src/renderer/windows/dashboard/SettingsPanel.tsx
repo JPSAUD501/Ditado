@@ -66,23 +66,23 @@ export const SettingsPanel = ({
       {/* ── Left column: settings form ── */}
       <div className="surface-panel p-4 grid gap-4 content-start">
         {/* API & Model */}
-        <Section title="API &amp; Model">
+        <Section title={t('settings.apiAndModel')}>
           <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr' }}>
-            <Field label="OpenRouter API key" hint="Encrypted in OS secure storage.">
+            <Field label={t('settings.openRouterApiKey')} hint={t('settings.encryptedInOs')}>
               <div className="flex gap-2">
                 <input
                   className="field field-mono"
-                  placeholder={settings.apiKeyPresent ? 'Key saved' : 'sk-or-v1-...'}
+                  placeholder={settings.apiKeyPresent ? t('settings.keySaved') : 'sk-or-v1-...'}
                   type="password"
                   value={pendingApiKey}
                   onChange={(e) => setPendingApiKey(e.target.value)}
                 />
                 <button className="button-secondary" type="button" style={{ flexShrink: 0 }} onClick={() => void saveApiKey()}>
-                  Save
+                  {t('common.save')}
                 </button>
               </div>
             </Field>
-            <Field label="Model ID" hint="Any OpenRouter model.">
+            <Field label={t('settings.modelId')} hint={t('settings.anyOpenRouterModel')}>
               <input
                 className="field field-mono"
                 value={settings.modelId}
@@ -95,19 +95,19 @@ export const SettingsPanel = ({
         <div className="divider" />
 
         {/* Hotkeys */}
-        <Section title="Hotkeys">
+        <Section title={t('settings.hotkeys')}>
           <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr' }}>
-            <Field label="Toggle" hint="Press to start, press again to send.">
+            <Field label={t('settings.toggleLabel')} hint={t('settings.toggleHint')}>
               <HotkeyField
-                label="Toggle"
+                label={t('settings.toggleLabel')}
                 value={settings.toggleHotkey}
                 fallbackValue="Shift+Alt"
                 onCommit={(v) => updateSettings({ toggleHotkey: v })}
               />
             </Field>
-            <Field label="Push-to-talk" hint="Hold to speak, release to send.">
+            <Field label={t('settings.pushToTalkLabel')} hint={t('settings.pushToTalkHint')}>
               <HotkeyField
-                label="Push to talk"
+                label={t('settings.pushToTalkLabel')}
                 value={settings.pushToTalkHotkey}
                 fallbackValue="Ctrl+Alt"
                 onCommit={(v) => updateSettings({ pushToTalkHotkey: v })}
@@ -119,9 +119,9 @@ export const SettingsPanel = ({
         <div className="divider" />
 
         {/* Audio */}
-        <Section title="Audio">
+        <Section title={t('settings.audio')}>
           <div className="grid gap-3" style={{ gridTemplateColumns: '1fr auto' }}>
-            <Field label="Microphone">
+            <Field label={t('settings.microphone')}>
               <MicrophoneSelect
                 refreshKey={microphoneRefreshKey}
                 selected={settings.preferredMicrophoneId}
@@ -134,9 +134,9 @@ export const SettingsPanel = ({
                 type="button"
                 onClick={() => void requestBrowserMicrophonePermission().catch(() => undefined).then(refreshMicrophones)}
               >
-                Grant access
+                {t('common.grantAccess')}
               </button>
-              <button className="button-ghost" type="button" onClick={refreshMicrophones}>Refresh</button>
+              <button className="button-ghost" type="button" onClick={refreshMicrophones}>{t('common.refresh')}</button>
             </div>
           </div>
         </Section>
@@ -144,16 +144,16 @@ export const SettingsPanel = ({
         <div className="divider" />
 
         {/* Insertion */}
-        <Section title="Insertion">
-          <Field label="Reveal mode" hint="How text appears in the target field.">
+        <Section title={t('settings.insertion')}>
+          <Field label={t('settings.revealMode')} hint={t('settings.revealModeHint')}>
             <select
               className="field"
               value={settings.insertionStreamingMode}
               onChange={(e) => void updateSettings({ insertionStreamingMode: e.target.value as Settings['insertionStreamingMode'] })}
               aria-label="Insertion reveal"
             >
-              <option value="letter-by-letter">Letter by letter (streaming)</option>
-              <option value="all-at-once">All at once (clipboard paste)</option>
+              <option value="letter-by-letter">{t('settings.letterByLetter')}</option>
+              <option value="all-at-once">{t('settings.allAtOnce')}</option>
             </select>
           </Field>
         </Section>
@@ -161,48 +161,48 @@ export const SettingsPanel = ({
         <div className="divider" />
 
         {/* System */}
-        <Section title="System">
+        <Section title={t('settings.system')}>
           <div className="flex gap-2 flex-wrap">
             <button className="button-ghost" type="button" onClick={() => void window.ditado.checkForUpdates()}>
-              Check for updates
+              {t('settings.checkForUpdates')}
             </button>
             <button
               className="button-ghost"
               type="button"
-              title="If shortcuts stop responding, click this to reset the shortcut capture lock."
+              title={t('settings.resetShortcutCaptureHint')}
               onClick={() => {
                 void window.ditado.setHotkeyCaptureActive(false)
                 void window.ditado.getShortcutStatus().then(setShortcutStatus)
               }}
             >
-              Reset shortcut capture
+              {t('settings.resetShortcutCapture')}
             </button>
             <button
               className="button-ghost"
               type="button"
-              title="Walk through the setup wizard again."
+              title={t('settings.restartSetupWizardHint')}
               onClick={onRestartOnboarding}
             >
-              Restart setup wizard
+              {t('settings.restartSetupWizard')}
             </button>
           </div>
           {shortcutStatus && (
             <div className="surface-muted p-2.5 text-xs grid gap-1" style={{ borderRadius: '0.4rem' }}>
               <div className="flex items-center gap-2">
-                <span style={{ color: 'var(--text-3)' }}>Keyboard hook</span>
+                <span style={{ color: 'var(--text-3)' }}>{t('settings.keyboardHook')}</span>
                 <span style={{ fontFamily: 'var(--font-mono)', color: shortcutStatus.uiohookRunning ? 'var(--status-ok)' : 'var(--status-error)' }}>
-                  {shortcutStatus.uiohookRunning ? 'running' : 'failed to start'}
+                  {shortcutStatus.uiohookRunning ? t('settings.hookRunning') : t('settings.hookFailed')}
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <span style={{ color: 'var(--text-3)' }}>Capture mode</span>
+                <span style={{ color: 'var(--text-3)' }}>{t('settings.captureMode')}</span>
                 <span style={{ fontFamily: 'var(--font-mono)', color: shortcutStatus.captureActive ? 'var(--status-error)' : 'var(--status-ok)' }}>
-                  {shortcutStatus.captureActive ? 'locked (shortcuts suspended)' : 'unlocked'}
+                  {shortcutStatus.captureActive ? t('settings.captureLocked') : t('settings.captureUnlocked')}
                 </span>
               </div>
               {!shortcutStatus.uiohookRunning && (
                 <div className="mt-1" style={{ color: 'var(--text-3)', lineHeight: 1.45 }}>
-                  The keyboard hook failed. Check that no antivirus or security software is blocking it, or try running the app as administrator.
+                  {t('settings.hookFailedMessage')}
                 </div>
               )}
             </div>
@@ -235,43 +235,43 @@ export const SettingsPanel = ({
           >
             <option value="system">{t('common.system')}</option>
             <option value="en">English</option>
-            <option value="pt-BR">Portugues (Brasil)</option>
-            <option value="es">Espanol</option>
+            <option value="pt-BR">Português (Brasil)</option>
+            <option value="es">Español</option>
           </select>
         </label>
 
         <div className="divider" />
-        <div className="section-label">Behavior</div>
+        <div className="section-label">{t('settings.behavior')}</div>
         <ToggleRow
-          label="Send context automatically"
-          description="Sends focused app and selection to the model."
+          label={t('settings.sendContext')}
+          description={t('settings.sendContextDesc')}
           value={settings.sendContextAutomatically}
           onChange={(v) => void updateSettings({ sendContextAutomatically: v })}
         />
         <ToggleRow
-          label="Launch on login"
-          description="Start in the system tray on boot."
+          label={t('settings.launchOnLogin')}
+          description={t('settings.launchOnLoginDesc')}
           value={settings.launchOnLogin}
           onChange={(v) => void updateSettings({ launchOnLogin: v })}
         />
 
         <div className="divider" />
-        <div className="section-label">Updates &amp; Telemetry</div>
+        <div className="section-label">{t('settings.updatesAndTelemetry')}</div>
         <ToggleRow
-          label="Telemetry"
-          description="Technical telemetry only: no audio or dictated text. Builds without OTLP config stay local-only."
+          label={t('settings.telemetry')}
+          description={t('settings.telemetryDesc')}
           value={settings.telemetryEnabled}
           onChange={(v) => void updateSettings({ telemetryEnabled: v })}
         />
         <ToggleRow
-          label="Auto updates"
-          description="Download and install updates automatically."
+          label={t('settings.autoUpdate')}
+          description={t('settings.autoUpdateDesc')}
           value={settings.autoUpdateEnabled}
           onChange={(v) => void updateSettings({ autoUpdateEnabled: v })}
         />
         <ToggleRow
-          label="Beta channel"
-          description="Receive prerelease builds."
+          label={t('settings.betaChannel')}
+          description={t('settings.betaChannelDesc')}
           value={settings.updateChannel === 'beta'}
           onChange={(v) => void updateSettings({ updateChannel: v ? 'beta' : 'stable' })}
         />

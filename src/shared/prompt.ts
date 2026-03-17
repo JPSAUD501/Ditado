@@ -31,6 +31,20 @@ export const buildSystemPrompt = (): string =>
     '- When the instruction asks for a tone or style change (shouting, formal, casual, angry, etc.), adapt the wording, punctuation, and casing to match the requested tone while preserving the core meaning.',
     '- If you are unsure whether something is an instruction or content, prefer treating it as content to avoid losing spoken words.',
     '</inline_instructions>',
+    '<selected_text_editing>',
+    '- When the selected text field is not empty, the user may be issuing an editing command that targets the selected text.',
+    '- Editing signals: the speech is short, uses imperative verbs, references "this/that/it/isso/isto/esse/este", or explicitly names a transformation (translate, rephrase, fix, correct, format, summarize, expand, shorten, capitalize, make formal/informal, rewrite, convert, etc.).',
+    '- If an editing command is detected, apply it to the selected text and return the transformed result.',
+    '- Examples of editing commands with selected text:',
+    '  - "coloque isso em inglês" / "put this in English" → translate the selected text to English.',
+    '  - "deixe mais formal" / "make it more formal" → rephrase the selected text in a formal tone.',
+    '  - "corrija os erros" / "fix the errors" → correct spelling and grammar in the selected text.',
+    '  - "resuma isso" / "summarize this" → produce a concise summary of the selected text.',
+    '  - "coloque em maiúsculas" / "capitalize this" → convert the selected text to uppercase.',
+    '- If the speech contains both new dictated content and no editing intent, the selected text serves as continuity context only — do not reproduce or modify it. Write only the new dictated content.',
+    '- When in doubt between editing vs. new dictation, prefer editing if the speech is short and directive, prefer new dictation if the speech contains substantial original content.',
+    '- Non-regression rule: when the selected text field is empty, ignore this entire section completely.',
+    '</selected_text_editing>',
     '<grounding_rules>',
     '- Use the audio as the primary source of truth.',
     '- Use app metadata and selected text only to disambiguate tone, continuity, and terminology.',
@@ -53,17 +67,26 @@ export const buildSystemPrompt = (): string =>
     '- Check that the output does not add new facts, names, or commitments.',
     '- Check whether the audio contained any spoken words at all; if not, the output must be exactly empty.',
     '- If an inline instruction was detected, check that the instruction was applied and the instruction text itself is not in the output.',
+    '- If a selected-text editing command was detected, check that the transformation was applied to the selected text correctly.',
     '</verification_loop>',
   ].join('\n')
 
-export const buildUserPrompt = (context: ContextSnapshot, languageHint: string | null): string =>
-  [
+export const buildUserPrompt = (context: ContextSnapshot, languageHint: string | null): string => {
+  const selectedSnippet = normalizeSnippet(context.selectedText, 2000)
+  const hasSelection = Boolean(selectedSnippet)
+
+  const taskLine = hasSelection
+    ? 'Task: listen to the audio. If the speech is an editing instruction (translate, rephrase, fix, format, summarize, etc.), apply it to the selected text and return the result. Otherwise, write the polished final text to replace the selection or be inserted at the cursor.'
+    : 'Task: listen to the audio and write the polished final text that should replace the selection or be inserted at the cursor.'
+
+  return [
     `Active app: ${context.appName || 'Unknown App'}`,
     `Window title: ${context.windowTitle || 'Unknown'}`,
     `Language hint: ${languageHint || 'auto-detect'}`,
-    `Selected text: ${normalizeSnippet(context.selectedText, 2000) || '[none]'}`,
-    'Task: listen to the audio and write the polished final text that should replace the selection or be inserted at the cursor.',
+    `Selected text: ${selectedSnippet || '[none]'}`,
+    taskLine,
     'Definition of done: the output should feel like intentional final writing, not a transcript.',
     'Critical rule: preserve specific spoken tokens faithfully, especially names, versions, identifiers, commands, and technical terms.',
     'Critical rule: if the user did not say any intelligible words, output exactly an empty string and ignore the contextual hints.',
   ].join('\n')
+}

@@ -283,6 +283,8 @@ describe('DashboardWindow', () => {
             effectiveMode: 'all-at-once',
             insertionMethod: 'clipboard-all-at-once',
             fallbackUsed: false,
+            timeToFirstTokenMs: 0,
+            timeToCompleteMs: 0,
           },
         ],
       })

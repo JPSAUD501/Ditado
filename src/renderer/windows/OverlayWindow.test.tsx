@@ -30,6 +30,7 @@ const noticeSession: DictationSession = {
   },
   errorMessage: null,
   noticeMessage: 'Segure para ditar. Toggle: Shift+Alt',
+  processingStartedAt: null,
 }
 
 const toggleSession: DictationSession = {

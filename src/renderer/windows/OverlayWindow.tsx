@@ -1,5 +1,7 @@
+import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from 'framer-motion'
-import { AlertCircle, CheckCircle, Loader, Mic, PenLine } from 'lucide-react'
+import { AlertCircle, CheckCircle, Loader, Mic, PenLine, Type } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 import { useOverlayBridge } from '@renderer/hooks/useDitadoBridge'
 import { useThemeAndLanguage } from '@renderer/hooks/useThemeAndLanguage'
@@ -7,7 +9,6 @@ import type { DictationStatus } from '@shared/contracts'
 
 /* ── Status-based colors ──────────────────────────────────────────── */
 
-/* toggle = azul (fluxo contínuo), push-to-talk = verde (ativo ao vivo) */
 const toggleStatusColor: Record<string, string> = {
   listening: 'var(--status-write)',
   arming: 'var(--text-3)',
@@ -67,6 +68,57 @@ const iconAnimation: Record<string, string> = {
 const chipSpring = { type: 'spring' as const, stiffness: 400, damping: 30, mass: 0.8 }
 const chipEnter = { type: 'spring' as const, stiffness: 500, damping: 32, mass: 0.6 }
 
+/* ── Live timer hook ──────────────────────────────────────────────── */
+
+const useLiveTimer = (startIso: string | null | undefined, active: boolean): string => {
+  const [elapsed, setElapsed] = useState('0.0')
+  const rafRef = useRef<number>(0)
+
+  useEffect(() => {
+    if (!active || !startIso) {
+      setElapsed('0.0')
+      return
+    }
+    const startMs = new Date(startIso).getTime()
+    const tick = () => {
+      const s = Math.max(0, (Date.now() - startMs) / 1000)
+      setElapsed(s.toFixed(1))
+      rafRef.current = requestAnimationFrame(tick)
+    }
+    rafRef.current = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(rafRef.current)
+  }, [active, startIso])
+
+  return elapsed
+}
+
+/* ── Equalizer bars component ─────────────────────────────────────── */
+
+const EqualizerBars = () => (
+  <span className="overlay-equalizer">
+    <span className="overlay-eq-bar" style={{ animationDelay: '0ms' }} />
+    <span className="overlay-eq-bar" style={{ animationDelay: '180ms' }} />
+    <span className="overlay-eq-bar" style={{ animationDelay: '360ms' }} />
+  </span>
+)
+
+/* ── Notice text translation hook ─────────────────────────────────── */
+
+const useNoticeText = (raw: string | null | undefined): string => {
+  const { t } = useTranslation()
+  if (!raw) return ''
+  // Format: "notices.key::param" or plain i18n key "notices.key"
+  if (raw.startsWith('notices.')) {
+    const parts = raw.split('::')
+    const key = parts[0]
+    const param = parts[1]
+    if (param) return t(key, { hotkey: param })
+    return t(key)
+  }
+  return raw
+}
+
+/* ── Main component ───────────────────────────────────────────────── */
 
 export const OverlayWindow = () => {
   const reducedMotion = useReducedMotion()
@@ -75,7 +127,6 @@ export const OverlayWindow = () => {
   const session = state.session
   const status: DictationStatus = session?.status ?? 'idle'
   const appName = session?.context.appName || session?.targetApp || 'Ditado'
-  const detail = session?.noticeMessage ?? appName
   const mode = session?.activationMode ?? 'toggle'
   const isVisible = Boolean(session) && status !== 'idle'
 
@@ -87,6 +138,20 @@ export const OverlayWindow = () => {
   const iconClass = reducedMotion ? '' : (iconAnimation[status] ?? '')
   const color = colorMap[status] ?? 'var(--text-3)'
   const border = borderMap[status] ?? (isPtt ? 'rgba(210,175,110,0.28)' : 'rgba(110,165,210,0.22)')
+
+  // Timer: show elapsed time during processing/streaming
+  const showTimer = status === 'processing' || status === 'streaming'
+  const timerText = useLiveTimer(session?.processingStartedAt, showTimer)
+
+  // Equalizer: show during listening
+  const showEqualizer = status === 'listening'
+
+  // Context badge: show when selected text is being sent
+  const hasContext = Boolean(session?.context.selectedText)
+
+  // Notice text translation
+  const noticeText = useNoticeText(session?.noticeMessage)
+  const detail = status === 'notice' ? (noticeText || appName) : appName
 
   return (
     <div className="overlay-shell">
@@ -131,19 +196,58 @@ export const OverlayWindow = () => {
                 </motion.span>
               </AnimatePresence>
 
-              {/* Text with fade transition to avoid font stretching during resize */}
-              <AnimatePresence mode="wait" initial={false}>
+              {/* Equalizer bars during listening */}
+              {showEqualizer && !reducedMotion && (
                 <motion.span
-                  key={detail}
-                  className="overlay-app-name"
-                  initial={reducedMotion ? false : { opacity: 0 }}
-                  animate={reducedMotion ? undefined : { opacity: 1 }}
-                  exit={reducedMotion ? undefined : { opacity: 0 }}
-                  transition={{ duration: 0.12 }}
+                  initial={{ opacity: 0, scale: 0.5 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.5 }}
+                  transition={{ duration: 0.2 }}
                 >
-                  {detail}
+                  <EqualizerBars />
                 </motion.span>
+              )}
+
+              {/* Text or timer */}
+              <AnimatePresence mode="wait" initial={false}>
+                {showTimer ? (
+                  <motion.span
+                    key="timer"
+                    className="overlay-timer"
+                    initial={reducedMotion ? false : { opacity: 0 }}
+                    animate={reducedMotion ? undefined : { opacity: 1 }}
+                    exit={reducedMotion ? undefined : { opacity: 0 }}
+                    transition={{ duration: 0.12 }}
+                  >
+                    {timerText}s
+                  </motion.span>
+                ) : (
+                  <motion.span
+                    key={detail}
+                    className="overlay-app-name"
+                    initial={reducedMotion ? false : { opacity: 0 }}
+                    animate={reducedMotion ? undefined : { opacity: 1 }}
+                    exit={reducedMotion ? undefined : { opacity: 0 }}
+                    transition={{ duration: 0.12 }}
+                  >
+                    {detail}
+                  </motion.span>
+                )}
               </AnimatePresence>
+
+              {/* Context badge */}
+              {hasContext && (
+                <motion.span
+                  className="overlay-context-badge"
+                  initial={reducedMotion ? false : { opacity: 0, scale: 0.5 }}
+                  animate={reducedMotion ? undefined : { opacity: 1, scale: 1 }}
+                  transition={chipSpring}
+                  title="Context"
+                >
+                  <Type size={10} strokeWidth={2.4} />
+                  <span className="overlay-context-dot" />
+                </motion.span>
+              )}
 
             </motion.div>
           )}

@@ -22,6 +22,7 @@ export const HotkeyField = ({
   fallbackValue: string
   onCommit: (value: string) => Promise<unknown> | void
 }) => {
+  const { t } = useTranslation()
   const [draft, setDraft] = useState(value)
   const [isCapturing, setIsCapturing] = useState(false)
   const visibleValue = isCapturing ? draft : value
@@ -56,10 +57,10 @@ export const HotkeyField = ({
         }}
       >
         <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: visibleValue ? 'var(--text-1)' : 'var(--text-3)' }}>
-          {isCapturing ? 'Press combo…' : visibleValue}
+          {isCapturing ? t('common.pressCombo') : visibleValue}
         </span>
         <span style={{ fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.12em', color: isCapturing ? 'var(--accent)' : 'var(--text-3)', flexShrink: 0 }}>
-          {isCapturing ? 'capturing' : label}
+          {isCapturing ? t('common.capturing') : label}
         </span>
       </button>
       <button
@@ -68,7 +69,7 @@ export const HotkeyField = ({
         type="button"
         onClick={() => { setDraft(fallbackValue); stopCapture(); void onCommit(fallbackValue) }}
       >
-        Reset to {fallbackValue}
+        {t('common.resetTo', { value: fallbackValue })}
       </button>
     </div>
   )
@@ -120,7 +121,7 @@ export const ToggleRow = ({
 const enumerateBrowserMicrophones = async (): Promise<Array<{ deviceId: string; label: string }>> => {
   if (!navigator.mediaDevices?.enumerateDevices) return window.ditado.listMicrophones()
   const devices = await navigator.mediaDevices.enumerateDevices()
-  const mics = devices.filter((d) => d.kind === 'audioinput').map((d) => ({ deviceId: d.deviceId, label: d.label || 'System microphone' }))
+  const mics = devices.filter((d) => d.kind === 'audioinput').map((d) => ({ deviceId: d.deviceId, label: d.label || d.deviceId }))
   return mics.length > 0 ? mics : window.ditado.listMicrophones()
 }
 
@@ -133,6 +134,7 @@ export const MicrophoneSelect = ({
   selected: string | null
   onSelect: (deviceId: string | null) => void
 }) => {
+  const { t } = useTranslation()
   const [devices, setDevices] = useState<Array<{ deviceId: string; label: string }>>([])
 
   useEffect(() => {
@@ -144,9 +146,9 @@ export const MicrophoneSelect = ({
   }, [refreshKey])
 
   return (
-    <select className="field" value={selected ?? ''} onChange={(e) => onSelect(e.target.value || null)} aria-label="Preferred microphone">
-      <option value="">System default</option>
-      {devices.length === 0 ? <option value="" disabled>No microphones detected</option> : null}
+    <select className="field" value={selected ?? ''} onChange={(e) => onSelect(e.target.value || null)} aria-label={t('settings.preferredMicrophone')}>
+      <option value="">{t('common.systemDefault')}</option>
+      {devices.length === 0 ? <option value="" disabled>{t('common.noMicrophonesDetected')}</option> : null}
       {devices.map((d) => <option key={d.deviceId} value={d.deviceId}>{d.label}</option>)}
     </select>
   )
@@ -398,6 +400,15 @@ export const HistoryRow = ({ entry, index }: { entry: HistoryEntry; index: numbe
                   {(
                     [
                       { label: t('history.meta.model'),  value: entry.modelId.split('/').at(-1) ?? entry.modelId },
+                      entry.timeToFirstTokenMs > 0
+                        ? { label: t('history.meta.ttft'), value: `${entry.timeToFirstTokenMs}ms` }
+                        : null,
+                      entry.timeToCompleteMs > 0
+                        ? { label: t('history.meta.totalTime'), value: `${(entry.timeToCompleteMs / 1000).toFixed(1)}s` }
+                        : null,
+                      entry.latencyMs > 0
+                        ? { label: t('history.meta.latency'), value: `${Math.round(entry.latencyMs)}ms` }
+                        : null,
                       { label: t('history.meta.mode'),   value: entry.effectiveMode === 'letter-by-letter' ? t('history.meta.letterByLetter') : t('history.meta.allAtOnce') },
                       { label: t('history.meta.method'), value: entry.insertionMethod === 'enigo-letter' ? t('history.meta.keyboard') : t('history.meta.clipboard') },
                       entry.fallbackUsed

@@ -21,6 +21,7 @@ export class DictationSessionOrchestrator {
   private activeInsertionSession: { sessionId: string; insertion: ProgressiveInsertionSession } | null = null
   private cancelledSessionIds = new Set<string>()
   private contextCaptureBySessionId = new Map<string, Promise<Awaited<ReturnType<ActiveContextService['capture']>>>>()
+  private speechEndedAtBySessionId = new Map<string, number>()
 
   constructor(
     private readonly store: AppStore,
@@ -192,10 +193,13 @@ export class DictationSessionOrchestrator {
     }
 
     if (currentSession.status === 'listening' && currentSession.activationMode === 'toggle') {
+      const now = new Date().toISOString()
+      this.speechEndedAtBySessionId.set(currentSession.id, performance.now())
       this.sessions.set({
         ...currentSession,
         status: 'processing',
         captureIntent: 'stop',
+        processingStartedAt: now,
         noticeMessage: null,
         errorMessage: null,
       })
@@ -213,10 +217,13 @@ export class DictationSessionOrchestrator {
       return
     }
 
+    const now = new Date().toISOString()
+    this.speechEndedAtBySessionId.set(currentSession.id, performance.now())
     this.sessions.set({
       ...currentSession,
       status: 'processing',
       captureIntent: 'stop',
+      processingStartedAt: now,
       noticeMessage: null,
       errorMessage: null,
     })
@@ -260,7 +267,7 @@ export class DictationSessionOrchestrator {
       startedAt: new Date().toISOString(),
       finishedAt: new Date().toISOString(),
       targetApp: 'Ditado',
-      noticeMessage: `Segure para ditar. Toggle: ${this.store.getSettings().toggleHotkey}`,
+      noticeMessage: `notices.holdToDictate::${this.store.getSettings().toggleHotkey}`,
     })
   }
 
@@ -280,7 +287,7 @@ export class DictationSessionOrchestrator {
 
     if (!payload.speechDetected) {
       this.submittingSessionId = null
-      await this.showNotice('Nenhuma fala detectada.', 'dictation-no-speech', {
+      await this.showNotice('notices.noSpeechDetected', 'dictation-no-speech', {
         peakAmplitude: payload.peakAmplitude.toFixed(5),
         rmsAmplitude: payload.rmsAmplitude.toFixed(5),
       }, currentSession.id)
@@ -315,10 +322,17 @@ export class DictationSessionOrchestrator {
         hasSelectedText: Boolean(context.selectedText),
       })
 
+      const processingStartedAt = new Date().toISOString()
+      if (!this.speechEndedAtBySessionId.has(currentSession.id)) {
+        this.speechEndedAtBySessionId.set(currentSession.id, performance.now())
+      }
+      const speechEndedAt = this.speechEndedAtBySessionId.get(currentSession.id)!
+
       this.sessions.set({
         ...currentSession,
         status: 'processing',
         captureIntent: 'none',
+        processingStartedAt,
         targetApp: context.appName,
         context,
         insertionPlan,
@@ -336,6 +350,7 @@ export class DictationSessionOrchestrator {
       }
       let partialText = ''
       let streamingStarted = false
+      let firstTokenAt = 0
 
       const response = await this.llm.stream(
         {
@@ -352,6 +367,7 @@ export class DictationSessionOrchestrator {
 
           if (!streamingStarted) {
             streamingStarted = true
+            firstTokenAt = performance.now()
             this.telemetry.sessionEvent(currentSession.id, 'streaming-started')
           }
           partialText += delta
@@ -373,16 +389,20 @@ export class DictationSessionOrchestrator {
 
       if (!response.text.trim()) {
         await insertion.finalize('')
-        await this.showNotice('Nenhum texto final retornado.', 'dictation-empty-output', {
+        await this.showNotice('notices.noFinalText', 'dictation-empty-output', {
           modelId: this.store.getSettings().modelId,
         }, currentSession.id)
         return
       }
 
       const execution = await insertion.finalize(response.text)
+      const completedAt = performance.now()
       if (this.cancelledSessionIds.has(currentSession.id) || this.sessions.get()?.id !== currentSession.id) {
         return
       }
+
+      const timeToFirstTokenMs = firstTokenAt > 0 ? Math.round(firstTokenAt - speechEndedAt) : 0
+      const timeToCompleteMs = Math.round(completedAt - speechEndedAt)
 
       const finishedAt = new Date().toISOString()
       const completedSession = {
@@ -413,7 +433,7 @@ export class DictationSessionOrchestrator {
         effectiveMode: execution.effectiveMode,
       })
       try {
-        await this.history.appendCompletedSession(completedSession, response, payload, execution)
+        await this.history.appendCompletedSession(completedSession, response, payload, execution, { timeToFirstTokenMs, timeToCompleteMs })
         this.notifyHistoryUpdated()
       } catch {
         // History persistence must not delay or mask a successful dictation.
@@ -466,6 +486,7 @@ export class DictationSessionOrchestrator {
       })
     } finally {
       this.contextCaptureBySessionId.delete(currentSession.id)
+      this.speechEndedAtBySessionId.delete(currentSession.id)
       if (this.activeInsertionSession?.sessionId === currentSession.id) {
         this.activeInsertionSession = null
       }

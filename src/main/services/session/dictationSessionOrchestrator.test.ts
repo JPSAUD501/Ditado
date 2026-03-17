@@ -379,7 +379,7 @@ describe('DictationSessionOrchestrator', () => {
 
     expect(llm.stream).not.toHaveBeenCalled()
     expect(orchestrator.getSession()?.status).toBe('notice')
-    expect(orchestrator.getSession()?.noticeMessage).toContain('Nenhuma fala')
+    expect(orchestrator.getSession()?.noticeMessage).toContain('notices.noSpeechDetected')
     expect(telemetry.finishSession).toHaveBeenCalledWith(
       sessionId,
       'notice',
@@ -430,7 +430,7 @@ describe('DictationSessionOrchestrator', () => {
     expect(finalize).toHaveBeenCalledWith('')
     expect(store.appendHistoryWithAudio).not.toHaveBeenCalled()
     expect(orchestrator.getSession()?.status).toBe('notice')
-    expect(orchestrator.getSession()?.noticeMessage).toContain('Nenhum texto final retornado.')
+    expect(orchestrator.getSession()?.noticeMessage).toContain('notices.noFinalText')
     expect(telemetry.finishSession).toHaveBeenCalledWith(
       sessionId,
       'notice',

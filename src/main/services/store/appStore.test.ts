@@ -139,6 +139,8 @@ describe('AppStore', () => {
       effectiveMode: 'all-at-once',
       insertionMethod: 'clipboard-all-at-once',
       fallbackUsed: false,
+      timeToFirstTokenMs: 0,
+      timeToCompleteMs: 0,
     }, {
       wavBase64: Buffer.from('wave-audio').toString('base64'),
       mimeType: 'audio/wav',
@@ -174,6 +176,8 @@ describe('AppStore', () => {
       effectiveMode: 'all-at-once',
       insertionMethod: 'clipboard-all-at-once',
       fallbackUsed: false,
+      timeToFirstTokenMs: 0,
+      timeToCompleteMs: 0,
     })
 
     await store.appendHistory({
@@ -198,6 +202,8 @@ describe('AppStore', () => {
       effectiveMode: 'all-at-once',
       insertionMethod: 'clipboard-all-at-once',
       fallbackUsed: false,
+      timeToFirstTokenMs: 0,
+      timeToCompleteMs: 0,
     })
 
     await store.flush()

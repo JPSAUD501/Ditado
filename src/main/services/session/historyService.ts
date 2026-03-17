@@ -10,6 +10,7 @@ export class HistoryService {
     response: LlmResponse,
     audio: DictationAudioPayload,
     execution: InsertionExecutionReport,
+    timing?: { timeToFirstTokenMs: number; timeToCompleteMs: number },
   ): Promise<void> {
     await this.store.appendHistoryWithAudio({
       id: session.id,
@@ -26,6 +27,8 @@ export class HistoryService {
       },
       usedContext: Boolean(session.context.selectedText),
       latencyMs: response.latencyMs,
+      timeToFirstTokenMs: timing?.timeToFirstTokenMs ?? 0,
+      timeToCompleteMs: timing?.timeToCompleteMs ?? 0,
       insertionStrategy: session.insertionPlan.strategy,
       requestedMode: execution.requestedMode,
       effectiveMode: execution.effectiveMode,
@@ -54,6 +57,8 @@ export class HistoryService {
       },
       usedContext: Boolean(session.context.selectedText),
       latencyMs: 0,
+      timeToFirstTokenMs: 0,
+      timeToCompleteMs: 0,
       insertionStrategy: session.insertionPlan.strategy,
       requestedMode: execution?.requestedMode ?? this.store.getSettings().insertionStreamingMode,
       effectiveMode: execution?.effectiveMode ?? this.store.getSettings().insertionStreamingMode,

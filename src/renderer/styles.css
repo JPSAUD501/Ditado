@@ -975,6 +975,62 @@ button:disabled {
 .animate-spin-slow { animation: spin 1.2s linear infinite; }
 .animate-shimmer { animation: shimmer 1.4s ease-in-out infinite; }
 
+/* ── Overlay: equalizer bars ──────────────────────────────────────── */
+
+@keyframes overlay-eq-bounce {
+  0%, 100% { height: 3px; }
+  50% { height: 11px; }
+}
+
+.overlay-equalizer {
+  display: inline-flex;
+  align-items: center;
+  gap: 1.5px;
+  height: 13px;
+  flex: 0 0 auto;
+}
+
+.overlay-eq-bar {
+  width: 2px;
+  height: 3px;
+  border-radius: 1px;
+  background: currentColor;
+  animation: overlay-eq-bounce 0.7s ease-in-out infinite;
+}
+
+/* ── Overlay: live timer ──────────────────────────────────────────── */
+
+.overlay-timer {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-1);
+  letter-spacing: 0.02em;
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+/* ── Overlay: context badge ───────────────────────────────────────── */
+
+.overlay-context-badge {
+  display: inline-flex;
+  align-items: center;
+  position: relative;
+  color: var(--text-3);
+  flex: 0 0 auto;
+}
+
+.overlay-context-dot {
+  position: absolute;
+  top: -1px;
+  right: -3px;
+  width: 4px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--status-ok);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

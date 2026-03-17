@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import {
   AlertCircle, ArrowLeft, ArrowRight, Check, CheckCircle,
@@ -22,16 +23,6 @@ type WizardProps = {
 
 const TOTAL_STEPS = 6
 const easeOutExpo = [0.16, 1, 0.3, 1] as const
-
-const demoStatusLabel: Partial<Record<string, string>> = {
-  idle: 'Waiting…',
-  arming: 'Arming…',
-  listening: 'Recording — speak now',
-  processing: 'Processing…',
-  streaming: 'Writing…',
-  completed: 'Done!',
-  error: 'Error',
-}
 
 const demoStatusColor: Partial<Record<string, string>> = {
   listening: 'var(--status-listen)',
@@ -57,7 +48,7 @@ const StatusDot = ({ color, pulse }: { color: string; pulse: boolean }) => (
 
 /* ── Suggested phrase ────────────────────────────────────────────────── */
 
-const SuggestedPhrase = ({ phrase }: { phrase: string }) => (
+const SuggestedPhrase = ({ phrase, label }: { phrase: string; label: string }) => (
   <motion.div
     style={{
       display: 'flex', alignItems: 'flex-start', gap: '0.55rem',
@@ -71,7 +62,7 @@ const SuggestedPhrase = ({ phrase }: { phrase: string }) => (
     <MessageSquareQuote size={13} style={{ color: 'var(--accent)', flexShrink: 0, marginTop: '0.1rem' }} />
     <div>
       <div style={{ fontSize: '0.55rem', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--accent)', marginBottom: '0.2rem' }}>
-        Try saying
+        {label}
       </div>
       <div style={{ fontSize: '0.8rem', color: 'var(--text-1)', lineHeight: 1.5, fontStyle: 'italic' }}>
         &ldquo;{phrase}&rdquo;
@@ -134,6 +125,7 @@ export const OnboardingWizard = ({
   refreshMicrophones,
   finishOnboarding,
 }: WizardProps) => {
+  const { t } = useTranslation()
   const reducedMotion = useReducedMotion()
   const [step, setStep] = useState(0)
   const [direction, setDirection] = useState(1)
@@ -259,13 +251,13 @@ export const OnboardingWizard = ({
         <div className="wizard-actions">
           {step > 0 ? (
             <button className="button-ghost" type="button" onClick={goPrev} disabled={finishing}>
-              <ArrowLeft size={14} /> Back
+              <ArrowLeft size={14} /> {t('common.back')}
             </button>
           ) : <div />}
           <div className="flex items-center gap-2">
             {step < TOTAL_STEPS - 1 && step > 0 && (
               <button className="button-ghost" type="button" onClick={goNext} style={{ fontSize: '0.72rem' }}>
-                Skip
+                {t('common.skip')}
               </button>
             )}
             <button
@@ -274,10 +266,10 @@ export const OnboardingWizard = ({
               disabled={!canProceed()}
               onClick={handleNext}
             >
-              {finishing ? 'Saving…'
-                : step === 0 && !apiKeySaved && pendingApiKey.trim() ? 'Save & continue'
-                : step === TOTAL_STEPS - 1 ? <><Check size={14} /> Finish setup</>
-                : <>Continue <ArrowRight size={14} /></>}
+              {finishing ? t('common.saving')
+                : step === 0 && !apiKeySaved && pendingApiKey.trim() ? t('common.saveAndContinue')
+                : step === TOTAL_STEPS - 1 ? <><Check size={14} /> {t('common.finishSetup')}</>
+                : <>{t('common.continue')} <ArrowRight size={14} /></>}
             </button>
           </div>
         </div>
@@ -297,64 +289,67 @@ const StepApiKey = ({
   apiKeySaved: boolean
   apiKeyError: string | null
   updateSettings: (patch: Partial<Settings>) => Promise<Settings>
-}) => (
-  <div>
-    <div className="wizard-step-label"><KeyRound size={11} className="inline -mt-px mr-1" />Step 1 of {TOTAL_STEPS}</div>
-    <div className="wizard-title">Connect your API</div>
-    <div className="wizard-desc">Ditado uses OpenRouter to access AI models. Enter your API key to get started.</div>
+}) => {
+  const { t } = useTranslation()
+  return (
+    <div>
+      <div className="wizard-step-label"><KeyRound size={11} className="inline -mt-px mr-1" />{t('common.stepOf', { step: 1, total: TOTAL_STEPS })}</div>
+      <div className="wizard-title">{t('onboarding.connectApi')}</div>
+      <div className="wizard-desc">{t('onboarding.connectApiDesc')}</div>
 
-    <div className="grid gap-3">
-      <label className="grid gap-1">
-        <span className="text-xs font-medium" style={{ color: 'var(--text-2)' }}>OpenRouter API key</span>
-        <input
-          className="field field-mono"
-          placeholder={apiKeySaved ? 'Key saved' : 'sk-or-v1-...'}
-          type="password"
-          value={pendingApiKey}
-          onChange={(e) => setPendingApiKey(e.target.value)}
-          autoFocus
-        />
-        <AnimatePresence mode="wait">
-          {apiKeySaved && !apiKeyError && (
-            <motion.span
-              key="ok"
-              className="text-xs flex items-center gap-1"
-              style={{ color: 'var(--status-ok)' }}
-              initial={{ opacity: 0, y: -3 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.18, ease: easeOutExpo }}
-            >
-              <CheckCircle size={12} /> Key configured
-            </motion.span>
-          )}
-          {apiKeyError && (
-            <motion.span
-              key="err"
-              className="text-xs flex items-center gap-1.5"
-              style={{ color: 'var(--status-error)' }}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-            >
-              <AlertCircle size={12} /> {apiKeyError}
-            </motion.span>
-          )}
-        </AnimatePresence>
-      </label>
+      <div className="grid gap-3">
+        <label className="grid gap-1">
+          <span className="text-xs font-medium" style={{ color: 'var(--text-2)' }}>{t('settings.openRouterApiKey')}</span>
+          <input
+            className="field field-mono"
+            placeholder={apiKeySaved ? t('settings.keySaved') : 'sk-or-v1-...'}
+            type="password"
+            value={pendingApiKey}
+            onChange={(e) => setPendingApiKey(e.target.value)}
+            autoFocus
+          />
+          <AnimatePresence mode="wait">
+            {apiKeySaved && !apiKeyError && (
+              <motion.span
+                key="ok"
+                className="text-xs flex items-center gap-1"
+                style={{ color: 'var(--status-ok)' }}
+                initial={{ opacity: 0, y: -3 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.18, ease: easeOutExpo }}
+              >
+                <CheckCircle size={12} /> {t('onboarding.keyConfigured')}
+              </motion.span>
+            )}
+            {apiKeyError && (
+              <motion.span
+                key="err"
+                className="text-xs flex items-center gap-1.5"
+                style={{ color: 'var(--status-error)' }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+              >
+                <AlertCircle size={12} /> {apiKeyError}
+              </motion.span>
+            )}
+          </AnimatePresence>
+        </label>
 
-      <label className="grid gap-1">
-        <span className="text-xs font-medium" style={{ color: 'var(--text-2)' }}>Model</span>
-        <input
-          className="field field-mono"
-          value={settings.modelId}
-          onChange={(e) => void updateSettings({ modelId: e.target.value })}
-        />
-        <span className="text-xs" style={{ color: 'var(--text-3)' }}>Any OpenRouter-compatible model ID.</span>
-      </label>
+        <label className="grid gap-1">
+          <span className="text-xs font-medium" style={{ color: 'var(--text-2)' }}>{t('settings.modelId')}</span>
+          <input
+            className="field field-mono"
+            value={settings.modelId}
+            onChange={(e) => void updateSettings({ modelId: e.target.value })}
+          />
+          <span className="text-xs" style={{ color: 'var(--text-3)' }}>{t('onboarding.anyOpenRouterModelId')}</span>
+        </label>
+      </div>
     </div>
-  </div>
-)
+  )
+}
 
 /* ── Step 1: Appearance ────────────────────────────────────────────── */
 
@@ -363,51 +358,54 @@ const StepAppearance = ({
 }: {
   settings: Settings
   updateSettings: (patch: Partial<Settings>) => Promise<Settings>
-}) => (
-  <div>
-    <div className="wizard-step-label"><Sparkles size={11} className="inline -mt-px mr-1" />Step 2 of {TOTAL_STEPS}</div>
-    <div className="wizard-title">Make it yours</div>
-    <div className="wizard-desc">Choose the look and language that feels right for you.</div>
+}) => {
+  const { t } = useTranslation()
+  return (
+    <div>
+      <div className="wizard-step-label"><Sparkles size={11} className="inline -mt-px mr-1" />{t('common.stepOf', { step: 2, total: TOTAL_STEPS })}</div>
+      <div className="wizard-title">{t('onboarding.makeItYours')}</div>
+      <div className="wizard-desc">{t('onboarding.makeItYoursDesc')}</div>
 
-    <div className="grid gap-4">
-      {/* Theme picker */}
-      <div className="grid gap-2">
-        <span className="text-xs font-medium" style={{ color: 'var(--text-2)' }}>Theme</span>
-        <div style={{ display: 'flex', gap: '0.5rem', position: 'relative' }}>
-          {([
-            { value: 'system', icon: Monitor, label: 'System' },
-            { value: 'dark',   icon: Moon,    label: 'Dark' },
-            { value: 'light',  icon: Sun,     label: 'Light' },
-          ] as const).map(({ value, icon, label }) => (
-            <ThemeCard
-              key={value}
-              value={value}
-              current={settings.theme}
-              icon={icon}
-              label={label}
-              onChange={(v) => void updateSettings({ theme: v })}
-            />
-          ))}
+      <div className="grid gap-4">
+        {/* Theme picker */}
+        <div className="grid gap-2">
+          <span className="text-xs font-medium" style={{ color: 'var(--text-2)' }}>{t('settings.theme')}</span>
+          <div style={{ display: 'flex', gap: '0.5rem', position: 'relative' }}>
+            {([
+              { value: 'system', icon: Monitor, label: t('common.system') },
+              { value: 'dark',   icon: Moon,    label: t('common.dark') },
+              { value: 'light',  icon: Sun,     label: t('common.light') },
+            ] as const).map(({ value, icon, label }) => (
+              <ThemeCard
+                key={value}
+                value={value}
+                current={settings.theme}
+                icon={icon}
+                label={label}
+                onChange={(v) => void updateSettings({ theme: v })}
+              />
+            ))}
+          </div>
         </div>
-      </div>
 
-      {/* Language picker */}
-      <label className="grid gap-1">
-        <span className="text-xs font-medium" style={{ color: 'var(--text-2)' }}>Language</span>
-        <select
-          className="field"
-          value={settings.language}
-          onChange={(e) => void updateSettings({ language: e.target.value as Settings['language'] })}
-        >
-          <option value="system">System default</option>
-          <option value="en">English</option>
-          <option value="pt-BR">Português (Brasil)</option>
-          <option value="es">Español</option>
-        </select>
-      </label>
+        {/* Language picker */}
+        <label className="grid gap-1">
+          <span className="text-xs font-medium" style={{ color: 'var(--text-2)' }}>{t('settings.language')}</span>
+          <select
+            className="field"
+            value={settings.language}
+            onChange={(e) => void updateSettings({ language: e.target.value as Settings['language'] })}
+          >
+            <option value="system">{t('common.systemDefault')}</option>
+            <option value="en">English</option>
+            <option value="pt-BR">Português (Brasil)</option>
+            <option value="es">Español</option>
+          </select>
+        </label>
+      </div>
     </div>
-  </div>
-)
+  )
+}
 
 /* ── Step 2: Microphone ────────────────────────────────────────────── */
 
@@ -419,10 +417,11 @@ const StepMicrophone = ({
   microphoneRefreshKey: number
   refreshMicrophones: () => void
 }) => {
+  const { t } = useTranslation()
   const requestMic = async () => {
     if (navigator.mediaDevices?.getUserMedia) {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      stream.getTracks().forEach((t) => t.stop())
+      stream.getTracks().forEach((tr) => tr.stop())
     }
     await window.ditado.requestMicrophoneAccess()
     refreshMicrophones()
@@ -430,13 +429,13 @@ const StepMicrophone = ({
 
   return (
     <div>
-      <div className="wizard-step-label"><Mic size={11} className="inline -mt-px mr-1" />Step 3 of {TOTAL_STEPS}</div>
-      <div className="wizard-title">Microphone access</div>
-      <div className="wizard-desc">Ditado needs mic permission to capture your voice.</div>
+      <div className="wizard-step-label"><Mic size={11} className="inline -mt-px mr-1" />{t('common.stepOf', { step: 3, total: TOTAL_STEPS })}</div>
+      <div className="wizard-title">{t('onboarding.microphoneAccess')}</div>
+      <div className="wizard-desc">{t('onboarding.microphoneAccessDesc')}</div>
 
       <div className="grid gap-3">
         <label className="grid gap-1">
-          <span className="text-xs font-medium" style={{ color: 'var(--text-2)' }}>Microphone</span>
+          <span className="text-xs font-medium" style={{ color: 'var(--text-2)' }}>{t('settings.microphone')}</span>
           <MicrophoneSelect
             refreshKey={microphoneRefreshKey}
             selected={settings.preferredMicrophoneId}
@@ -445,10 +444,10 @@ const StepMicrophone = ({
         </label>
         <div className="flex gap-2">
           <button className="button-secondary" type="button" onClick={() => void requestMic()}>
-            Grant permission
+            {t('common.grantPermission')}
           </button>
           <button className="button-ghost" type="button" onClick={refreshMicrophones}>
-            Refresh
+            {t('common.refresh')}
           </button>
         </div>
       </div>
@@ -477,9 +476,20 @@ const DemoStep = ({
   suggestedPhrase: string
   instruction: string
 }) => {
+  const { t } = useTranslation()
   const status = session?.status ?? 'idle'
   const isRelevant = session?.activationMode === activationMode && status !== 'idle'
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  const demoStatusLabel: Partial<Record<string, string>> = {
+    idle: t('onboarding.demoWaiting'),
+    arming: t('onboarding.demoArming'),
+    listening: t('onboarding.demoListening'),
+    processing: t('onboarding.demoProcessing'),
+    streaming: t('onboarding.demoStreaming'),
+    completed: t('onboarding.demoCompleted'),
+    error: t('onboarding.demoError'),
+  }
 
   useEffect(() => {
     if (session?.activationMode === activationMode && status === 'completed' && !done) {
@@ -492,15 +502,15 @@ const DemoStep = ({
     : done ? 'var(--status-ok)' : 'var(--text-3)'
 
   const statusText = done && !isRelevant
-    ? 'Great — it works!'
+    ? t('onboarding.demoSuccess')
     : isRelevant
       ? (demoStatusLabel[status] ?? status)
-      : 'Click the box below, then use your shortcut'
+      : t('onboarding.demoInstruction')
 
   return (
     <div>
       <div className="wizard-step-label">
-        <StepIcon size={11} className="inline -mt-px mr-1" />{stepLabel}
+        <span className="inline -mt-px mr-1"><StepIcon size={11} /></span>{stepLabel}
       </div>
       <div className="wizard-title">{title}</div>
       <div className="wizard-desc">{desc}</div>
@@ -549,7 +559,7 @@ const DemoStep = ({
       <textarea
         ref={textareaRef}
         className="wizard-demo-textarea"
-        placeholder={`${instruction}\n\nYour dictated text will appear here…`}
+        placeholder={`${instruction}\n\n${t('onboarding.textWillAppear')}`}
         rows={4}
         spellCheck={false}
       />
@@ -557,7 +567,7 @@ const DemoStep = ({
       {/* Suggested phrase */}
       {!done && (
         <div style={{ marginTop: '0.6rem' }}>
-          <SuggestedPhrase phrase={suggestedPhrase} />
+          <SuggestedPhrase phrase={suggestedPhrase} label={t('onboarding.trySaying')} />
         </div>
       )}
     </div>
@@ -574,24 +584,27 @@ const StepPushToTalkDemo = ({
   done: boolean
   onDone: () => void
   updateSettings: (patch: Partial<Settings>) => Promise<Settings>
-}) => (
-  <DemoStep
-    stepLabel={`Step 4 of ${TOTAL_STEPS}`}
-    icon={Zap}
-    title="Try push-to-talk"
-    desc="Click the text box, hold your shortcut while speaking, then release to transcribe."
-    hotkey={settings.pushToTalkHotkey}
-    hotkeyLabel="Push-to-talk shortcut"
-    hotkeyFallback="Ctrl+Alt"
-    onHotkeyChange={(v) => void updateSettings({ pushToTalkHotkey: v })}
-    session={session}
-    activationMode="push-to-talk"
-    done={done}
-    onDone={onDone}
-    suggestedPhrase="Create a science presentation, I mean math, for my third grade class."
-    instruction={`Hold ${settings.pushToTalkHotkey} and speak`}
-  />
-)
+}) => {
+  const { t } = useTranslation()
+  return (
+    <DemoStep
+      stepLabel={t('common.stepOf', { step: 4, total: TOTAL_STEPS })}
+      icon={Zap}
+      title={t('onboarding.tryPushToTalk')}
+      desc={t('onboarding.tryPushToTalkDesc')}
+      hotkey={settings.pushToTalkHotkey}
+      hotkeyLabel={t('onboarding.pushToTalkShortcut')}
+      hotkeyFallback="Ctrl+Alt"
+      onHotkeyChange={(v) => void updateSettings({ pushToTalkHotkey: v })}
+      session={session}
+      activationMode="push-to-talk"
+      done={done}
+      onDone={onDone}
+      suggestedPhrase={t('onboarding.suggestedPhrasesPtt')}
+      instruction={t('onboarding.holdAndSpeak', { hotkey: settings.pushToTalkHotkey })}
+    />
+  )
+}
 
 /* ── Step 4: Toggle demo ───────────────────────────────────────────── */
 
@@ -603,42 +616,44 @@ const StepToggleDemo = ({
   done: boolean
   onDone: () => void
   updateSettings: (patch: Partial<Settings>) => Promise<Settings>
-}) => (
-  <DemoStep
-    stepLabel={`Step 5 of ${TOTAL_STEPS}`}
-    icon={Repeat}
-    title="Try toggle dictation"
-    desc="Click the text box, press your shortcut to start, speak, then press again to send."
-    hotkey={settings.toggleHotkey}
-    hotkeyLabel="Toggle shortcut"
-    hotkeyFallback="Shift+Alt"
-    onHotkeyChange={(v) => void updateSettings({ toggleHotkey: v })}
-    session={session}
-    activationMode="toggle"
-    done={done}
-    onDone={onDone}
-    suggestedPhrase="Write this in English: meeting postponed to Friday, sorry for the inconvenience."
-    instruction={`Press ${settings.toggleHotkey} to start, press again to stop`}
-  />
-)
+}) => {
+  const { t } = useTranslation()
+  return (
+    <DemoStep
+      stepLabel={t('common.stepOf', { step: 5, total: TOTAL_STEPS })}
+      icon={Repeat}
+      title={t('onboarding.tryToggle')}
+      desc={t('onboarding.tryToggleDesc')}
+      hotkey={settings.toggleHotkey}
+      hotkeyLabel={t('onboarding.toggleShortcut')}
+      hotkeyFallback="Shift+Alt"
+      onHotkeyChange={(v) => void updateSettings({ toggleHotkey: v })}
+      session={session}
+      activationMode="toggle"
+      done={done}
+      onDone={onDone}
+      suggestedPhrase={t('onboarding.suggestedPhrasesToggle')}
+      instruction={t('onboarding.pressToStartStop', { hotkey: settings.toggleHotkey })}
+    />
+  )
+}
 
 /* ── Step 5: Ready ─────────────────────────────────────────────────── */
 
 const StepReady = ({ settings }: { settings: Settings }) => {
+  const { t } = useTranslation()
   const rows = [
-    { label: 'API key',       value: settings.apiKeyPresent ? 'Configured' : 'Not set', warn: !settings.apiKeyPresent },
-    { label: 'Model',         value: settings.modelId.split('/').at(-1) ?? settings.modelId },
-    { label: 'Toggle',        value: settings.toggleHotkey },
-    { label: 'Push-to-talk',  value: settings.pushToTalkHotkey },
+    { label: t('overview.apiKey'),       value: settings.apiKeyPresent ? t('common.configured') : t('common.notSet'), warn: !settings.apiKeyPresent },
+    { label: t('overview.model'),        value: settings.modelId.split('/').at(-1) ?? settings.modelId },
+    { label: t('common.toggle'),         value: settings.toggleHotkey },
+    { label: t('common.pushToTalk'),     value: settings.pushToTalkHotkey },
   ]
 
   return (
     <div>
-      <div className="wizard-step-label"><Sparkles size={11} className="inline -mt-px mr-1" />Step 6 of {TOTAL_STEPS}</div>
-      <div className="wizard-title">You&apos;re all set</div>
-      <div className="wizard-desc">
-        Ditado lives in the system tray. Use your shortcuts to dictate into any focused field.
-      </div>
+      <div className="wizard-step-label"><Sparkles size={11} className="inline -mt-px mr-1" />{t('common.stepOf', { step: 6, total: TOTAL_STEPS })}</div>
+      <div className="wizard-title">{t('onboarding.allSet')}</div>
+      <div className="wizard-desc">{t('onboarding.allSetDesc')}</div>
 
       <div className="surface-muted p-3 grid" style={{ borderRadius: '0.6rem', gap: 0 }}>
         {rows.map((row, i) => (
@@ -668,7 +683,7 @@ const StepReady = ({ settings }: { settings: Settings }) => {
         animate={{ opacity: 1 }}
         transition={{ delay: 0.32 }}
       >
-        If text insertion fails, the result stays in your clipboard. All settings can be changed later.
+        {t('settings.fallbackClipboardHint')}
       </motion.p>
     </div>
   )

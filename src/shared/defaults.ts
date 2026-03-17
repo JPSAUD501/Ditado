@@ -61,6 +61,7 @@ export const createIdleSession = (): DictationSession => ({
   captureIntent: 'none',
   startedAt: new Date().toISOString(),
   finishedAt: null,
+  processingStartedAt: null,
   targetApp: 'Unknown App',
   context: emptyContextSnapshot,
   partialText: '',
