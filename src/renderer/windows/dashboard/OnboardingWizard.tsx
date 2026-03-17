@@ -1,6 +1,9 @@
-import { useEffect, useState } from 'react'
-import { motion, useReducedMotion } from 'framer-motion'
-import { AlertCircle, ArrowLeft, ArrowRight, Check, CheckCircle, KeyRound, Mic, Repeat, Sparkles, Zap } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import {
+  AlertCircle, ArrowLeft, ArrowRight, Check, CheckCircle,
+  KeyRound, Mic, MessageSquareQuote, Monitor, Moon, Repeat, Sparkles, Sun, Zap,
+} from 'lucide-react'
 
 import type { DictationSession, Settings } from '@shared/contracts'
 import { HotkeyField, MicrophoneSelect } from './controls'
@@ -18,6 +21,107 @@ type WizardProps = {
 }
 
 const TOTAL_STEPS = 6
+const easeOutExpo = [0.16, 1, 0.3, 1] as const
+
+const demoStatusLabel: Partial<Record<string, string>> = {
+  idle: 'Waiting…',
+  arming: 'Arming…',
+  listening: 'Recording — speak now',
+  processing: 'Processing…',
+  streaming: 'Writing…',
+  completed: 'Done!',
+  error: 'Error',
+}
+
+const demoStatusColor: Partial<Record<string, string>> = {
+  listening: 'var(--status-listen)',
+  processing: 'var(--status-process)',
+  streaming: 'var(--status-write)',
+  completed: 'var(--status-ok)',
+  error: 'var(--status-error)',
+}
+
+/* ── Animated status dot ─────────────────────────────────────────────── */
+
+const StatusDot = ({ color, pulse }: { color: string; pulse: boolean }) => (
+  <motion.div
+    style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: color }}
+    animate={{
+      boxShadow: pulse
+        ? [`0 0 0 0px ${color}55`, `0 0 0 5px ${color}00`]
+        : `0 0 0 0px ${color}00`,
+    }}
+    transition={pulse ? { duration: 1.1, repeat: Infinity, ease: 'easeOut' } : { duration: 0.25 }}
+  />
+)
+
+/* ── Suggested phrase ────────────────────────────────────────────────── */
+
+const SuggestedPhrase = ({ phrase }: { phrase: string }) => (
+  <motion.div
+    style={{
+      display: 'flex', alignItems: 'flex-start', gap: '0.55rem',
+      padding: '0.6rem 0.75rem', borderRadius: '0.5rem',
+      background: 'var(--accent-muted)', border: '1px solid rgba(210,175,110,0.15)',
+    }}
+    initial={{ opacity: 0, y: 5 }}
+    animate={{ opacity: 1, y: 0 }}
+    transition={{ duration: 0.28, ease: easeOutExpo, delay: 0.1 }}
+  >
+    <MessageSquareQuote size={13} style={{ color: 'var(--accent)', flexShrink: 0, marginTop: '0.1rem' }} />
+    <div>
+      <div style={{ fontSize: '0.55rem', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--accent)', marginBottom: '0.2rem' }}>
+        Try saying
+      </div>
+      <div style={{ fontSize: '0.8rem', color: 'var(--text-1)', lineHeight: 1.5, fontStyle: 'italic' }}>
+        &ldquo;{phrase}&rdquo;
+      </div>
+    </div>
+  </motion.div>
+)
+
+/* ── Theme card ──────────────────────────────────────────────────────── */
+
+const ThemeCard = ({
+  value, current, icon: Icon, label, onChange,
+}: {
+  value: Settings['theme']
+  current: Settings['theme']
+  icon: React.FC<{ size?: number; strokeWidth?: number }>
+  label: string
+  onChange: (v: Settings['theme']) => void
+}) => {
+  const active = current === value
+  return (
+    <motion.button
+      type="button"
+      onClick={() => onChange(value)}
+      style={{
+        flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.4rem',
+        padding: '0.75rem 0.5rem', borderRadius: '0.6rem', cursor: 'pointer',
+        border: `1px solid ${active ? 'rgba(210,175,110,0.4)' : 'var(--border)'}`,
+        background: active ? 'var(--accent-muted)' : 'var(--bg-2)',
+        color: active ? 'var(--accent)' : 'var(--text-2)',
+        transition: 'border-color 150ms ease, background 150ms ease, color 150ms ease',
+      }}
+      whileTap={{ scale: 0.95 }}
+    >
+      <Icon size={18} strokeWidth={1.8} />
+      <span style={{ fontSize: '0.7rem', fontWeight: 500 }}>{label}</span>
+      {active && (
+        <motion.div
+          layoutId="theme-check"
+          style={{ position: 'absolute', top: 6, right: 6 }}
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          transition={{ type: 'spring', stiffness: 500, damping: 20 }}
+        >
+          <Check size={10} />
+        </motion.div>
+      )}
+    </motion.button>
+  )
+}
 
 export const OnboardingWizard = ({
   settings,
@@ -32,23 +136,24 @@ export const OnboardingWizard = ({
 }: WizardProps) => {
   const reducedMotion = useReducedMotion()
   const [step, setStep] = useState(0)
+  const [direction, setDirection] = useState(1)
   const [apiKeySaved, setApiKeySaved] = useState(settings.apiKeyPresent)
   const [apiKeyError, setApiKeyError] = useState<string | null>(null)
   const [pushTalkDone, setPushTalkDone] = useState(false)
   const [toggleDone, setToggleDone] = useState(false)
   const [finishing, setFinishing] = useState(false)
 
-  const next = () => setStep((s) => Math.min(s + 1, TOTAL_STEPS - 1))
-  const prev = () => setStep((s) => Math.max(s - 1, 0))
+  const goNext = () => { setDirection(1); setStep((s) => Math.min(s + 1, TOTAL_STEPS - 1)) }
+  const goPrev = () => { setDirection(-1); setStep((s) => Math.max(s - 1, 0)) }
 
   const handleSaveApiKey = async () => {
     setApiKeyError(null)
     try {
       await saveApiKey()
       setApiKeySaved(true)
-      next()
+      goNext()
     } catch (err) {
-      setApiKeyError(err instanceof Error ? err.message : 'Failed to save API key. Check that secure storage is available on this device.')
+      setApiKeyError(err instanceof Error ? err.message : 'Failed to save API key.')
     }
   }
 
@@ -59,100 +164,107 @@ export const OnboardingWizard = ({
   }
 
   const handleNext = () => {
-    if (step === 0 && pendingApiKey.trim()) {
-      void handleSaveApiKey()
-      return
-    }
+    if (step === 0 && pendingApiKey.trim()) { void handleSaveApiKey(); return }
     if (step === TOTAL_STEPS - 1) {
       setFinishing(true)
       void finishOnboarding().catch(() => setFinishing(false))
       return
     }
-    next()
+    goNext()
+  }
+
+  const slideVariants = {
+    enter: (dir: number) => ({ opacity: 0, x: dir * 22 }),
+    center: { opacity: 1, x: 0 },
+    exit: (dir: number) => ({ opacity: 0, x: dir * -22 }),
   }
 
   return (
     <div className="wizard-backdrop">
       <motion.div
         className="wizard-card"
-        initial={reducedMotion ? false : { opacity: 0, y: 16, scale: 0.98 }}
+        initial={reducedMotion ? false : { opacity: 0, y: 24, scale: 0.96 }}
         animate={reducedMotion ? undefined : { opacity: 1, y: 0, scale: 1 }}
-        transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+        transition={{ duration: 0.38, ease: easeOutExpo }}
       >
-        {/* Progress bar */}
+        {/* Progress dots */}
         <div className="wizard-progress">
           {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
-            <div
+            <motion.div
               key={i}
               className="wizard-progress-dot"
               data-active={i === step ? 'true' : undefined}
               data-done={i < step ? 'true' : undefined}
+              layout
+              transition={{ duration: 0.25, ease: easeOutExpo }}
             />
           ))}
         </div>
 
         {/* Step content */}
-        <motion.div
-          key={step}
-          initial={reducedMotion ? false : { opacity: 0, x: 12 }}
-          animate={reducedMotion ? undefined : { opacity: 1, x: 0 }}
-          transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-        >
-          {step === 0 && (
-            <StepApiKey
-              settings={settings}
-              pendingApiKey={pendingApiKey}
-              setPendingApiKey={setPendingApiKey}
-              apiKeySaved={apiKeySaved}
-              apiKeyError={apiKeyError}
-              updateSettings={updateSettings}
-            />
-          )}
-          {step === 1 && (
-            <StepHotkeys
-              settings={settings}
-              updateSettings={updateSettings}
-            />
-          )}
-          {step === 2 && (
-            <StepMicrophone
-              settings={settings}
-              updateSettings={updateSettings}
-              microphoneRefreshKey={microphoneRefreshKey}
-              refreshMicrophones={refreshMicrophones}
-            />
-          )}
-          {step === 3 && (
-            <StepPushToTalkDemo
-              settings={settings}
-              session={session}
-              done={pushTalkDone}
-              onDone={() => setPushTalkDone(true)}
-            />
-          )}
-          {step === 4 && (
-            <StepToggleDemo
-              settings={settings}
-              session={session}
-              done={toggleDone}
-              onDone={() => setToggleDone(true)}
-            />
-          )}
-          {step === 5 && <StepReady settings={settings} />}
-        </motion.div>
+        <AnimatePresence mode="wait" custom={direction}>
+          <motion.div
+            key={step}
+            custom={direction}
+            variants={reducedMotion ? undefined : slideVariants}
+            initial="enter"
+            animate="center"
+            exit="exit"
+            transition={{ duration: 0.22, ease: easeOutExpo }}
+          >
+            {step === 0 && (
+              <StepApiKey
+                settings={settings}
+                pendingApiKey={pendingApiKey}
+                setPendingApiKey={setPendingApiKey}
+                apiKeySaved={apiKeySaved}
+                apiKeyError={apiKeyError}
+                updateSettings={updateSettings}
+              />
+            )}
+            {step === 1 && (
+              <StepAppearance settings={settings} updateSettings={updateSettings} />
+            )}
+            {step === 2 && (
+              <StepMicrophone
+                settings={settings}
+                updateSettings={updateSettings}
+                microphoneRefreshKey={microphoneRefreshKey}
+                refreshMicrophones={refreshMicrophones}
+              />
+            )}
+            {step === 3 && (
+              <StepPushToTalkDemo
+                settings={settings}
+                session={session}
+                done={pushTalkDone}
+                onDone={() => setPushTalkDone(true)}
+                updateSettings={updateSettings}
+              />
+            )}
+            {step === 4 && (
+              <StepToggleDemo
+                settings={settings}
+                session={session}
+                done={toggleDone}
+                onDone={() => setToggleDone(true)}
+                updateSettings={updateSettings}
+              />
+            )}
+            {step === 5 && <StepReady settings={settings} />}
+          </motion.div>
+        </AnimatePresence>
 
         {/* Actions */}
         <div className="wizard-actions">
           {step > 0 ? (
-            <button className="button-ghost" type="button" onClick={prev} disabled={finishing}>
+            <button className="button-ghost" type="button" onClick={goPrev} disabled={finishing}>
               <ArrowLeft size={14} /> Back
             </button>
-          ) : (
-            <div />
-          )}
+          ) : <div />}
           <div className="flex items-center gap-2">
             {step < TOTAL_STEPS - 1 && step > 0 && (
-              <button className="button-ghost" type="button" onClick={next} style={{ fontSize: '0.72rem' }}>
+              <button className="button-ghost" type="button" onClick={goNext} style={{ fontSize: '0.72rem' }}>
                 Skip
               </button>
             )}
@@ -162,14 +274,10 @@ export const OnboardingWizard = ({
               disabled={!canProceed()}
               onClick={handleNext}
             >
-              {finishing
-                ? 'Saving…'
-                : step === 0 && !apiKeySaved && pendingApiKey.trim()
-                  ? 'Save & continue'
-                  : step === TOTAL_STEPS - 1
-                    ? <><Check size={14} /> Finish setup</>
-                    : <>Continue <ArrowRight size={14} /></>
-              }
+              {finishing ? 'Saving…'
+                : step === 0 && !apiKeySaved && pendingApiKey.trim() ? 'Save & continue'
+                : step === TOTAL_STEPS - 1 ? <><Check size={14} /> Finish setup</>
+                : <>Continue <ArrowRight size={14} /></>}
             </button>
           </div>
         </div>
@@ -178,29 +286,22 @@ export const OnboardingWizard = ({
   )
 }
 
-/* ── Step 0: API Key + Model ───────────────────────────────────────── */
+/* ── Step 0: API Key ───────────────────────────────────────────────── */
 
 const StepApiKey = ({
-  settings,
-  pendingApiKey,
-  setPendingApiKey,
-  apiKeySaved,
-  apiKeyError,
-  updateSettings,
+  settings, pendingApiKey, setPendingApiKey, apiKeySaved, apiKeyError, updateSettings,
 }: {
   settings: Settings
   pendingApiKey: string
-  setPendingApiKey: (value: string) => void
+  setPendingApiKey: (v: string) => void
   apiKeySaved: boolean
   apiKeyError: string | null
   updateSettings: (patch: Partial<Settings>) => Promise<Settings>
 }) => (
   <div>
-    <div className="wizard-step-label"><KeyRound size={12} className="inline -mt-px mr-1" />Step 1 of {TOTAL_STEPS}</div>
+    <div className="wizard-step-label"><KeyRound size={11} className="inline -mt-px mr-1" />Step 1 of {TOTAL_STEPS}</div>
     <div className="wizard-title">Connect your API</div>
-    <div className="wizard-desc">
-      Ditado uses OpenRouter to access language models. Enter your API key to get started.
-    </div>
+    <div className="wizard-desc">Ditado uses OpenRouter to access AI models. Enter your API key to get started.</div>
 
     <div className="grid gap-3">
       <label className="grid gap-1">
@@ -213,16 +314,33 @@ const StepApiKey = ({
           onChange={(e) => setPendingApiKey(e.target.value)}
           autoFocus
         />
-        {apiKeySaved && !apiKeyError && (
-          <span className="text-xs flex items-center gap-1" style={{ color: 'var(--status-ok)' }}>
-            <CheckCircle size={12} /> Key configured
-          </span>
-        )}
-        {apiKeyError && (
-          <span className="text-xs flex items-center gap-1.5" style={{ color: 'var(--status-error)' }}>
-            <AlertCircle size={12} /> {apiKeyError}
-          </span>
-        )}
+        <AnimatePresence mode="wait">
+          {apiKeySaved && !apiKeyError && (
+            <motion.span
+              key="ok"
+              className="text-xs flex items-center gap-1"
+              style={{ color: 'var(--status-ok)' }}
+              initial={{ opacity: 0, y: -3 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.18, ease: easeOutExpo }}
+            >
+              <CheckCircle size={12} /> Key configured
+            </motion.span>
+          )}
+          {apiKeyError && (
+            <motion.span
+              key="err"
+              className="text-xs flex items-center gap-1.5"
+              style={{ color: 'var(--status-error)' }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+            >
+              <AlertCircle size={12} /> {apiKeyError}
+            </motion.span>
+          )}
+        </AnimatePresence>
       </label>
 
       <label className="grid gap-1">
@@ -232,54 +350,61 @@ const StepApiKey = ({
           value={settings.modelId}
           onChange={(e) => void updateSettings({ modelId: e.target.value })}
         />
-        <span className="text-xs" style={{ color: 'var(--text-3)' }}>
-          Any OpenRouter-compatible model ID.
-        </span>
+        <span className="text-xs" style={{ color: 'var(--text-3)' }}>Any OpenRouter-compatible model ID.</span>
       </label>
     </div>
   </div>
 )
 
-/* ── Step 1: Hotkeys ───────────────────────────────────────────────── */
+/* ── Step 1: Appearance ────────────────────────────────────────────── */
 
-const StepHotkeys = ({
-  settings,
-  updateSettings,
+const StepAppearance = ({
+  settings, updateSettings,
 }: {
   settings: Settings
   updateSettings: (patch: Partial<Settings>) => Promise<Settings>
 }) => (
   <div>
-    <div className="wizard-step-label"><Zap size={12} className="inline -mt-px mr-1" />Step 2 of {TOTAL_STEPS}</div>
-    <div className="wizard-title">Set your shortcuts</div>
-    <div className="wizard-desc">
-      Two global shortcuts control dictation. Press any modifier combo to change them.
-    </div>
+    <div className="wizard-step-label"><Sparkles size={11} className="inline -mt-px mr-1" />Step 2 of {TOTAL_STEPS}</div>
+    <div className="wizard-title">Make it yours</div>
+    <div className="wizard-desc">Choose the look and language that feels right for you.</div>
 
     <div className="grid gap-4">
-      <div className="grid gap-1">
-        <span className="text-xs font-medium" style={{ color: 'var(--text-2)' }}>
-          Toggle — press to start, press again to stop &amp; send
-        </span>
-        <HotkeyField
-          label="Toggle"
-          value={settings.toggleHotkey}
-          fallbackValue="Shift+Alt"
-          onCommit={(value) => updateSettings({ toggleHotkey: value })}
-        />
+      {/* Theme picker */}
+      <div className="grid gap-2">
+        <span className="text-xs font-medium" style={{ color: 'var(--text-2)' }}>Theme</span>
+        <div style={{ display: 'flex', gap: '0.5rem', position: 'relative' }}>
+          {([
+            { value: 'system', icon: Monitor, label: 'System' },
+            { value: 'dark',   icon: Moon,    label: 'Dark' },
+            { value: 'light',  icon: Sun,     label: 'Light' },
+          ] as const).map(({ value, icon, label }) => (
+            <ThemeCard
+              key={value}
+              value={value}
+              current={settings.theme}
+              icon={icon}
+              label={label}
+              onChange={(v) => void updateSettings({ theme: v })}
+            />
+          ))}
+        </div>
       </div>
 
-      <div className="grid gap-1">
-        <span className="text-xs font-medium" style={{ color: 'var(--text-2)' }}>
-          Push-to-talk — hold to speak, release to send
-        </span>
-        <HotkeyField
-          label="Push to talk"
-          value={settings.pushToTalkHotkey}
-          fallbackValue="Ctrl+Alt"
-          onCommit={(value) => updateSettings({ pushToTalkHotkey: value })}
-        />
-      </div>
+      {/* Language picker */}
+      <label className="grid gap-1">
+        <span className="text-xs font-medium" style={{ color: 'var(--text-2)' }}>Language</span>
+        <select
+          className="field"
+          value={settings.language}
+          onChange={(e) => void updateSettings({ language: e.target.value as Settings['language'] })}
+        >
+          <option value="system">System default</option>
+          <option value="en">English</option>
+          <option value="pt-BR">Português (Brasil)</option>
+          <option value="es">Español</option>
+        </select>
+      </label>
     </div>
   </div>
 )
@@ -287,10 +412,7 @@ const StepHotkeys = ({
 /* ── Step 2: Microphone ────────────────────────────────────────────── */
 
 const StepMicrophone = ({
-  settings,
-  updateSettings,
-  microphoneRefreshKey,
-  refreshMicrophones,
+  settings, updateSettings, microphoneRefreshKey, refreshMicrophones,
 }: {
   settings: Settings
   updateSettings: (patch: Partial<Settings>) => Promise<Settings>
@@ -308,11 +430,9 @@ const StepMicrophone = ({
 
   return (
     <div>
-      <div className="wizard-step-label"><Mic size={12} className="inline -mt-px mr-1" />Step 3 of {TOTAL_STEPS}</div>
+      <div className="wizard-step-label"><Mic size={11} className="inline -mt-px mr-1" />Step 3 of {TOTAL_STEPS}</div>
       <div className="wizard-title">Microphone access</div>
-      <div className="wizard-desc">
-        Ditado needs microphone permission to capture your voice. Select a device or keep the system default.
-      </div>
+      <div className="wizard-desc">Ditado needs mic permission to capture your voice.</div>
 
       <div className="grid gap-3">
         <label className="grid gap-1">
@@ -320,16 +440,15 @@ const StepMicrophone = ({
           <MicrophoneSelect
             refreshKey={microphoneRefreshKey}
             selected={settings.preferredMicrophoneId}
-            onSelect={(deviceId) => void updateSettings({ preferredMicrophoneId: deviceId })}
+            onSelect={(id) => void updateSettings({ preferredMicrophoneId: id })}
           />
         </label>
-
         <div className="flex gap-2">
           <button className="button-secondary" type="button" onClick={() => void requestMic()}>
             Grant permission
           </button>
           <button className="button-ghost" type="button" onClick={refreshMicrophones}>
-            Refresh devices
+            Refresh
           </button>
         </div>
       </div>
@@ -337,193 +456,220 @@ const StepMicrophone = ({
   )
 }
 
-/* ── Demo step shared ──────────────────────────────────────────────── */
+/* ── Shared demo step ────────────────────────────────────────────────── */
 
-const demoStatusLabel: Partial<Record<string, string>> = {
-  idle: 'Waiting for input…',
-  arming: 'Arming…',
-  listening: 'Recording — speak now',
-  processing: 'Processing audio…',
-  streaming: 'Writing result…',
-  completed: 'Done!',
-  error: 'Error during dictation',
-}
+const DemoStep = ({
+  stepLabel, icon: StepIcon, title, desc, hotkey, hotkeyLabel, hotkeyFallback, onHotkeyChange,
+  session, activationMode, done, onDone, suggestedPhrase, instruction,
+}: {
+  stepLabel: string
+  icon: React.FC<{ size?: number; strokeWidth?: number }>
+  title: string
+  desc: string
+  hotkey: string
+  hotkeyLabel: string
+  hotkeyFallback: string
+  onHotkeyChange: (v: string) => void
+  session: DictationSession | null
+  activationMode: 'push-to-talk' | 'toggle'
+  done: boolean
+  onDone: () => void
+  suggestedPhrase: string
+  instruction: string
+}) => {
+  const status = session?.status ?? 'idle'
+  const isRelevant = session?.activationMode === activationMode && status !== 'idle'
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-const demoStatusColor: Partial<Record<string, string>> = {
-  listening: 'var(--status-listen)',
-  processing: 'var(--status-process)',
-  streaming: 'var(--status-write)',
-  completed: 'var(--status-ok)',
-  error: 'var(--status-error)',
+  useEffect(() => {
+    if (session?.activationMode === activationMode && status === 'completed' && !done) {
+      onDone()
+    }
+  }, [status, session?.activationMode, done, onDone, activationMode])
+
+  const statusColor = isRelevant
+    ? (demoStatusColor[status] ?? 'var(--text-3)')
+    : done ? 'var(--status-ok)' : 'var(--text-3)'
+
+  const statusText = done && !isRelevant
+    ? 'Great — it works!'
+    : isRelevant
+      ? (demoStatusLabel[status] ?? status)
+      : 'Click the box below, then use your shortcut'
+
+  return (
+    <div>
+      <div className="wizard-step-label">
+        <StepIcon size={11} className="inline -mt-px mr-1" />{stepLabel}
+      </div>
+      <div className="wizard-title">{title}</div>
+      <div className="wizard-desc">{desc}</div>
+
+      {/* Hotkey config — always visible at top */}
+      <div style={{ marginBottom: '0.75rem' }}>
+        <div className="text-xs font-medium" style={{ color: 'var(--text-2)', marginBottom: '0.3rem' }}>
+          {hotkeyLabel}
+        </div>
+        <HotkeyField
+          label={hotkeyLabel}
+          value={hotkey}
+          fallbackValue={hotkeyFallback}
+          onCommit={onHotkeyChange}
+        />
+      </div>
+
+      {/* Status bar */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: '0.5rem',
+        marginBottom: '0.4rem', minHeight: '1.5rem',
+      }}>
+        <StatusDot color={statusColor} pulse={isRelevant && status === 'listening'} />
+        <motion.span
+          key={statusText}
+          className="text-xs"
+          style={{ color: statusColor, flex: 1 }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.18 }}
+        >
+          {statusText}
+        </motion.span>
+        {done && !isRelevant && (
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{ type: 'spring', stiffness: 450, damping: 18 }}
+          >
+            <CheckCircle size={14} style={{ color: 'var(--status-ok)' }} />
+          </motion.div>
+        )}
+      </div>
+
+      {/* Dictation textarea */}
+      <textarea
+        ref={textareaRef}
+        className="wizard-demo-textarea"
+        placeholder={`${instruction}\n\nYour dictated text will appear here…`}
+        rows={4}
+        spellCheck={false}
+      />
+
+      {/* Suggested phrase */}
+      {!done && (
+        <div style={{ marginTop: '0.6rem' }}>
+          <SuggestedPhrase phrase={suggestedPhrase} />
+        </div>
+      )}
+    </div>
+  )
 }
 
 /* ── Step 3: Push-to-talk demo ─────────────────────────────────────── */
 
 const StepPushToTalkDemo = ({
-  settings,
-  session,
-  done,
-  onDone,
+  settings, session, done, onDone, updateSettings,
 }: {
   settings: Settings
   session: DictationSession | null
   done: boolean
   onDone: () => void
-}) => {
-  const status = session?.status ?? 'idle'
-  const isRelevant = session?.activationMode === 'push-to-talk' && status !== 'idle'
-
-  useEffect(() => {
-    if (session?.activationMode === 'push-to-talk' && status === 'completed' && !done) {
-      onDone()
-    }
-  }, [status, session?.activationMode, done, onDone])
-
-  const statusColor = isRelevant ? (demoStatusColor[status] ?? 'var(--text-3)') : done ? 'var(--status-ok)' : 'var(--text-3)'
-  const statusText = done && !isRelevant
-    ? 'Successfully recorded!'
-    : isRelevant
-      ? (demoStatusLabel[status] ?? status)
-      : 'Waiting for input…'
-
-  return (
-    <div>
-      <div className="wizard-step-label"><Mic size={12} className="inline -mt-px mr-1" />Step 4 of {TOTAL_STEPS}</div>
-      <div className="wizard-title">Try push-to-talk</div>
-      <div className="wizard-desc">
-        Hold your push-to-talk shortcut while speaking. Release to transcribe and insert text.
-      </div>
-
-      <div className="surface-muted p-4 grid gap-3" style={{ borderRadius: '0.6rem', marginTop: '0.75rem' }}>
-        <div className="flex items-center gap-3">
-          <div style={{
-            width: '8px', height: '8px', borderRadius: '50%', flexShrink: 0,
-            background: statusColor,
-            boxShadow: isRelevant && status === 'listening' ? `0 0 0 3px ${statusColor}33` : 'none',
-          }} />
-          <div>
-            <div className="text-sm font-medium" style={{ color: statusColor }}>{statusText}</div>
-            {done && !isRelevant
-              ? <div className="text-xs mt-0.5" style={{ color: 'var(--text-3)' }}>You can continue or try again.</div>
-              : <div className="text-xs mt-0.5" style={{ color: 'var(--text-3)' }}>
-                  Hold <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-2)' }}>{settings.pushToTalkHotkey}</span> to record
-                </div>
-            }
-          </div>
-          {done && !isRelevant && <CheckCircle size={16} style={{ color: 'var(--status-ok)', marginLeft: 'auto', flexShrink: 0 }} />}
-        </div>
-      </div>
-
-      <p className="mt-3 text-xs" style={{ color: 'var(--text-3)', lineHeight: 1.5 }}>
-        If shortcuts aren't responding, check system accessibility permissions or use the "Push" button in the top bar while on the main dashboard. You can skip this step and continue.
-      </p>
-    </div>
-  )
-}
+  updateSettings: (patch: Partial<Settings>) => Promise<Settings>
+}) => (
+  <DemoStep
+    stepLabel={`Step 4 of ${TOTAL_STEPS}`}
+    icon={Zap}
+    title="Try push-to-talk"
+    desc="Click the text box, hold your shortcut while speaking, then release to transcribe."
+    hotkey={settings.pushToTalkHotkey}
+    hotkeyLabel="Push-to-talk shortcut"
+    hotkeyFallback="Ctrl+Alt"
+    onHotkeyChange={(v) => void updateSettings({ pushToTalkHotkey: v })}
+    session={session}
+    activationMode="push-to-talk"
+    done={done}
+    onDone={onDone}
+    suggestedPhrase="Create a science presentation, I mean math, for my third grade class."
+    instruction={`Hold ${settings.pushToTalkHotkey} and speak`}
+  />
+)
 
 /* ── Step 4: Toggle demo ───────────────────────────────────────────── */
 
 const StepToggleDemo = ({
-  settings,
-  session,
-  done,
-  onDone,
+  settings, session, done, onDone, updateSettings,
 }: {
   settings: Settings
   session: DictationSession | null
   done: boolean
   onDone: () => void
-}) => {
-  const status = session?.status ?? 'idle'
-  const isRelevant = session?.activationMode === 'toggle' && status !== 'idle'
-
-  useEffect(() => {
-    if (session?.activationMode === 'toggle' && status === 'completed' && !done) {
-      onDone()
-    }
-  }, [status, session?.activationMode, done, onDone])
-
-  const statusColor = isRelevant ? (demoStatusColor[status] ?? 'var(--text-3)') : done ? 'var(--status-ok)' : 'var(--text-3)'
-  const statusText = done && !isRelevant
-    ? 'Successfully recorded!'
-    : isRelevant
-      ? (demoStatusLabel[status] ?? status)
-      : 'Waiting for input…'
-
-  return (
-    <div>
-      <div className="wizard-step-label"><Repeat size={12} className="inline -mt-px mr-1" />Step 5 of {TOTAL_STEPS}</div>
-      <div className="wizard-title">Try toggle dictation</div>
-      <div className="wizard-desc">
-        Press the toggle shortcut once to start recording, then press again to stop and send.
-      </div>
-
-      <div className="surface-muted p-4 grid gap-3" style={{ borderRadius: '0.6rem', marginTop: '0.75rem' }}>
-        <div className="flex items-center gap-3">
-          <div style={{
-            width: '8px', height: '8px', borderRadius: '50%', flexShrink: 0,
-            background: statusColor,
-            boxShadow: isRelevant && status === 'listening' ? `0 0 0 3px ${statusColor}33` : 'none',
-          }} />
-          <div>
-            <div className="text-sm font-medium" style={{ color: statusColor }}>{statusText}</div>
-            {done && !isRelevant
-              ? <div className="text-xs mt-0.5" style={{ color: 'var(--text-3)' }}>You can continue or try again.</div>
-              : <div className="text-xs mt-0.5" style={{ color: 'var(--text-3)' }}>
-                  Press <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-2)' }}>{settings.toggleHotkey}</span> to start, press again to stop
-                </div>
-            }
-          </div>
-          {done && !isRelevant && <CheckCircle size={16} style={{ color: 'var(--status-ok)', marginLeft: 'auto', flexShrink: 0 }} />}
-        </div>
-      </div>
-
-      <p className="mt-3 text-xs" style={{ color: 'var(--text-3)', lineHeight: 1.5 }}>
-        If shortcuts aren't responding, check system accessibility permissions or use the "Toggle" button in the top bar while on the main dashboard. You can skip this step and continue.
-      </p>
-    </div>
-  )
-}
+  updateSettings: (patch: Partial<Settings>) => Promise<Settings>
+}) => (
+  <DemoStep
+    stepLabel={`Step 5 of ${TOTAL_STEPS}`}
+    icon={Repeat}
+    title="Try toggle dictation"
+    desc="Click the text box, press your shortcut to start, speak, then press again to send."
+    hotkey={settings.toggleHotkey}
+    hotkeyLabel="Toggle shortcut"
+    hotkeyFallback="Shift+Alt"
+    onHotkeyChange={(v) => void updateSettings({ toggleHotkey: v })}
+    session={session}
+    activationMode="toggle"
+    done={done}
+    onDone={onDone}
+    suggestedPhrase="Write this in English: meeting postponed to Friday, sorry for the inconvenience."
+    instruction={`Press ${settings.toggleHotkey} to start, press again to stop`}
+  />
+)
 
 /* ── Step 5: Ready ─────────────────────────────────────────────────── */
 
-const StepReady = ({ settings }: { settings: Settings }) => (
-  <div>
-    <div className="wizard-step-label"><Sparkles size={12} className="inline -mt-px mr-1" />Step 6 of {TOTAL_STEPS}</div>
-    <div className="wizard-title">You're all set</div>
-    <div className="wizard-desc">
-      Ditado runs in the system tray. Use your shortcuts to start dictating — speak naturally and the model writes polished text into the focused field.
-    </div>
+const StepReady = ({ settings }: { settings: Settings }) => {
+  const rows = [
+    { label: 'API key',       value: settings.apiKeyPresent ? 'Configured' : 'Not set', warn: !settings.apiKeyPresent },
+    { label: 'Model',         value: settings.modelId.split('/').at(-1) ?? settings.modelId },
+    { label: 'Toggle',        value: settings.toggleHotkey },
+    { label: 'Push-to-talk',  value: settings.pushToTalkHotkey },
+  ]
 
-    <div className="surface-muted p-3 grid gap-2">
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-xs" style={{ color: 'var(--text-2)' }}>API key</span>
-        <span className="text-xs" style={{ color: settings.apiKeyPresent ? 'var(--status-ok)' : 'var(--status-error)', fontFamily: 'var(--font-mono)' }}>
-          {settings.apiKeyPresent ? 'Configured' : 'Not set'}
-        </span>
+  return (
+    <div>
+      <div className="wizard-step-label"><Sparkles size={11} className="inline -mt-px mr-1" />Step 6 of {TOTAL_STEPS}</div>
+      <div className="wizard-title">You&apos;re all set</div>
+      <div className="wizard-desc">
+        Ditado lives in the system tray. Use your shortcuts to dictate into any focused field.
       </div>
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-xs" style={{ color: 'var(--text-2)' }}>Model</span>
-        <span className="text-xs" style={{ color: 'var(--text-1)', fontFamily: 'var(--font-mono)' }}>
-          {settings.modelId.split('/').at(-1) ?? settings.modelId}
-        </span>
-      </div>
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-xs" style={{ color: 'var(--text-2)' }}>Toggle</span>
-        <span className="text-xs" style={{ color: 'var(--text-1)', fontFamily: 'var(--font-mono)' }}>
-          {settings.toggleHotkey}
-        </span>
-      </div>
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-xs" style={{ color: 'var(--text-2)' }}>Push-to-talk</span>
-        <span className="text-xs" style={{ color: 'var(--text-1)', fontFamily: 'var(--font-mono)' }}>
-          {settings.pushToTalkHotkey}
-        </span>
-      </div>
-    </div>
 
-    <p className="mt-3 text-xs" style={{ color: 'var(--text-3)', lineHeight: 1.5 }}>
-      If insertion fails, the result stays in your clipboard. You can change all settings later from the dashboard.
-    </p>
-  </div>
-)
+      <div className="surface-muted p-3 grid" style={{ borderRadius: '0.6rem', gap: 0 }}>
+        {rows.map((row, i) => (
+          <motion.div
+            key={row.label}
+            className="flex items-center justify-between"
+            style={{
+              padding: '0.35rem 0',
+              borderBottom: i < rows.length - 1 ? '1px solid var(--border)' : 'none',
+            }}
+            initial={{ opacity: 0, x: -6 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.22, ease: easeOutExpo, delay: i * 0.07 }}
+          >
+            <span className="text-xs" style={{ color: 'var(--text-2)' }}>{row.label}</span>
+            <span className="text-xs" style={{ color: row.warn ? 'var(--status-error)' : 'var(--text-1)', fontFamily: 'var(--font-mono)' }}>
+              {row.value}
+            </span>
+          </motion.div>
+        ))}
+      </div>
+
+      <motion.p
+        className="mt-3 text-xs"
+        style={{ color: 'var(--text-3)', lineHeight: 1.5 }}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.32 }}
+      >
+        If text insertion fails, the result stays in your clipboard. All settings can be changed later.
+      </motion.p>
+    </div>
+  )
+}

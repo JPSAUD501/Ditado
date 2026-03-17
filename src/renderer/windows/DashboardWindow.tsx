@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion, useReducedMotion } from 'framer-motion'
-import { AlertCircle, ArrowDown, Clock, Loader2, LayoutDashboard, PackageCheck, RotateCcw, Settings2 } from 'lucide-react'
+import {  ArrowDown, Clock, Loader2, LayoutDashboard, PackageCheck, RotateCcw, Settings2 } from 'lucide-react'
 
 import type { DashboardTab, Settings, UpdateState } from '@shared/contracts'
 import { StatusPill } from '@renderer/components/StatusPill'
@@ -15,77 +15,90 @@ import { SettingsPanel } from './dashboard/SettingsPanel'
 const UpdateWidget = ({ updateState, appVersion }: { updateState: UpdateState; appVersion: string }) => {
   const { t } = useTranslation()
   const { status, downloadProgress } = updateState
+  const showAction = status !== 'idle' && status !== 'disabled' && status !== 'unsupported'
 
   return (
     <div className="sidebar-update-widget">
-      <span className="sidebar-version">v{appVersion}</span>
+      {/* Version label — clickable to check for updates */}
+      <button
+        type="button"
+        className="sidebar-version-btn"
+        onClick={() => { void window.ditado.checkForUpdates() }}
+        title={t('updateWidget.checkForUpdates')}
+      >
+        v{appVersion}
+      </button>
 
-      {status === 'checking' && (
-        <div className="sidebar-update-row">
-          <Loader2 size={10} className="update-spinner" />
-          <span className="sidebar-update-label">{t('updateStatus.checking')}</span>
-        </div>
-      )}
-
-      {status === 'available' && (
-        <button
-          type="button"
-          className="sidebar-update-btn sidebar-update-btn--download"
-          onClick={() => { void window.ditado.downloadUpdate() }}
-          title={t('updateWidget.downloadUpdate')}
+      {/* Update action area */}
+      {showAction && (
+        <motion.div
+          className="sidebar-update-action"
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
         >
-          <ArrowDown size={10} strokeWidth={2.2} />
-          <span>{t('updateWidget.downloadUpdate')}</span>
-        </button>
-      )}
+          {status === 'checking' && (
+            <div className="sidebar-update-icon-btn sidebar-update-icon-btn--checking" title={t('updateStatus.checking')}>
+              <Loader2 size={14} className="update-spinner" />
+            </div>
+          )}
 
-      {status === 'downloading' && (
-        <div className="sidebar-update-progress-wrap" title={t('updateWidget.downloading', { percent: downloadProgress ?? 0 })}>
-          <div className="sidebar-update-progress-bar">
-            <motion.div
-              className="sidebar-update-progress-fill"
-              initial={{ width: '0%' }}
-              animate={{ width: `${downloadProgress ?? 0}%` }}
-              transition={{ duration: 0.4, ease: 'easeOut' }}
-            />
-          </div>
-          <span className="sidebar-update-label">{downloadProgress ?? 0}%</span>
-        </div>
-      )}
+          {status === 'available' && (
+            <button
+              type="button"
+              className="sidebar-update-icon-btn sidebar-update-icon-btn--download"
+              onClick={() => { void window.ditado.downloadUpdate() }}
+              title={t('updateWidget.downloadUpdate')}
+            >
+              <ArrowDown size={14} strokeWidth={2.5} />
+            </button>
+          )}
 
-      {status === 'downloaded' && (
-        <button
-          type="button"
-          className="sidebar-update-btn sidebar-update-btn--install"
-          onClick={() => { void window.ditado.installUpdate() }}
-          title={t('updateWidget.installing')}
-        >
-          <PackageCheck size={10} strokeWidth={2.2} />
-          <span>{t('updateWidget.installing')}</span>
-        </button>
-      )}
+          {status === 'downloading' && (
+            <div
+              className="sidebar-update-icon-btn sidebar-update-icon-btn--downloading"
+              title={t('updateWidget.downloading', { percent: downloadProgress ?? 0 })}
+            >
+              <svg viewBox="0 0 36 36" width="30" height="30" className="sidebar-progress-ring">
+                <circle cx="18" cy="18" r="14" fill="none" stroke="var(--bg-3)" strokeWidth="3" />
+                <motion.circle
+                  cx="18" cy="18" r="14" fill="none"
+                  stroke="var(--accent)"
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                  strokeDasharray={Math.PI * 28}
+                  initial={{ strokeDashoffset: Math.PI * 28 }}
+                  animate={{ strokeDashoffset: Math.PI * 28 * (1 - (downloadProgress ?? 0) / 100) }}
+                  transition={{ duration: 0.4, ease: 'easeOut' }}
+                  transform="rotate(-90 18 18)"
+                />
+              </svg>
+              <span className="sidebar-progress-text">{downloadProgress ?? 0}</span>
+            </div>
+          )}
 
-      {status === 'error' && (
-        <button
-          type="button"
-          className="sidebar-update-btn sidebar-update-btn--error"
-          onClick={() => { void window.ditado.checkForUpdates() }}
-          title={t('updateWidget.retry')}
-        >
-          <AlertCircle size={10} strokeWidth={2.2} />
-          <span>{t('updateWidget.retry')}</span>
-        </button>
-      )}
+          {status === 'downloaded' && (
+            <button
+              type="button"
+              className="sidebar-update-icon-btn sidebar-update-icon-btn--install"
+              onClick={() => { void window.ditado.installUpdate() }}
+              title={t('updateWidget.installing')}
+            >
+              <PackageCheck size={14} strokeWidth={2.2} />
+            </button>
+          )}
 
-      {status === 'idle' && (
-        <button
-          type="button"
-          className="sidebar-update-btn sidebar-update-btn--idle"
-          onClick={() => { void window.ditado.checkForUpdates() }}
-          title={t('updateWidget.checkForUpdates')}
-        >
-          <RotateCcw size={9} strokeWidth={2.2} />
-        </button>
+          {status === 'error' && (
+            <button
+              type="button"
+              className="sidebar-update-icon-btn sidebar-update-icon-btn--error"
+              onClick={() => { void window.ditado.checkForUpdates() }}
+              title={t('updateWidget.retry')}
+            >
+              <RotateCcw size={13} strokeWidth={2.2} />
+            </button>
+          )}
+        </motion.div>
       )}
     </div>
   )
