@@ -27,10 +27,11 @@ const settings: Settings = {
 }
 
 const createPayload = (): DictationAudioPayload => ({
-  wavBase64: 'ZmFrZQ==',
-  mimeType: 'audio/wav',
+  audioBase64: 'ZmFrZQ==',
+  mimeType: 'audio/mpeg',
   languageHint: 'en-US',
-  durationMs: 1400,
+  durationMs: 1600,
+  audioProcessingMs: 32,
   speechDetected: true,
   peakAmplitude: 0.18,
   rmsAmplitude: 0.06,
@@ -158,7 +159,7 @@ describe('DictationSessionOrchestrator', () => {
           expect(request.context.selectedText).toBe('old line')
           await onDelta('new ')
           await onDelta('copy')
-          return { text: 'new copy', latencyMs: 240, finishReason: 'stop' }
+          return { text: 'new copy', latencyMs: 240, audioSendMs: 85, finishReason: 'stop' }
         },
       ),
     }
@@ -196,6 +197,8 @@ describe('DictationSessionOrchestrator', () => {
         id: sessionId,
         outputText: 'new copy',
         outcome: 'completed',
+        audioProcessingMs: 32,
+        audioSendMs: 85,
         fallbackUsed: true,
       }),
       expect.any(Object),
@@ -262,7 +265,7 @@ describe('DictationSessionOrchestrator', () => {
       {
         stream: vi.fn(async (_request: LlmRequest, onDelta: (delta: string) => Promise<void>): Promise<LlmResponse> => {
           await onDelta('ready')
-          return { text: 'ready', latencyMs: 180, finishReason: 'stop' }
+          return { text: 'ready', latencyMs: 180, audioSendMs: 60, finishReason: 'stop' }
         }),
       } as never,
       createTelemetryDouble() as never,
@@ -322,7 +325,12 @@ describe('DictationSessionOrchestrator', () => {
         ),
       }) as never,
       {
-        stream: vi.fn(async (): Promise<LlmResponse> => ({ text: 'ready', latencyMs: 180, finishReason: 'stop' })),
+        stream: vi.fn(async (): Promise<LlmResponse> => ({
+          text: 'ready',
+          latencyMs: 180,
+          audioSendMs: 60,
+          finishReason: 'stop',
+        })),
       } as never,
       telemetry as never,
       { getState: vi.fn(async () => ({ microphone: 'granted', accessibility: 'granted' })) } as never,
@@ -387,6 +395,41 @@ describe('DictationSessionOrchestrator', () => {
     )
   })
 
+  it('treats audio shorter than 1.5 seconds as no speech for both modes', async () => {
+    const llm = { stream: vi.fn() }
+    const telemetry = createTelemetryDouble()
+
+    const orchestrator = new DictationSessionOrchestrator(
+      createStoreDouble() as never,
+      { capture: vi.fn(async () => context) } as never,
+      createInsertionEngineDouble() as never,
+      llm as never,
+      telemetry as never,
+      { getState: vi.fn(async () => ({ microphone: 'granted', accessibility: 'granted' })) } as never,
+    )
+
+    await orchestrator.startCapture('push-to-talk')
+    const sessionId = orchestrator.getSession()?.id
+    if (!sessionId) {
+      throw new Error('Expected session id')
+    }
+
+    orchestrator.markRecorderStarted(sessionId)
+    await orchestrator.submitAudio('push-to-talk', {
+      ...createPayload(),
+      durationMs: 1400,
+    })
+
+    expect(llm.stream).not.toHaveBeenCalled()
+    expect(orchestrator.getSession()?.status).toBe('notice')
+    expect(orchestrator.getSession()?.noticeMessage).toContain('notices.noSpeechDetected')
+    expect(telemetry.finishSession).toHaveBeenCalledWith(
+      sessionId,
+      'notice',
+      expect.objectContaining({ noticeName: 'dictation-no-speech' }),
+    )
+  })
+
   it('treats an empty model response as notice and avoids persisting history', async () => {
     const telemetry = createTelemetryDouble()
     const finalize = vi.fn(async () => ({
@@ -411,6 +454,7 @@ describe('DictationSessionOrchestrator', () => {
         stream: vi.fn(async (): Promise<LlmResponse> => ({
           text: '   ',
           latencyMs: 120,
+          audioSendMs: 45,
           finishReason: 'stop',
         })),
       } as never,
@@ -464,7 +508,7 @@ describe('DictationSessionOrchestrator', () => {
       {
         stream: vi.fn(async (_request: LlmRequest, onDelta: (delta: string) => Promise<void>): Promise<LlmResponse> => {
           await onDelta('partial text')
-          return { text: 'partial text', latencyMs: 150, finishReason: 'stop' }
+          return { text: 'partial text', latencyMs: 150, audioSendMs: 52, finishReason: 'stop' }
         }),
       } as never,
       telemetry as never,

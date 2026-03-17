@@ -76,7 +76,7 @@ export class ActiveContextService {
     const activeWindow = await loadActiveWindow()
     const base: ContextSnapshot = {
       ...emptyContextSnapshot,
-      appName: activeWindow?.owner?.name || 'Unknown App',
+      appName: activeWindow?.owner?.name || 'App',
       windowTitle: activeWindow?.title || null,
       capturedAt: new Date().toISOString(),
       permissionsGranted: process.platform !== 'darwin' || process.env.CI === 'true',

@@ -1,4 +1,4 @@
-import { app, ipcMain } from 'electron'
+import { app, type BrowserWindow, ipcMain } from 'electron'
 
 import {
   apiKeyInputSchema,
@@ -27,6 +27,7 @@ interface RegisterIpcOptions {
   onSettingsChanged: () => Promise<void>
   broadcastState: () => Promise<void>
   openDashboardTab: (tab: DashboardTab) => void
+  getOverlayWindow: () => BrowserWindow | null
 }
 
 export const registerIpc = ({
@@ -40,6 +41,7 @@ export const registerIpc = ({
   onSettingsChanged,
   broadcastState,
   openDashboardTab,
+  getOverlayWindow,
 }: RegisterIpcOptions): void => {
   ipcMain.handle(ipcChannels.overlay.getState, async () => ({
     session: orchestrator.getSession(),
@@ -133,5 +135,13 @@ export const registerIpc = ({
   })
   ipcMain.handle(ipcChannels.updates.install, () => {
     updates.installUpdate()
+  })
+
+  // Fire-and-forget: forward audio level from dashboard renderer to overlay
+  ipcMain.on(ipcChannels.dictation.audioLevel, (_event, level: number) => {
+    const overlay = getOverlayWindow()
+    if (overlay && !overlay.isDestroyed()) {
+      overlay.webContents.send(ipcChannels.dictation.audioLevel, level)
+    }
   })
 }

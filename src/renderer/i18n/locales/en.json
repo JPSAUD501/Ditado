@@ -89,9 +89,11 @@
       "allAtOnce": "Clipboard",
       "keyboard": "Keyboard",
       "clipboard": "Clipboard",
-      "ttft": "TTFT",
-      "totalTime": "Total",
-      "latency": "Latency"
+      "audioProcessing": "Process audio",
+      "audioSend": "Send audio",
+      "ttft": "First token",
+      "totalTime": "Speech end -> complete",
+      "latency": "Full AI response"
     },
     "deleteEntry": "Delete entry",
     "confirmDeleteEntry": "Delete this entry?",

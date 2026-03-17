@@ -27,6 +27,7 @@ export class OpenRouterService {
     })
 
     const startedAt = performance.now()
+    let responseHeadersAt = 0
     let finalText = ''
     let finishReason: string | null = null
 
@@ -81,6 +82,7 @@ export class OpenRouterService {
         retryCodes: OPENROUTER_RETRY_CODES,
       },
     )
+    responseHeadersAt = performance.now()
 
     for await (const chunk of stream) {
       const choice = chunk.choices[0]
@@ -101,6 +103,7 @@ export class OpenRouterService {
     return llmResponseSchema.parse({
       text: finalText.trim(),
       latencyMs: Math.round(performance.now() - startedAt),
+      audioSendMs: Math.round(Math.max(responseHeadersAt - startedAt, 0)),
       finishReason,
     })
   }

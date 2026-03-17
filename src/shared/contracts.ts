@@ -91,6 +91,8 @@ export const historyEntrySchema = z.object({
   submittedContext: contextSnapshotSchema.nullable().default(null),
   usedContext: z.boolean(),
   latencyMs: z.number().nonnegative().default(0),
+  audioProcessingMs: z.number().nonnegative().default(0),
+  audioSendMs: z.number().nonnegative().default(0),
   timeToFirstTokenMs: z.number().nonnegative().default(0),
   timeToCompleteMs: z.number().nonnegative().default(0),
   insertionStrategy: insertionStrategySchema,
@@ -167,6 +169,7 @@ export type LlmRequest = z.infer<typeof llmRequestSchema>
 export const llmResponseSchema = z.object({
   text: z.string(),
   latencyMs: z.number().nonnegative(),
+  audioSendMs: z.number().nonnegative().default(0),
   finishReason: z.string().nullable(),
 })
 
@@ -252,10 +255,11 @@ export type DashboardViewModel = z.infer<typeof dashboardViewModelSchema>
 export type WindowKind = 'overlay' | 'dashboard'
 
 export const dictationAudioPayloadSchema = z.object({
-  wavBase64: z.string(),
+  audioBase64: z.string(),
   mimeType: z.string(),
   languageHint: z.string().nullable(),
   durationMs: z.number().int().nonnegative(),
+  audioProcessingMs: z.number().nonnegative().default(0),
   speechDetected: z.boolean(),
   peakAmplitude: z.number().nonnegative(),
   rmsAmplitude: z.number().nonnegative(),

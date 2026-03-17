@@ -14,6 +14,7 @@ export const ipcChannels = {
     cancel: 'dictation:cancel',
     recorderStarted: 'dictation:recorderStarted',
     recorderFailed: 'dictation:recorderFailed',
+    audioLevel: 'dictation:audioLevel',
   },
   settings: {
     update: 'settings:update',

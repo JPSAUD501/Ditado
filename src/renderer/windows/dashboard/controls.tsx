@@ -400,6 +400,12 @@ export const HistoryRow = ({ entry, index }: { entry: HistoryEntry; index: numbe
                   {(
                     [
                       { label: t('history.meta.model'),  value: entry.modelId.split('/').at(-1) ?? entry.modelId },
+                      entry.audioProcessingMs > 0
+                        ? { label: t('history.meta.audioProcessing'), value: `${entry.audioProcessingMs}ms` }
+                        : null,
+                      entry.audioSendMs > 0
+                        ? { label: t('history.meta.audioSend'), value: `${entry.audioSendMs}ms` }
+                        : null,
                       entry.timeToFirstTokenMs > 0
                         ? { label: t('history.meta.ttft'), value: `${entry.timeToFirstTokenMs}ms` }
                         : null,

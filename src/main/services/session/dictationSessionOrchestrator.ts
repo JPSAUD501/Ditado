@@ -285,7 +285,7 @@ export class DictationSessionOrchestrator {
     this.submittingSessionId = currentSession.id
     this.cancelledSessionIds.delete(currentSession.id)
 
-    if (!payload.speechDetected) {
+    if (!payload.speechDetected || payload.durationMs < 1500) {
       this.submittingSessionId = null
       await this.showNotice('notices.noSpeechDetected', 'dictation-no-speech', {
         peakAmplitude: payload.peakAmplitude.toFixed(5),
@@ -354,7 +354,7 @@ export class DictationSessionOrchestrator {
 
       const response = await this.llm.stream(
         {
-          audioBase64: payload.wavBase64,
+          audioBase64: payload.audioBase64,
           audioMimeType: payload.mimeType,
           languageHint: payload.languageHint,
           context,

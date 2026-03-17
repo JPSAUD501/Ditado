@@ -31,6 +31,27 @@ const ensureParentDir = async (filePath: string): Promise<void> => {
   await mkdir(dirname(filePath), { recursive: true })
 }
 
+const audioExtensionFromMimeType = (mimeType: string): string => {
+  const normalized = mimeType.toLowerCase()
+  if (normalized.includes('mpeg') || normalized.includes('mp3')) {
+    return 'mp3'
+  }
+  if (normalized.includes('wav')) {
+    return 'wav'
+  }
+  if (normalized.includes('ogg')) {
+    return 'ogg'
+  }
+  if (normalized.includes('aac')) {
+    return 'aac'
+  }
+  if (normalized.includes('mp4') || normalized.includes('m4a')) {
+    return 'm4a'
+  }
+
+  return 'audio'
+}
+
 const writeAtomicJson = async (filePath: string, payload: unknown): Promise<void> => {
   await ensureParentDir(filePath)
   const tempPath = `${filePath}.tmp`
@@ -292,9 +313,10 @@ export class AppStore {
     entryId: string,
     payload: DictationAudioPayload,
   ): Promise<Pick<HistoryEntry, 'audioFilePath' | 'audioDurationMs' | 'audioMimeType' | 'audioBytes'>> {
-    const filePath = join(this.historyAudioDir, `${entryId}.wav`)
+    const extension = audioExtensionFromMimeType(payload.mimeType)
+    const filePath = join(this.historyAudioDir, `${entryId}.${extension}`)
     await mkdir(this.historyAudioDir, { recursive: true })
-    const buffer = Buffer.from(payload.wavBase64, 'base64')
+    const buffer = Buffer.from(payload.audioBase64, 'base64')
     await writeFile(filePath, buffer)
 
     return {

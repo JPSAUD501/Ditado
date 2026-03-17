@@ -42,6 +42,16 @@ const toggleSession: DictationSession = {
   targetApp: 'VS Code',
 }
 
+const unknownAppSession: DictationSession = {
+  ...toggleSession,
+  id: 'session-3',
+  targetApp: 'Unknown App',
+  context: {
+    ...toggleSession.context,
+    appName: 'Unknown App',
+  },
+}
+
 const installOverlayApi = (session: DictationSession | null): void => {
   window.ditado = {
     getOverlayState: vi.fn(async () => ({
@@ -80,6 +90,8 @@ const installOverlayApi = (session: DictationSession | null): void => {
     checkForUpdates: vi.fn(async () => undefined),
     downloadUpdate: vi.fn(async () => undefined),
     installUpdate: vi.fn(async () => undefined),
+    sendAudioLevel: vi.fn(),
+    subscribeAudioLevel: vi.fn(() => () => undefined),
   }
 }
 
@@ -115,5 +127,13 @@ describe('OverlayWindow', () => {
       expect(chip).toHaveAttribute('data-mode', 'toggle')
       expect(chip).toHaveAttribute('data-status', 'listening')
     })
+  })
+
+  it('renders App instead of Unknown App', async () => {
+    installOverlayApi(unknownAppSession)
+    render(<OverlayWindow />)
+
+    expect(await screen.findByText('App')).toBeInTheDocument()
+    expect(screen.queryByText('Unknown App')).toBeNull()
   })
 })

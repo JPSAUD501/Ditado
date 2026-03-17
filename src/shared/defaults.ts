@@ -27,7 +27,7 @@ export const defaultSettings: Settings = {
 }
 
 export const emptyContextSnapshot: ContextSnapshot = {
-  appName: 'Unknown App',
+  appName: 'App',
   windowTitle: null,
   selectedText: '',
   permissionsGranted: false,
@@ -37,7 +37,7 @@ export const emptyContextSnapshot: ContextSnapshot = {
 
 export const defaultInsertionPlan: InsertionPlan = {
   strategy: 'insert-at-cursor',
-  targetApp: 'Unknown App',
+  targetApp: 'App',
   capability: 'automation',
 }
 
@@ -62,7 +62,7 @@ export const createIdleSession = (): DictationSession => ({
   startedAt: new Date().toISOString(),
   finishedAt: null,
   processingStartedAt: null,
-  targetApp: 'Unknown App',
+  targetApp: 'App',
   context: emptyContextSnapshot,
   partialText: '',
   finalText: '',

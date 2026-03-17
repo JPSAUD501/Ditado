@@ -98,4 +98,9 @@ setHotkeyCaptureActive: (active: boolean) => ipcRenderer.invoke(ipcChannels.hotk
   checkForUpdates: () => ipcRenderer.invoke(ipcChannels.updates.check),
   downloadUpdate: () => ipcRenderer.invoke(ipcChannels.updates.download),
   installUpdate: () => ipcRenderer.invoke(ipcChannels.updates.install),
+  sendAudioLevel: (level: number) => {
+    ipcRenderer.send(ipcChannels.dictation.audioLevel, level)
+  },
+  subscribeAudioLevel: (listener: (level: number) => void) =>
+    subscribe(ipcChannels.dictation.audioLevel, listener),
 })

@@ -89,9 +89,11 @@
       "allAtOnce": "Portapapeles",
       "keyboard": "Teclado",
       "clipboard": "Portapapeles",
-      "ttft": "TTFT",
-      "totalTime": "Total",
-      "latency": "Latencia"
+      "audioProcessing": "Procesar audio",
+      "audioSend": "Enviar audio",
+      "ttft": "Primer token",
+      "totalTime": "Fin del habla -> completo",
+      "latency": "Respuesta completa de IA"
     },
     "deleteEntry": "Eliminar entrada",
     "confirmDeleteEntry": "¿Eliminar esta entrada?",

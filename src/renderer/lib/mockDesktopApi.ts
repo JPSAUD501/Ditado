@@ -109,5 +109,7 @@ export const ensureMockDesktopApi = (): void => {
     checkForUpdates: async () => undefined,
     downloadUpdate: async () => undefined,
     installUpdate: async () => undefined,
+    sendAudioLevel: () => undefined,
+    subscribeAudioLevel: () => () => undefined,
   }
 }

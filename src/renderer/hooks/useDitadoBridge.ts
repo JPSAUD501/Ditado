@@ -77,11 +77,30 @@ export const useDashboardBridge = (): DashboardViewModel => {
   return state
 }
 
+export const useAudioLevel = (): number => {
+  const [level, setLevel] = useState(0)
+
+  useEffect(() => {
+    const unsubscribe = window.ditado.subscribeAudioLevel(setLevel)
+    return unsubscribe
+  }, [])
+
+  return level
+}
+
 export const useDictationRecorder = (
   session: DictationSession | null,
   preferredMicrophoneId: string | null,
 ): { isRecording: boolean } => {
   const recorder = useMemo(() => new WavRecorder(), [])
+
+  useEffect(() => {
+    recorder.onAudioLevel = (rms) => {
+      window.ditado.sendAudioLevel(rms)
+    }
+    return () => { recorder.onAudioLevel = null }
+  }, [recorder])
+
   const [isRecording, setIsRecording] = useState(false)
   const handledIntent = useRef<string | null>(null)
   const stopInFlight = useRef<string | null>(null)

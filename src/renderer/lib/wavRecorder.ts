@@ -1,6 +1,7 @@
 import type { DictationAudioPayload } from '@shared/contracts'
 
 export const MAX_RECORDING_DURATION_MS = 10 * 60 * 1000
+const MP3_MIME_CANDIDATES = ['audio/mpeg', 'audio/mp3'] as const
 
 const RECORDER_WORKLET_NAME = 'ditado-recorder-worklet'
 const recorderWorkletUrl = new URL('./ditadoRecorderProcessor.js', import.meta.url)
@@ -54,7 +55,7 @@ const analyzeSamples = (samples: Float32Array): {
   }
 }
 
-const encodeWav = (samples: Float32Array, sampleRate: number): ArrayBuffer => {
+const encodeWav = (samples: Float32Array, sampleRate: number): Uint8Array => {
   const buffer = new ArrayBuffer(44 + samples.length * 2)
   const view = new DataView(buffer)
 
@@ -85,14 +86,23 @@ const encodeWav = (samples: Float32Array, sampleRate: number): ArrayBuffer => {
     offset += 2
   }
 
-  return buffer
+  return new Uint8Array(buffer)
 }
 
-const toBase64 = (buffer: ArrayBuffer): string => {
-  const bytes = new Uint8Array(buffer)
+const chooseEncodedMimeType = (): string | null => {
+  if (typeof MediaRecorder === 'undefined' || typeof MediaRecorder.isTypeSupported !== 'function') {
+    return null
+  }
+
+  return MP3_MIME_CANDIDATES.find((mimeType) => MediaRecorder.isTypeSupported(mimeType)) ?? null
+}
+
+const toBase64 = (bytes: Uint8Array): string => {
   let binary = ''
-  for (const byte of bytes) {
-    binary += String.fromCharCode(byte)
+  const chunkSize = 0x8000
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    const chunk = bytes.subarray(offset, offset + chunkSize)
+    binary += String.fromCharCode(...chunk)
   }
   return btoa(binary)
 }
@@ -103,9 +113,16 @@ export class WavRecorder {
   private source: MediaStreamAudioSourceNode | null = null
   private processor: AudioWorkletNode | null = null
   private sink: GainNode | null = null
+  private mediaRecorder: MediaRecorder | null = null
+  private encodedChunks: Blob[] = []
+  private encodedMimeType: string | null = null
+  private encodedStopPromise: Promise<Blob | null> | null = null
   private chunks: Float32Array[] = []
   private recording = false
   private startedAtMs = 0
+
+  /** Called with a normalized audio level (0–1) roughly every ~80ms while recording. */
+  onAudioLevel: ((level: number) => void) | null = null
 
   async start(deviceId: string | null): Promise<void> {
     if (this.recording) {
@@ -132,10 +149,47 @@ export class WavRecorder {
     this.sink = this.audioContext.createGain()
     this.sink.gain.value = 0
     this.chunks = []
+    this.encodedChunks = []
+    this.encodedMimeType = chooseEncodedMimeType()
     this.startedAtMs = Date.now()
 
-    this.processor.port.onmessage = (event: MessageEvent<Float32Array>) => {
-      const chunk = event.data
+    if (this.encodedMimeType) {
+      this.mediaRecorder = new MediaRecorder(this.stream, { mimeType: this.encodedMimeType })
+      this.mediaRecorder.ondataavailable = (event: BlobEvent) => {
+        if (event.data.size > 0) {
+          this.encodedChunks.push(event.data)
+        }
+      }
+      this.encodedStopPromise = new Promise((resolve) => {
+        if (!this.mediaRecorder) {
+          resolve(null)
+          return
+        }
+
+        this.mediaRecorder.onstop = () => {
+          if (!this.encodedMimeType || this.encodedChunks.length === 0) {
+            resolve(null)
+            return
+          }
+          resolve(new Blob(this.encodedChunks, { type: this.encodedMimeType }))
+        }
+      })
+      this.mediaRecorder.start()
+    } else {
+      this.mediaRecorder = null
+      this.encodedStopPromise = Promise.resolve(null)
+    }
+
+    this.processor.port.onmessage = (event: MessageEvent<Float32Array | { type: string; value: number }>) => {
+      const data = event.data
+
+      // RMS level message from worklet
+      if (data && typeof data === 'object' && 'type' in data && data.type === 'rms') {
+        this.onAudioLevel?.(data.value)
+        return
+      }
+
+      const chunk = data as Float32Array
       if (!(chunk instanceof Float32Array) || chunk.length === 0) {
         return
       }
@@ -157,24 +211,33 @@ export class WavRecorder {
       throw new Error('Recorder is not active')
     }
 
+    const processingStartedAt = performance.now()
+    const durationMs = Math.min(Math.max(Date.now() - this.startedAtMs, 0), MAX_RECORDING_DURATION_MS)
     this.recording = false
     const sampleRate = this.audioContext.sampleRate
-    this.cleanup()
+    const encodedBlobPromise = this.stopMediaRecorder()
 
     const samples = mergeChunks(this.chunks)
     if (!samples.length) {
+      this.cleanup()
       throw new Error('No audio captured')
     }
     const analysis = analyzeSamples(samples)
-
-    const wavBuffer = encodeWav(samples, sampleRate)
+    const encodedBlob = await encodedBlobPromise
+    const audioBytes = encodedBlob
+      ? new Uint8Array(await encodedBlob.arrayBuffer())
+      : encodeWav(samples, sampleRate)
+    const mimeType = encodedBlob?.type || 'audio/wav'
     this.chunks = []
+    this.cleanup()
+    const audioProcessingMs = Math.round(performance.now() - processingStartedAt)
 
     return {
-      wavBase64: toBase64(wavBuffer),
-      mimeType: 'audio/wav',
+      audioBase64: toBase64(audioBytes),
+      mimeType,
       languageHint,
-      durationMs: Math.min(Math.max(Date.now() - this.startedAtMs, 0), MAX_RECORDING_DURATION_MS),
+      durationMs,
+      audioProcessingMs,
       speechDetected: analysis.speechDetected,
       peakAmplitude: analysis.peakAmplitude,
       rmsAmplitude: analysis.rmsAmplitude,
@@ -189,6 +252,10 @@ export class WavRecorder {
   }
 
   private cleanup(): void {
+    this.mediaRecorder = null
+    this.encodedChunks = []
+    this.encodedMimeType = null
+    this.encodedStopPromise = null
     this.processor?.disconnect()
     this.source?.disconnect()
     this.sink?.disconnect()
@@ -200,5 +267,17 @@ export class WavRecorder {
     this.stream = null
     this.audioContext = null
     this.startedAtMs = 0
+  }
+
+  private stopMediaRecorder(): Promise<Blob | null> {
+    if (!this.mediaRecorder) {
+      return Promise.resolve(null)
+    }
+
+    const stopPromise = this.encodedStopPromise ?? Promise.resolve(null)
+    if (this.mediaRecorder.state !== 'inactive') {
+      this.mediaRecorder.stop()
+    }
+    return stopPromise
   }
 }

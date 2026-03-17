@@ -95,6 +95,8 @@ const installDesktopApi = (
   downloadUpdate: vi.fn(async () => undefined),
   installUpdate: vi.fn(async () => undefined),
   getShortcutStatus: vi.fn(async () => ({ captureActive: false, uiohookRunning: true })),
+  sendAudioLevel: vi.fn(),
+  subscribeAudioLevel: vi.fn(() => () => undefined),
 }
 
   return {
@@ -278,6 +280,8 @@ describe('DashboardWindow', () => {
             submittedContext: null,
             usedContext: false,
             latencyMs: 120,
+            audioProcessingMs: 28,
+            audioSendMs: 64,
             insertionStrategy: 'insert-at-cursor',
             requestedMode: 'all-at-once',
             effectiveMode: 'all-at-once',

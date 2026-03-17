@@ -4,7 +4,7 @@ import { pathToFileURL } from 'node:url'
 
 import { defaultPermissionState } from '../shared/defaults.js'
 import { ipcChannels } from '../shared/ipc.js'
-import type { DashboardTab, Settings, WindowKind } from '../shared/contracts.js'
+import type { DashboardTab, OverlayViewModel, Settings, WindowKind } from '../shared/contracts.js'
 import { createWindowIcon } from './bootstrap/appIcon.js'
 import { registerIpc } from './bootstrap/registerIpc.js'
 import { configureMediaPermissions } from './bootstrap/configureMediaPermissions.js'
@@ -38,9 +38,11 @@ let hotkeyCaptureActive = false
 let uiohookRunning = false
 let overlayHideTimer: NodeJS.Timeout | null = null
 let overlayLoaded = false
+let lastOverlayState: OverlayViewModel | null = null
 let currentDashboardTheme: Settings['theme'] = 'system'
 const OVERLAY_WIDTH = 340
 const OVERLAY_HEIGHT = 54
+const OVERLAY_EXIT_DURATION_MS = 140
 const STARTUP_UPDATE_CHECK_DELAY_MS = 12_000
 const STABLE_USER_DATA_DIR_NAME = 'Ditado'
 const DASHBOARD_TITLEBAR_HEIGHT = 36
@@ -202,7 +204,19 @@ const hideOverlay = (): void => {
     clearTimeout(overlayHideTimer)
     overlayHideTimer = null
   }
-  windows.overlay?.hide()
+  overlayHideTimer = setTimeout(() => {
+    windows.overlay?.hide()
+    overlayHideTimer = null
+  }, OVERLAY_EXIT_DURATION_MS)
+}
+
+const dismissOverlay = (): void => {
+  if (lastOverlayState?.session) {
+    const nextOverlayState = { ...lastOverlayState, session: null }
+    lastOverlayState = nextOverlayState
+    windows.overlay?.webContents.send(ipcChannels.overlay.state, nextOverlayState)
+  }
+  hideOverlay()
 }
 
 const showDashboard = (tab: DashboardTab = 'overview'): void => {
@@ -230,6 +244,7 @@ const broadcastState = async (
     settings: store.getSettings(),
     permissions: permissionState,
   }
+  lastOverlayState = overlayState
   const dashboardState = {
     session,
     settings: store.getSettings(),
@@ -319,6 +334,7 @@ void app.whenReady().then(async () => {
       await broadcastState(store, orchestrator, permissions, telemetry, updates)
     },
     openDashboardTab: (tab) => showDashboard(tab),
+    getOverlayWindow: () => windows.overlay,
   })
 
   orchestrator.subscribe((session) => {
@@ -337,7 +353,7 @@ void app.whenReady().then(async () => {
       session.status === 'permission-required'
     ) {
       overlayHideTimer = setTimeout(() => {
-        hideOverlay()
+        dismissOverlay()
       }, session.status === 'notice' ? 1600 : 1200)
     }
   })

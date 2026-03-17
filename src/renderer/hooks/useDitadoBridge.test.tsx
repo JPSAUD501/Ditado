@@ -13,10 +13,11 @@ const recorderState = {
   stop: vi.fn(async () => {
     recorderState.recording = false
     return {
-      wavBase64: 'ZmFrZQ==',
-      mimeType: 'audio/wav',
+      audioBase64: 'ZmFrZQ==',
+      mimeType: 'audio/mpeg',
       languageHint: 'pt-BR',
       durationMs: 500,
+      audioProcessingMs: 18,
       speechDetected: true,
       peakAmplitude: 0.22,
       rmsAmplitude: 0.07,
@@ -96,6 +97,8 @@ beforeEach(() => {
     checkForUpdates: vi.fn(),
     downloadUpdate: vi.fn(async () => undefined),
     installUpdate: vi.fn(async () => undefined),
+    sendAudioLevel: vi.fn(),
+    subscribeAudioLevel: vi.fn(() => () => undefined),
   }
 })
 
