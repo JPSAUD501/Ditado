@@ -4,7 +4,7 @@ import { pathToFileURL } from 'node:url'
 
 import { defaultPermissionState } from '../shared/defaults.js'
 import { ipcChannels } from '../shared/ipc.js'
-import type { DashboardTab, OverlayViewModel, Settings, WindowKind } from '../shared/contracts.js'
+import type { DashboardTab, DictationSession, OverlayViewModel, Settings, WindowKind } from '../shared/contracts.js'
 import { createWindowIcon } from './bootstrap/appIcon.js'
 import { registerIpc } from './bootstrap/registerIpc.js'
 import { configureMediaPermissions } from './bootstrap/configureMediaPermissions.js'
@@ -387,6 +387,48 @@ void app.whenReady().then(async () => {
   })
 
   await broadcastState(store, orchestrator, permissions, telemetry, updates)
+
+  // Show "Ditado is ready" notice on startup using the existing overlay system
+  const showStartupNotice = (): void => {
+    const now = new Date().toISOString()
+    const startupSession: DictationSession = {
+      id: 'startup',
+      activationMode: 'toggle',
+      status: 'notice',
+      captureIntent: 'none',
+      startedAt: now,
+      finishedAt: null,
+      processingStartedAt: null,
+      targetApp: '',
+      context: { appName: '', windowTitle: null, selectedText: '', permissionsGranted: false, confidence: 'low', capturedAt: now },
+      partialText: '',
+      finalText: '',
+      insertionPlan: { strategy: 'insert-at-cursor', targetApp: '', capability: 'clipboard' },
+      errorMessage: null,
+      noticeMessage: 'notices.ready',
+    }
+    const startupNoticeState: OverlayViewModel = {
+      session: startupSession,
+      settings: store.getSettings(),
+      permissions: defaultPermissionState,
+    }
+    lastOverlayState = startupNoticeState
+    windows.overlay?.webContents.send(ipcChannels.overlay.state, startupNoticeState)
+    showOverlay()
+    overlayHideTimer = setTimeout(() => {
+      dismissOverlay()
+    }, 1600)
+  }
+
+  if (overlayLoaded) {
+    showStartupNotice()
+  } else {
+    windows.overlay?.webContents.once('did-finish-load', () => {
+      // Small delay to let React mount and register IPC listeners
+      setTimeout(showStartupNotice, 150)
+    })
+  }
+
   setTimeout(() => {
     try {
       insertion.warmupLetterInput()

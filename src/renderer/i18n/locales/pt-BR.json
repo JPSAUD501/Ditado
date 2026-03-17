@@ -199,6 +199,7 @@
     "demoInstruction": "Clique na caixa abaixo e use seu atalho"
   },
   "notices": {
+    "ready": "Ditado está pronto",
     "noSpeechDetected": "Nenhuma fala detectada.",
     "holdToDictate": "Segure para ditar. Alternar: {{hotkey}}",
     "noFinalText": "Nenhum texto final retornado."

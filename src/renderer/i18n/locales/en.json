@@ -199,6 +199,7 @@
     "demoInstruction": "Click the box below, then use your shortcut"
   },
   "notices": {
+    "ready": "Ditado is ready",
     "noSpeechDetected": "No speech detected.",
     "holdToDictate": "Hold to dictate. Toggle: {{hotkey}}",
     "noFinalText": "No final text returned."

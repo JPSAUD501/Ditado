@@ -189,8 +189,9 @@ export const OverlayWindow = () => {
   const borderMap = isPtt ? pttStatusBorder : toggleStatusBorder
 
   // color is set on the chip itself — icon, equalizer, timer all inherit it
-  const color = colorMap[status] ?? 'var(--text-3)'
-  const border = borderMap[status] ?? (isPtt ? 'rgba(210,175,110,0.28)' : 'rgba(110,165,210,0.22)')
+  const isReadyNotice = status === 'notice' && session?.noticeMessage === 'notices.ready'
+  const color = isReadyNotice ? 'var(--status-ok)' : (colorMap[status] ?? 'var(--text-3)')
+  const border = isReadyNotice ? 'rgba(112,192,134,0.22)' : (borderMap[status] ?? (isPtt ? 'rgba(210,175,110,0.28)' : 'rgba(110,165,210,0.22)'))
 
   // Timer — only visible during processing/streaming
   const showTimer = status === 'processing' || status === 'streaming'

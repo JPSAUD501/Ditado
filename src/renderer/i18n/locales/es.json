@@ -199,6 +199,7 @@
     "demoInstruction": "Haz clic en el cuadro abajo y usa tu atajo"
   },
   "notices": {
+    "ready": "Ditado está listo",
     "noSpeechDetected": "No se detectó voz.",
     "holdToDictate": "Mantén para dictar. Alternar: {{hotkey}}",
     "noFinalText": "No se devolvió texto final."

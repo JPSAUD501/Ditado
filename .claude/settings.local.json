@@ -10,7 +10,8 @@
       "Read(//c/Users/joao.cardoso/GitHub/Ditado/$LOCALAPPDATA/Ditado/**)",
       "Read(//c/Users/joao.cardoso/GitHub/Ditado/**)",
       "Bash(ls -la \"C:\\\\Users\\\\joao.cardoso\\\\AppData\\\\Roaming\\\\ditado\\\\data\\\\settings\"*)",
-      "Bash(npm test:*)"
+      "Bash(npm test:*)",
+      "Bash(find:*)"
     ]
   }
 }
