@@ -120,9 +120,25 @@ export class WavRecorder {
   private chunks: Float32Array[] = []
   private recording = false
   private startedAtMs = 0
+  private warmupPromise: Promise<void> | null = null
 
   /** Called with a normalized audio level (0–1) roughly every ~80ms while recording. */
   onAudioLevel: ((level: number) => void) | null = null
+
+  setOnAudioLevel(listener: ((level: number) => void) | null): void {
+    this.onAudioLevel = listener
+  }
+
+  async warmup(deviceId: string | null): Promise<void> {
+    if (this.recording || this.audioContext || this.warmupPromise) {
+      return this.warmupPromise ?? Promise.resolve()
+    }
+
+    this.warmupPromise = this.performWarmup(deviceId).finally(() => {
+      this.warmupPromise = null
+    })
+    return this.warmupPromise
+  }
 
   async start(deviceId: string | null): Promise<void> {
     if (this.recording) {
@@ -267,6 +283,62 @@ export class WavRecorder {
     this.stream = null
     this.audioContext = null
     this.startedAtMs = 0
+  }
+
+  private async performWarmup(deviceId: string | null): Promise<void> {
+    if (!(await this.shouldWarmupMicrophone())) {
+      return
+    }
+
+    let stream: MediaStream | null = null
+    let audioContext: AudioContext | null = null
+
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: deviceId ? { deviceId: { exact: deviceId } } : true,
+      })
+      audioContext = new AudioContext()
+      await audioContext.audioWorklet.addModule(recorderWorkletUrl)
+      if (audioContext.state === 'suspended') {
+        await audioContext.resume()
+      }
+    } catch {
+      // Startup warmup is opportunistic; normal capture remains the source of truth.
+    } finally {
+      stream?.getTracks().forEach((track) => track.stop())
+      if (audioContext) {
+        void audioContext.close()
+      }
+    }
+  }
+
+  private async shouldWarmupMicrophone(): Promise<boolean> {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      return false
+    }
+
+    const isMac = /\bMac\b/i.test(navigator.userAgent)
+    if (!navigator.permissions?.query) {
+      return !isMac
+    }
+
+    try {
+      const permissionStatus = await navigator.permissions.query({
+        name: 'microphone' as PermissionName,
+      })
+
+      if (permissionStatus.state === 'denied') {
+        return false
+      }
+
+      if (permissionStatus.state === 'granted') {
+        return true
+      }
+
+      return !isMac
+    } catch {
+      return !isMac
+    }
   }
 
   private stopMediaRecorder(): Promise<Blob | null> {

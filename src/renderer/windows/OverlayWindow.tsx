@@ -75,8 +75,6 @@ const iconAnimation: Record<string, string> = {
 // ease-in-out suave: começa devagar, acelera, desacelera — "easy easy"
 const easeInOut = [0.45, 0, 0.55, 1] as const
 
-// Layout tween — ease-in-out simétrico, ágil
-const layoutTween = { type: 'tween' as const, duration: 0.22, ease: easeInOut }
 // Icon swap spring
 const chipSpring = { type: 'spring' as const, duration: 0.28, bounce: 0.1 }
 // Context badge pop

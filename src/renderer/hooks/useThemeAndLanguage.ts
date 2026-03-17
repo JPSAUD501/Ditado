@@ -20,8 +20,10 @@ const applyTheme = (theme: Settings['theme']): void => {
 }
 
 export const useThemeAndLanguage = (settings: Pick<Settings, 'theme' | 'language'>, options?: { skipTheme?: boolean }): void => {
+  const skipTheme = options?.skipTheme ?? false
+
   useEffect(() => {
-    if (options?.skipTheme) return
+    if (skipTheme) return
     applyTheme(settings.theme)
 
     if (settings.theme === 'system') {
@@ -37,7 +39,7 @@ export const useThemeAndLanguage = (settings: Pick<Settings, 'theme' | 'language
       mq.addListener(handler)
       return () => mq.removeListener(handler)
     }
-  }, [settings.theme])
+  }, [settings.theme, skipTheme])
 
   useEffect(() => {
     changeLanguage(settings.language)

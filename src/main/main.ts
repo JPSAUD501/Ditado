@@ -115,6 +115,7 @@ const createOverlayWindow = (): BrowserWindow => {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
+      backgroundThrottling: false,
     },
   })
   window.setAlwaysOnTop(true, 'screen-saver')
@@ -157,6 +158,7 @@ const createDashboardWindow = (tab: DashboardTab = 'overview', theme: Settings['
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
+      backgroundThrottling: false,
     },
   })
 
@@ -385,6 +387,13 @@ void app.whenReady().then(async () => {
   })
 
   await broadcastState(store, orchestrator, permissions, telemetry, updates)
+  setTimeout(() => {
+    try {
+      insertion.warmupLetterInput()
+    } catch {
+      // Warmup is best-effort; the live insertion path still handles fallback.
+    }
+  }, 0)
   setTimeout(() => {
     void updates.checkForUpdates()
   }, STARTUP_UPDATE_CHECK_DELAY_MS)

@@ -93,12 +93,13 @@ export const useDictationRecorder = (
   preferredMicrophoneId: string | null,
 ): { isRecording: boolean } => {
   const recorder = useMemo(() => new WavRecorder(), [])
+  const warmedMicrophone = useRef<string | null | undefined>(undefined)
 
   useEffect(() => {
-    recorder.onAudioLevel = (rms) => {
+    recorder.setOnAudioLevel((rms) => {
       window.ditado.sendAudioLevel(rms)
-    }
-    return () => { recorder.onAudioLevel = null }
+    })
+    return () => { recorder.setOnAudioLevel(null) }
   }, [recorder])
 
   const [isRecording, setIsRecording] = useState(false)
@@ -151,6 +152,16 @@ export const useDictationRecorder = (
       void recorder.cancel()
     }
   }, [recorder])
+
+  useEffect(() => {
+    const warmupKey = preferredMicrophoneId ?? '__default__'
+    if (warmedMicrophone.current === warmupKey) {
+      return
+    }
+
+    warmedMicrophone.current = warmupKey
+    void recorder.warmup(preferredMicrophoneId).catch(() => undefined)
+  }, [preferredMicrophoneId, recorder])
 
   useEffect(() => {
     if (!session) {
