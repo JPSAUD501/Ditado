@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import type { DictationAudioPayload } from '@shared/contracts'
 import { WavRecorder } from './wavRecorder'
 
-type RecorderTestHarness = WavRecorder & {
+type RecorderTestHarness = {
   recording: boolean
   audioContext: { sampleRate: number; close: () => Promise<void> } | null
   processor: { disconnect: () => void } | null
@@ -11,6 +12,7 @@ type RecorderTestHarness = WavRecorder & {
   stream: { getTracks: () => Array<{ stop: () => void }> } | null
   chunks: Float32Array[]
   startedAtMs: number
+  stop: (languageHint: string | null) => Promise<DictationAudioPayload>
 }
 
 describe('WavRecorder', () => {
