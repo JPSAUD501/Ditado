@@ -19,6 +19,7 @@ import { OpenRouterService } from './services/llm/openRouterService.js'
 import { PermissionService } from './services/permissions/permissionService.js'
 import { DictationSessionOrchestrator } from './services/session/dictationSessionOrchestrator.js'
 import { AppStore } from './services/store/appStore.js'
+import { syncLoginItemSettings } from './services/system/loginItem.js'
 import { loadTelemetryBuildConfig } from './services/telemetry/telemetryBuildConfig.js'
 import { createRemoteTelemetryRuntime } from './services/telemetry/telemetryRemoteRuntime.js'
 import { TelemetryService } from './services/telemetry/telemetryService.js'
@@ -293,7 +294,7 @@ void app.whenReady().then(async () => {
   })
   await updates.initialize()
 
-  app.setLoginItemSettings({ openAtLogin: store.getSettings().launchOnLogin })
+  syncLoginItemSettings(app, store.getSettings().launchOnLogin)
 
   windows.overlay = createOverlayWindow()
   windows.dashboard = createDashboardWindow(
@@ -341,7 +342,7 @@ void app.whenReady().then(async () => {
     getShortcutStatus: () => ({ captureActive: hotkeyCaptureActive, uiohookRunning }),
     onSettingsChanged: async () => {
       currentDashboardTheme = store.getSettings().theme
-      app.setLoginItemSettings({ openAtLogin: store.getSettings().launchOnLogin })
+      syncLoginItemSettings(app, store.getSettings().launchOnLogin)
       applyDashboardChrome(windows.dashboard, currentDashboardTheme)
       updates.syncFromSettings()
       refreshShortcuts()
