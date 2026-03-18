@@ -30,6 +30,13 @@ const clamp = (value: number, min: number, max: number): number => {
   return Math.max(min, Math.min(max, value))
 }
 
+const ACTIVE_MIN_INTERVAL_MS = 8.5
+const COMPLETED_MIN_INTERVAL_MS = 10.5
+const MIN_PUMP_DELAY_MS = 7
+const MAX_DESIRED_CPS = 95
+const FINAL_SETTLE_MIN_MS = 32
+const FINAL_SETTLE_MAX_MS = 85
+
 const normalizeInsertionText = (text: string): string => {
   if (!text) {
     return ''
@@ -83,6 +90,7 @@ class ProgressiveInsertionSession {
   private nextRevealAt = 0
   private renderRateEwma = 0
   private lastPumpTs = 0
+  private lastTypedAt = 0
 
   constructor(
     private readonly requestedMode: InsertionStreamingMode,
@@ -164,6 +172,7 @@ class ProgressiveInsertionSession {
 
     await this.waitForPendingInsertion()
     this.throwUnexpectedErrorIfNeeded()
+    await this.waitForVisualSettle()
 
     if (this.aborted || !fullText.trim()) {
       return this.getExecutionReport()
@@ -405,7 +414,7 @@ class ProgressiveInsertionSession {
       desired = tailCpsRaw * 0.35 + tailTargetCps * 0.65
     }
 
-    return clamp(desired, 0, 900)
+    return clamp(desired, 0, MAX_DESIRED_CPS)
   }
 
   private schedulePump(delayMs: number): void {
@@ -413,7 +422,9 @@ class ProgressiveInsertionSession {
       return
     }
 
-    const boundedDelay = clamp(delayMs, 0, 150)
+    const boundedDelay = this.pendingChars.length > 0
+      ? clamp(delayMs, MIN_PUMP_DELAY_MS, 150)
+      : clamp(delayMs, 0, 150)
     const dueAt = performance.now() + boundedDelay
     if (this.timer && this.scheduledAt <= dueAt) {
       return
@@ -461,18 +472,18 @@ class ProgressiveInsertionSession {
     const smoothing = dtMs > 0 ? 1 - Math.exp(-dtMs / (speedingUp ? 110 : 320)) : 1
 
     this.currentIntervalMs += (desiredIntervalMs - this.currentIntervalMs) * smoothing
-    this.currentIntervalMs = clamp(this.currentIntervalMs, this.completed ? 6.5 : 3.5, 150)
+    this.currentIntervalMs = clamp(
+      this.currentIntervalMs,
+      this.completed ? COMPLETED_MIN_INTERVAL_MS : ACTIVE_MIN_INTERVAL_MS,
+      150,
+    )
 
     if (this.pendingChars.length > 0 && this.nextRevealAt === 0) {
       this.nextRevealAt = now + Math.min(14, this.currentIntervalMs * 0.24)
     }
 
     let revealedThisPump = 0
-    const reserveChars = this.getReserveChars(now)
-    const bufferAhead = Math.max(0, this.pendingChars.length - reserveChars)
-    const maxCharsThisPump = this.completed
-      ? 2
-      : clamp(1 + Math.floor(bufferAhead / Math.max(20, this.chunkSizeEwma * 3.8)), 1, 3)
+    const maxCharsThisPump = 1
 
     while (
       this.pendingChars.length > 0 &&
@@ -524,6 +535,7 @@ class ProgressiveInsertionSession {
     try {
       this.automationService.typeGrapheme(nextChar)
       this.writtenGraphemeCount += 1
+      this.lastTypedAt = now
     } catch (error) {
       this.pendingChars.unshift(nextChar)
 
@@ -568,6 +580,24 @@ class ProgressiveInsertionSession {
 
     return new Promise((resolve) => {
       this.flushWaiters.push(resolve)
+    })
+  }
+
+  private waitForVisualSettle(): Promise<void> {
+    if (this.effectiveMode !== 'letter-by-letter' || this.aborted || this.unexpectedError || this.lastTypedAt === 0) {
+      return Promise.resolve()
+    }
+
+    const settleMs = clamp(this.currentIntervalMs * 1.75, FINAL_SETTLE_MIN_MS, FINAL_SETTLE_MAX_MS)
+    const elapsedMs = performance.now() - this.lastTypedAt
+    const remainingMs = Math.max(0, settleMs - elapsedMs)
+
+    if (remainingMs === 0) {
+      return Promise.resolve()
+    }
+
+    return new Promise((resolve) => {
+      setTimeout(resolve, remainingMs)
     })
   }
 

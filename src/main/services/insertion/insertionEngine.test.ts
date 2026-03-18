@@ -98,6 +98,60 @@ describe('InsertionEngine', () => {
     })
   })
 
+  it('keeps letter-by-letter typing on separate timer ticks instead of burst-writing chunks', async () => {
+    vi.useFakeTimers()
+    const clipboard = createClipboard()
+    const automation = createAutomation()
+    const timestamps: number[] = []
+    automation.typeGrapheme.mockImplementation(() => {
+      timestamps.push(performance.now())
+    })
+
+    const { InsertionEngine } = await import('./insertionEngine.js')
+    const engine = new InsertionEngine(clipboard as never, automation as never)
+    const session = engine.createProgressiveSession('letter-by-letter')
+
+    await session.warmup()
+    const text = 'abcdef'
+    await session.append(text)
+    const executionPromise = session.finalize(text)
+    await flushAdaptiveTyping()
+    await executionPromise
+
+    expect(timestamps).toHaveLength(text.length)
+    expect(new Set(timestamps).size).toBe(timestamps.length)
+    expect(Math.min(...timestamps.slice(1).map((value, index) => value - timestamps[index]))).toBeGreaterThanOrEqual(7)
+  })
+
+  it('waits for the last typed grapheme to visually settle before finalizing', async () => {
+    vi.useFakeTimers()
+    const clipboard = createClipboard()
+    const automation = createAutomation()
+
+    const { InsertionEngine } = await import('./insertionEngine.js')
+    const engine = new InsertionEngine(clipboard as never, automation as never)
+    const session = engine.createProgressiveSession('letter-by-letter')
+
+    await session.warmup()
+    await session.append('a')
+
+    let resolved = false
+    const executionPromise = session.finalize('a').then((execution) => {
+      resolved = true
+      return execution
+    })
+
+    await vi.advanceTimersByTimeAsync(20)
+    expect(automation.typeGrapheme).toHaveBeenCalledTimes(1)
+    expect(resolved).toBe(false)
+
+    await vi.advanceTimersByTimeAsync(120)
+    const execution = await executionPromise
+
+    expect(resolved).toBe(true)
+    expect(execution.effectiveMode).toBe('letter-by-letter')
+  })
+
   it('falls back from letter-by-letter to all-at-once when automation is unsupported', async () => {
     vi.useFakeTimers()
     const clipboard = createClipboard()

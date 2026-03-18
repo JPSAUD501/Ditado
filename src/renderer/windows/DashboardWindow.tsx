@@ -4,6 +4,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import {  ArrowDown, Clock, Loader2, LayoutDashboard, PackageCheck, RotateCcw, Settings2 } from 'lucide-react'
 
 import type { DashboardTab, Settings, UpdateState } from '@shared/contracts'
+import { useUiSounds } from '@renderer/audio/useUiSounds'
 import { StatusPill } from '@renderer/components/StatusPill'
 import { useDashboardBridge, useDictationRecorder } from '@renderer/hooks/useDitadoBridge'
 import { useThemeAndLanguage } from '@renderer/hooks/useThemeAndLanguage'
@@ -121,6 +122,7 @@ const areSettingsEqual = (left: Settings, right: Settings): boolean => JSON.stri
 
 export const DashboardWindow = ({ initialTab }: { initialTab: DashboardTab }) => {
   const state = useDashboardBridge()
+  useUiSounds(state.session)
   const reducedMotion = useReducedMotion()
   const effectiveInitial = initialTab === 'onboarding' ? 'overview' : initialTab
   const [activeTab, setActiveTab] = useState<DashboardTab>(effectiveInitial)
