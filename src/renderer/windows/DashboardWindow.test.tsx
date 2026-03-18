@@ -112,6 +112,32 @@ const installDesktopApi = (
 }
 
 describe('DashboardWindow', () => {
+  it('opens the onboarding wizard when launch requests onboarding and setup is still incomplete', async () => {
+    const { updateSettings } = installDesktopApi({
+      ...defaultSettings,
+      apiKeyPresent: true,
+      onboardingCompleted: false,
+    })
+
+    render(<DashboardWindow initialTab="onboarding" />)
+
+    expect(await screen.findByText(/connect your api/i)).toBeInTheDocument()
+    expect(updateSettings).not.toHaveBeenCalled()
+  })
+
+  it('keeps the settings screen available when onboarding is done but the API key is missing', async () => {
+    installDesktopApi({
+      ...defaultSettings,
+      onboardingCompleted: true,
+      apiKeyPresent: false,
+    })
+
+    render(<DashboardWindow initialTab="settings" />)
+
+    expect(await screen.findByRole('textbox', { name: /model id/i })).toBeInTheDocument()
+    expect(screen.queryByText(/connect api/i)).toBeNull()
+  })
+
   it('updates toggles immediately and persists the change through the desktop bridge', async () => {
     const { updateSettings } = installDesktopApi()
     render(<DashboardWindow initialTab="settings" />)

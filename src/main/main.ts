@@ -89,6 +89,22 @@ const resolveDashboardTheme = (theme: Settings['theme']): 'dark' | 'light' => {
   return theme
 }
 
+const getPreferredDashboardTab = (settings: Settings): DashboardTab => {
+  if (!settings.onboardingCompleted) {
+    return 'onboarding'
+  }
+
+  if (!settings.apiKeyPresent) {
+    return 'settings'
+  }
+
+  return 'overview'
+}
+
+const isAppReady = (settings: Settings): boolean => (
+  settings.onboardingCompleted && settings.apiKeyPresent
+)
+
 const applyDashboardChrome = (window: BrowserWindow | null, theme: Settings['theme']): void => {
   if (!window || process.platform === 'darwin') {
     return
@@ -148,10 +164,10 @@ const createDashboardWindow = (tab: DashboardTab = 'overview', theme: Settings['
   const isMac = process.platform === 'darwin'
   const chrome = dashboardChrome[resolveDashboardTheme(theme)]
   const window = new BrowserWindow({
-    width: 1180,
-    height: 860,
-    minWidth: 900,
-    minHeight: 620,
+    width: 1040,
+    height: 760,
+    minWidth: 860,
+    minHeight: 600,
     titleBarStyle: isMac ? 'hiddenInset' : 'hidden',
     titleBarOverlay: isMac ? undefined : {
       color: chrome.overlayColor,
@@ -298,7 +314,7 @@ void app.whenReady().then(async () => {
 
   windows.overlay = createOverlayWindow()
   windows.dashboard = createDashboardWindow(
-    store.getSettings().onboardingCompleted ? 'overview' : 'onboarding',
+    getPreferredDashboardTab(store.getSettings()),
     currentDashboardTheme,
   )
   windows.dashboard.on('blur', () => { hotkeyCaptureActive = false })
@@ -314,7 +330,7 @@ void app.whenReady().then(async () => {
 
   const { refresh: refreshTray } = registerTray(
     {
-      openOverview: () => showDashboard('overview'),
+      openOverview: () => showDashboard(getPreferredDashboardTab(store.getSettings())),
       openHistory: () => showDashboard('history'),
       quit: () => {
         isQuitting = true
@@ -382,7 +398,7 @@ void app.whenReady().then(async () => {
   })
 
   app.on('activate', () => {
-    showDashboard(store.getSettings().onboardingCompleted ? 'overview' : 'onboarding')
+    showDashboard(getPreferredDashboardTab(store.getSettings()))
   })
 
   let shutdownInFlight = false
@@ -442,13 +458,18 @@ void app.whenReady().then(async () => {
     }, 1600)
   }
 
-  if (overlayLoaded) {
-    showStartupNotice()
+  const settings = store.getSettings()
+  if (isAppReady(settings)) {
+    if (overlayLoaded) {
+      showStartupNotice()
+    } else {
+      windows.overlay?.webContents.once('did-finish-load', () => {
+        // Small delay to let React mount and register IPC listeners
+        setTimeout(showStartupNotice, 150)
+      })
+    }
   } else {
-    windows.overlay?.webContents.once('did-finish-load', () => {
-      // Small delay to let React mount and register IPC listeners
-      setTimeout(showStartupNotice, 150)
-    })
+    showDashboard(getPreferredDashboardTab(settings))
   }
 
   const runLetterInputWarmup = (): void => {

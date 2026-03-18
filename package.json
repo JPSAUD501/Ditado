@@ -16,7 +16,7 @@
   "scripts": {
     "clean": "node scripts/clean-build.mjs",
     "clean:native": "node scripts/clean-native-artifacts.mjs",
-    "generate:ui-earcons": "electron scripts/generate-ui-earcons.mjs",
+    "generate:ui-earcons": "cross-env ELECTRON_DISABLE_SANDBOX=1 electron scripts/generate-ui-earcons.mjs",
     "generate:icons": "electron scripts/generate-icons.mjs",
     "generate:installer-assets": "node scripts/generate-installer-assets.mjs",
     "build:telemetry-config": "node scripts/generate-telemetry-build-config.mjs",

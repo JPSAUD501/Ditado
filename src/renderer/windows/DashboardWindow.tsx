@@ -130,6 +130,7 @@ export const DashboardWindow = ({ initialTab }: { initialTab: DashboardTab }) =>
   const [draftSettings, setDraftSettings] = useState<Settings | null>(null)
   const [microphoneRefreshKey, setMicrophoneRefreshKey] = useState(0)
   const [forceOnboarding, setForceOnboarding] = useState(false)
+  const [requestedOnboarding, setRequestedOnboarding] = useState(initialTab === 'onboarding')
   const latestStateSettings = useRef(state.settings)
   const latestSettingsMutationId = useRef(0)
   useDictationRecorder(state.session, state.settings.preferredMicrophoneId)
@@ -201,20 +202,19 @@ export const DashboardWindow = ({ initialTab }: { initialTab: DashboardTab }) =>
   const finishOnboarding = async (): Promise<void> => {
     await updateSettings({ onboardingCompleted: true })
     setForceOnboarding(false)
+    setRequestedOnboarding(false)
+    setActiveTab('overview')
   }
 
   /* ── Auto-complete onboarding for existing users who already have an API key ── */
-  const autoOnboardingDone = useRef(false)
   useEffect(() => {
-    if (!settings.onboardingCompleted && settings.apiKeyPresent && !autoOnboardingDone.current) {
-      autoOnboardingDone.current = true
-      void updateSettings({ onboardingCompleted: true }).catch(() => undefined)
+    if (settings.onboardingCompleted && requestedOnboarding) {
+      setRequestedOnboarding(false)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- updateSettings is stable for this onboarding check
-  }, [settings.onboardingCompleted, settings.apiKeyPresent])
+  }, [requestedOnboarding, settings.onboardingCompleted])
 
   /* ── Onboarding wizard overlay ── */
-  if (forceOnboarding || (!settings.onboardingCompleted && !settings.apiKeyPresent)) {
+  if (forceOnboarding || requestedOnboarding || !settings.onboardingCompleted) {
     return (
       <OnboardingWizard
         settings={settings}
