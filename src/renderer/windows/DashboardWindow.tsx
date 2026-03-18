@@ -130,31 +130,23 @@ export const DashboardWindow = ({ initialTab }: { initialTab: DashboardTab }) =>
   const [draftSettings, setDraftSettings] = useState<Settings | null>(null)
   const [microphoneRefreshKey, setMicrophoneRefreshKey] = useState(0)
   const [forceOnboarding, setForceOnboarding] = useState(false)
-  const [requestedOnboarding, setRequestedOnboarding] = useState(initialTab === 'onboarding')
   const latestStateSettings = useRef(state.settings)
   const latestSettingsMutationId = useRef(0)
   useDictationRecorder(state.session, state.settings.preferredMicrophoneId)
   const { t } = useTranslation()
-  const settings = draftSettings ?? state.settings
+  const settings =
+    draftSettings && !areSettingsEqual(draftSettings, state.settings)
+      ? draftSettings
+      : state.settings
+  const requestedOnboarding = initialTab === 'onboarding' && !settings.onboardingCompleted
   useThemeAndLanguage(settings)
   const sessionStatus = state.session?.status ?? 'idle'
 
   // Keep the ref in sync with the current settings (draft or state).
   // This must run after every render to ensure async operations have the latest value.
   useEffect(() => {
-    latestStateSettings.current = draftSettings ?? state.settings
-  }, [draftSettings, state.settings])
-
-  useEffect(() => {
-    // When the server confirms a new state, clear the optimistic draft only if it
-    // already matches (meaning all in-flight mutations have been acknowledged).
-    setDraftSettings((currentDraft) => {
-      if (!currentDraft || areSettingsEqual(currentDraft, state.settings)) {
-        return null
-      }
-      return currentDraft
-    })
-  }, [state.settings])
+    latestStateSettings.current = settings
+  }, [settings])
 
   const applySettingsMutation = async (
     applyOptimisticUpdate: (base: Settings) => Settings,
@@ -202,17 +194,10 @@ export const DashboardWindow = ({ initialTab }: { initialTab: DashboardTab }) =>
   const finishOnboarding = async (): Promise<void> => {
     await updateSettings({ onboardingCompleted: true })
     setForceOnboarding(false)
-    setRequestedOnboarding(false)
     setActiveTab('overview')
   }
 
   /* ── Auto-complete onboarding for existing users who already have an API key ── */
-  useEffect(() => {
-    if (settings.onboardingCompleted && requestedOnboarding) {
-      setRequestedOnboarding(false)
-    }
-  }, [requestedOnboarding, settings.onboardingCompleted])
-
   /* ── Onboarding wizard overlay ── */
   if (forceOnboarding || requestedOnboarding || !settings.onboardingCompleted) {
     return (
