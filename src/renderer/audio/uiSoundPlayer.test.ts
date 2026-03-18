@@ -148,6 +148,6 @@ describe('uiSoundPlayer', () => {
     await playUiSound('success')
 
     expect(audioContextInstances[0]?.createGain).toHaveBeenCalledTimes(1)
-    expect((audioContextInstances[0]?.createGain.mock.results[0]?.value as MockGainNode).gain.value).toBeCloseTo(0.28)
+    expect((audioContextInstances[0]?.createGain.mock.results[0]?.value as MockGainNode).gain.value).toBeCloseTo(0.15)
   })
 })
