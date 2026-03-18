@@ -7,10 +7,15 @@ import type {
   UpdateState,
 } from './contracts.js'
 
+const isMac = typeof process !== 'undefined' && process.platform === 'darwin'
+
+export const defaultPushToTalkHotkey = isMac ? 'Meta+Alt' : 'Ctrl+Alt'
+export const defaultToggleHotkey = isMac ? 'Shift+Meta' : 'Shift+Alt'
+
 export const defaultSettings: Settings = {
   launchOnLogin: false,
-  pushToTalkHotkey: 'Ctrl+Alt',
-  toggleHotkey: 'Shift+Alt',
+  pushToTalkHotkey: defaultPushToTalkHotkey,
+  toggleHotkey: defaultToggleHotkey,
   preferredMicrophoneId: null,
   sendContextAutomatically: true,
   telemetryEnabled: true,

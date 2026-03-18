@@ -2,6 +2,7 @@ import { type ReactNode, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { Settings } from '@shared/contracts'
+import { defaultPushToTalkHotkey, defaultToggleHotkey } from '@shared/defaults'
 import { HotkeyField, MicrophoneSelect, ToggleRow } from './controls'
 
 const requestBrowserMicrophonePermission = async (): Promise<void> => {
@@ -101,7 +102,7 @@ export const SettingsPanel = ({
               <HotkeyField
                 label={t('settings.toggleLabel')}
                 value={settings.toggleHotkey}
-                fallbackValue="Shift+Alt"
+                fallbackValue={defaultToggleHotkey}
                 onCommit={(v) => updateSettings({ toggleHotkey: v })}
               />
             </Field>
@@ -109,7 +110,7 @@ export const SettingsPanel = ({
               <HotkeyField
                 label={t('settings.pushToTalkLabel')}
                 value={settings.pushToTalkHotkey}
-                fallbackValue="Ctrl+Alt"
+                fallbackValue={defaultPushToTalkHotkey}
                 onCommit={(v) => updateSettings({ pushToTalkHotkey: v })}
               />
             </Field>

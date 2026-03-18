@@ -1204,6 +1204,12 @@ button:disabled {
   color: currentColor;
 }
 
+/* ─── macOS traffic-light clearance ────────────────────────────────── */
+
+[data-platform="darwin"] .sidebar {
+  padding-top: 2.5rem;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

@@ -44,4 +44,7 @@ export const ipcChannels = {
     download: 'updates:download',
     install: 'updates:install',
   },
+  shell: {
+    openExternal: 'shell:openExternal',
+  },
 } as const

@@ -90,6 +90,7 @@ const installOverlayApi = (session: DictationSession | null): void => {
     checkForUpdates: vi.fn(async () => undefined),
     downloadUpdate: vi.fn(async () => undefined),
     installUpdate: vi.fn(async () => undefined),
+    openExternalUrl: vi.fn(async () => undefined),
     sendAudioLevel: vi.fn(),
     subscribeAudioLevel: vi.fn(() => () => undefined),
   }

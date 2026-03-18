@@ -181,6 +181,12 @@
     "fallbackClipboardHint": "If text insertion fails, the result stays in your clipboard. All settings can be changed later."
   },
   "onboarding": {
+    "welcomeTitle": "Welcome to Ditado",
+    "welcomeDesc": "AI-powered voice dictation that works in any application. Speak naturally, and Ditado will transcribe and insert your text wherever you're typing.",
+    "featureContextAware": "Context-aware: understands what app you're in and adapts its output",
+    "featureStreaming": "Real-time streaming: see your words appear as you speak",
+    "featureWorksEverywhere": "Works everywhere: dictate into any text field on your computer",
+    "getApiKey": "Get one at openrouter.ai/keys",
     "connectApi": "Connect your API",
     "connectApiDesc": "Ditado uses OpenRouter to access AI models. Enter your API key to get started.",
     "keyConfigured": "Key configured",

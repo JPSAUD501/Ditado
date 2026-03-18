@@ -38,6 +38,7 @@ setHotkeyCaptureActive: (active: boolean) => Promise<void>
   checkForUpdates: () => Promise<void>
   downloadUpdate: () => Promise<void>
   installUpdate: () => Promise<void>
+  openExternalUrl: (url: string) => Promise<void>
   sendAudioLevel: (level: number) => void
   subscribeAudioLevel: (listener: (level: number) => void) => () => void
 }

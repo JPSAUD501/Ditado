@@ -111,6 +111,32 @@ export const isSupportedHotkey = (value: string): boolean => {
   return normalized.split('+').some((token) => modifierOrder.includes(token as ModifierLabel))
 }
 
+const macSymbols: Record<string, string> = {
+  Ctrl: '\u2303',   // ⌃
+  Shift: '\u21E7',  // ⇧
+  Alt: '\u2325',    // ⌥
+  Meta: '\u2318',   // ⌘
+}
+
+const detectMac = (): boolean => {
+  if (typeof navigator !== 'undefined') {
+    return navigator.userAgent.includes('Macintosh')
+  }
+  if (typeof process !== 'undefined') {
+    return process.platform === 'darwin'
+  }
+  return false
+}
+
+export const formatHotkeyForDisplay = (hotkey: string): string => {
+  if (!detectMac()) return hotkey
+
+  return hotkey
+    .split('+')
+    .map((token) => macSymbols[token] ?? token)
+    .join('')
+}
+
 export const hotkeyFromKeyboardEvent = (event: KeyboardLikeEvent): string | null => {
   const modifiers = [
     event.ctrlKey ? 'Ctrl' : null,

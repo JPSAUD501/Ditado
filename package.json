@@ -91,6 +91,9 @@
     },
     "mac": {
       "icon": "build/icon.png",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Ditado needs microphone access to capture your voice and transcribe dictation into any app."
+      },
       "target": [
         "dmg",
         "zip"

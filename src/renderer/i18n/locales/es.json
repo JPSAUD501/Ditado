@@ -181,6 +181,12 @@
     "fallbackClipboardHint": "Si la inserción de texto falla, el resultado queda en tu portapapeles. Todos los ajustes se pueden cambiar después."
   },
   "onboarding": {
+    "welcomeTitle": "Bienvenido a Ditado",
+    "welcomeDesc": "Dictado por voz con IA que funciona en cualquier aplicación. Habla naturalmente, y Ditado transcribirá e insertará tu texto donde estés escribiendo.",
+    "featureContextAware": "Consciente del contexto: entiende en qué app estás y adapta la salida",
+    "featureStreaming": "Streaming en tiempo real: ve tus palabras aparecer mientras hablas",
+    "featureWorksEverywhere": "Funciona en todas partes: dicta en cualquier campo de texto de tu computador",
+    "getApiKey": "Obtén una en openrouter.ai/keys",
     "connectApi": "Conecta tu API",
     "connectApiDesc": "Ditado usa OpenRouter para acceder a modelos de IA. Ingresa tu clave API para comenzar.",
     "keyConfigured": "Clave configurada",

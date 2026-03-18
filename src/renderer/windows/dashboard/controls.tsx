@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { Check, ChevronDown, Copy, Pause, Play, Trash2 } from 'lucide-react'
 
 import type { HistoryEntry } from '@shared/contracts'
-import { hotkeyFromKeyboardEvent, isSupportedHotkey, normalizeHotkey } from '@shared/hotkeys'
+import { formatHotkeyForDisplay, hotkeyFromKeyboardEvent, isSupportedHotkey, normalizeHotkey } from '@shared/hotkeys'
 import { formatDate, summarizeContext } from './formatters'
 
 const easeOutExpo = [0.16, 1, 0.3, 1] as const
@@ -57,7 +57,7 @@ export const HotkeyField = ({
         }}
       >
         <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: visibleValue ? 'var(--text-1)' : 'var(--text-3)' }}>
-          {isCapturing ? t('common.pressCombo') : visibleValue}
+          {isCapturing ? t('common.pressCombo') : formatHotkeyForDisplay(visibleValue)}
         </span>
         <span style={{ fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.12em', color: isCapturing ? 'var(--accent)' : 'var(--text-3)', flexShrink: 0 }}>
           {isCapturing ? t('common.capturing') : label}
@@ -69,7 +69,7 @@ export const HotkeyField = ({
         type="button"
         onClick={() => { setDraft(fallbackValue); stopCapture(); void onCommit(fallbackValue) }}
       >
-        {t('common.resetTo', { value: fallbackValue })}
+        {t('common.resetTo', { value: formatHotkeyForDisplay(fallbackValue) })}
       </button>
     </div>
   )

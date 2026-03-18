@@ -107,6 +107,7 @@ beforeEach(() => {
     checkForUpdates: vi.fn(),
     downloadUpdate: vi.fn(async () => undefined),
     installUpdate: vi.fn(async () => undefined),
+    openExternalUrl: vi.fn(async () => undefined),
     sendAudioLevel: vi.fn(),
     subscribeAudioLevel: vi.fn(() => () => undefined),
   }

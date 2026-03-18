@@ -94,6 +94,7 @@ const installDesktopApi = (
   checkForUpdates: vi.fn(async () => undefined),
   downloadUpdate: vi.fn(async () => undefined),
   installUpdate: vi.fn(async () => undefined),
+  openExternalUrl: vi.fn(async () => undefined),
   getShortcutStatus: vi.fn(async () => ({ captureActive: false, uiohookRunning: true })),
   sendAudioLevel: vi.fn(),
   subscribeAudioLevel: vi.fn(() => () => undefined),
@@ -121,7 +122,7 @@ describe('DashboardWindow', () => {
 
     render(<DashboardWindow initialTab="onboarding" />)
 
-    expect(await screen.findByText(/connect your api/i)).toBeInTheDocument()
+    expect(await screen.findByText(/welcome to ditado/i)).toBeInTheDocument()
     expect(updateSettings).not.toHaveBeenCalled()
   })
 

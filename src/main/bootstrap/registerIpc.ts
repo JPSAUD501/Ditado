@@ -1,4 +1,4 @@
-import { app, type BrowserWindow, ipcMain } from 'electron'
+import { app, type BrowserWindow, ipcMain, shell } from 'electron'
 
 import {
   apiKeyInputSchema,
@@ -135,6 +135,12 @@ export const registerIpc = ({
   })
   ipcMain.handle(ipcChannels.updates.install, () => {
     updates.installUpdate()
+  })
+
+  ipcMain.handle(ipcChannels.shell.openExternal, (_event, url: string) => {
+    if (typeof url === 'string' && (url.startsWith('https://') || url.startsWith('http://'))) {
+      return shell.openExternal(url)
+    }
   })
 
   // Fire-and-forget: forward audio level from dashboard renderer to overlay
