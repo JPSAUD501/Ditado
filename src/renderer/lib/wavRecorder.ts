@@ -120,6 +120,7 @@ export class WavRecorder {
   private chunks: Float32Array[] = []
   private recording = false
   private startedAtMs = 0
+  private recordingStartedAt: string | null = null
   private warmupPromise: Promise<RecorderWarmupStatus> | null = null
 
   /** Called with a normalized audio level (0–1) roughly every ~80ms while recording. */
@@ -168,6 +169,7 @@ export class WavRecorder {
     this.encodedChunks = []
     this.encodedMimeType = chooseEncodedMimeType()
     this.startedAtMs = Date.now()
+    this.recordingStartedAt = new Date().toISOString()
 
     if (this.encodedMimeType) {
       this.mediaRecorder = new MediaRecorder(this.stream, { mimeType: this.encodedMimeType })
@@ -229,6 +231,8 @@ export class WavRecorder {
 
     const processingStartedAt = performance.now()
     const durationMs = Math.min(Math.max(Date.now() - this.startedAtMs, 0), MAX_RECORDING_DURATION_MS)
+    const recordingStartedAt = this.recordingStartedAt
+    const recordingEndedAt = new Date().toISOString()
     this.recording = false
     const sampleRate = this.audioContext.sampleRate
     const encodedBlobPromise = this.stopMediaRecorder()
@@ -245,8 +249,10 @@ export class WavRecorder {
       : encodeWav(samples, sampleRate)
     const mimeType = encodedBlob?.type || 'audio/wav'
     this.chunks = []
-    this.cleanup()
     const audioProcessingMs = Math.round(performance.now() - processingStartedAt)
+    const audioPreparationStartedAt = new Date(Date.now() - audioProcessingMs).toISOString()
+    const audioPreparationEndedAt = new Date().toISOString()
+    this.cleanup()
 
     return {
       audioBase64: toBase64(audioBytes),
@@ -257,12 +263,19 @@ export class WavRecorder {
       speechDetected: analysis.speechDetected,
       peakAmplitude: analysis.peakAmplitude,
       rmsAmplitude: analysis.rmsAmplitude,
+      recordingStartedAt,
+      recordingEndedAt,
+      audioPreparationStartedAt,
+      audioPreparationEndedAt,
+      stopReason: durationMs >= MAX_RECORDING_DURATION_MS ? 'max-duration' : 'user-stop',
+      maxDurationReached: durationMs >= MAX_RECORDING_DURATION_MS,
     }
   }
 
   async cancel(): Promise<void> {
     this.recording = false
     this.startedAtMs = 0
+    this.recordingStartedAt = null
     this.chunks = []
     this.cleanup()
   }
@@ -283,6 +296,7 @@ export class WavRecorder {
     this.stream = null
     this.audioContext = null
     this.startedAtMs = 0
+    this.recordingStartedAt = null
   }
 
   private async performWarmup(deviceId: string | null): Promise<RecorderWarmupStatus> {

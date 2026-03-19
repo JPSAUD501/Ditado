@@ -13,7 +13,7 @@ export const defaultPushToTalkHotkey = isMac ? 'Meta+Alt' : 'Ctrl+Alt'
 export const defaultToggleHotkey = isMac ? 'Shift+Meta' : 'Shift+Alt'
 
 export const defaultSettings: Settings = {
-  launchOnLogin: false,
+  launchOnLogin: true,
   pushToTalkHotkey: defaultPushToTalkHotkey,
   toggleHotkey: defaultToggleHotkey,
   preferredMicrophoneId: null,

@@ -38,3 +38,5 @@ public/audio/ui/*.wav
 *.njsproj
 *.sln
 *.sw?
+
+nul

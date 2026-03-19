@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { DashboardWindow } from './DashboardWindow'
 import { defaultPermissionState, defaultSettings } from '@shared/defaults'
-import type { DashboardViewModel, Settings } from '@shared/contracts'
+import { historyEntrySchema, type DashboardViewModel, type Settings } from '@shared/contracts'
 
 const onboardedSettings: Settings = { ...defaultSettings, onboardingCompleted: true }
 
@@ -195,7 +195,7 @@ describe('DashboardWindow', () => {
     await userEvent.click(launchOnLoginToggle)
 
     expect(sendContextToggle).toHaveAttribute('aria-pressed', 'false')
-    expect(launchOnLoginToggle).toHaveAttribute('aria-pressed', 'true')
+    expect(launchOnLoginToggle).toHaveAttribute('aria-pressed', 'false')
 
     await act(async () => {
       firstSave.resolve({ ...onboardedSettings, sendContextAutomatically: false })
@@ -204,7 +204,7 @@ describe('DashboardWindow', () => {
     })
 
     expect(sendContextToggle).toHaveAttribute('aria-pressed', 'false')
-    expect(launchOnLoginToggle).toHaveAttribute('aria-pressed', 'true')
+    expect(launchOnLoginToggle).toHaveAttribute('aria-pressed', 'false')
 
     await act(async () => {
       secondSave.resolve({
@@ -217,7 +217,7 @@ describe('DashboardWindow', () => {
     })
 
     expect(updateSettings).toHaveBeenNthCalledWith(1, { sendContextAutomatically: false })
-    expect(updateSettings).toHaveBeenNthCalledWith(2, { launchOnLogin: true })
+    expect(updateSettings).toHaveBeenNthCalledWith(2, { launchOnLogin: false })
     expect(sendContextToggle).toHaveAttribute('aria-pressed', 'false')
     expect(launchOnLoginToggle).toHaveAttribute('aria-pressed', 'true')
   })
@@ -292,7 +292,7 @@ describe('DashboardWindow', () => {
       publishState({
         ...createState(),
         history: [
-          {
+          historyEntrySchema.parse({
             id: 'entry-1',
             createdAt: new Date().toISOString(),
             outcome: 'completed',
@@ -318,7 +318,7 @@ describe('DashboardWindow', () => {
             fallbackUsed: false,
             timeToFirstTokenMs: 0,
             timeToCompleteMs: 0,
-          },
+          }),
         ],
       })
       await Promise.resolve()

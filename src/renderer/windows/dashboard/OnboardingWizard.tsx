@@ -48,31 +48,6 @@ const StatusDot = ({ color, pulse }: { color: string; pulse: boolean }) => (
   />
 )
 
-/* -- Suggested phrase ----------------------------------------------------- */
-
-const SuggestedPhrase = ({ phrase, label }: { phrase: string; label: string }) => (
-  <motion.div
-    style={{
-      display: 'flex', alignItems: 'flex-start', gap: '0.55rem',
-      padding: '0.6rem 0.75rem', borderRadius: '0.5rem',
-      background: 'var(--accent-muted)', border: '1px solid rgba(210,175,110,0.15)',
-    }}
-    initial={{ opacity: 0, y: 5 }}
-    animate={{ opacity: 1, y: 0 }}
-    transition={{ duration: 0.28, ease: easeOutExpo, delay: 0.1 }}
-  >
-    <MessageSquareQuote size={13} style={{ color: 'var(--accent)', flexShrink: 0, marginTop: '0.1rem' }} />
-    <div>
-      <div style={{ fontSize: '0.55rem', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--accent)', marginBottom: '0.2rem' }}>
-        {label}
-      </div>
-      <div style={{ fontSize: '0.8rem', color: 'var(--text-1)', lineHeight: 1.5, fontStyle: 'italic' }}>
-        &ldquo;{phrase}&rdquo;
-      </div>
-    </div>
-  </motion.div>
-)
-
 /* -- Theme card ----------------------------------------------------------- */
 
 const ThemeCard = ({
@@ -92,6 +67,7 @@ const ThemeCard = ({
       style={{
         flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.4rem',
         padding: '0.75rem 0.5rem', borderRadius: '0.6rem', cursor: 'pointer',
+        position: 'relative',
         border: `1px solid ${active ? 'rgba(210,175,110,0.4)' : 'var(--border)'}`,
         background: active ? 'var(--accent-muted)' : 'var(--bg-2)',
         color: active ? 'var(--accent)' : 'var(--text-2)',
@@ -152,8 +128,10 @@ export const OnboardingWizard = ({
   }
 
   const canProceed = () => {
-    if (step === 1) return apiKeySaved || pendingApiKey.trim().length > 0
     if (finishing) return false
+    if (step === 1) return apiKeySaved || pendingApiKey.trim().length > 0
+    if (step === 4) return pushTalkDone
+    if (step === 5) return toggleDone
     return true
   }
 
@@ -288,19 +266,34 @@ export const OnboardingWizard = ({
 
 /* -- Step 0: Welcome ------------------------------------------------------ */
 
-const FeatureHighlight = ({ text, delay }: { text: string; delay: number }) => (
+const FeatureHighlight = ({
+  text,
+  delay,
+  icon: Icon,
+}: {
+  text: string
+  delay: number
+  icon: React.FC<{ size?: number; strokeWidth?: number }>
+}) => (
   <motion.div
     style={{
-      display: 'flex', alignItems: 'flex-start', gap: '0.5rem',
-      padding: '0.5rem 0.65rem', borderRadius: '0.5rem',
+      display: 'flex', alignItems: 'flex-start', gap: '0.65rem',
+      padding: '0.65rem 0.75rem', borderRadius: '0.55rem',
       background: 'var(--accent-muted)', border: '1px solid rgba(210,175,110,0.15)',
     }}
-    initial={{ opacity: 0, y: 5 }}
+    initial={{ opacity: 0, y: 6 }}
     animate={{ opacity: 1, y: 0 }}
     transition={{ duration: 0.28, ease: easeOutExpo, delay }}
   >
-    <Check size={14} style={{ color: 'var(--accent)', flexShrink: 0, marginTop: '0.1rem' }} />
-    <span className="text-xs" style={{ color: 'var(--text-1)', lineHeight: 1.5 }}>{text}</span>
+    <div style={{
+      width: 24, height: 24, borderRadius: 7,
+      background: 'rgba(210,175,110,0.18)', border: '1px solid rgba(210,175,110,0.25)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      color: 'var(--accent)', flexShrink: 0,
+    }}>
+      <Icon size={13} strokeWidth={2} />
+    </div>
+    <span className="text-xs" style={{ color: 'var(--text-1)', lineHeight: 1.55 }}>{text}</span>
   </motion.div>
 )
 
@@ -316,9 +309,21 @@ const StepWelcome = () => {
       <div className="wizard-desc">{t('onboarding.welcomeDesc')}</div>
 
       <div className="grid gap-2" style={{ marginTop: '0.5rem' }}>
-        <FeatureHighlight text={t('onboarding.featureContextAware')} delay={0.08} />
-        <FeatureHighlight text={t('onboarding.featureStreaming')} delay={0.16} />
-        <FeatureHighlight text={t('onboarding.featureWorksEverywhere')} delay={0.24} />
+        <FeatureHighlight
+          text={t('onboarding.featureContextAware')}
+          delay={0.08}
+          icon={MessageSquareQuote}
+        />
+        <FeatureHighlight
+          text={t('onboarding.featureStreaming')}
+          delay={0.16}
+          icon={Zap}
+        />
+        <FeatureHighlight
+          text={t('onboarding.featureWorksEverywhere')}
+          delay={0.24}
+          icon={Monitor}
+        />
       </div>
     </div>
   )
@@ -513,7 +518,7 @@ const StepMicrophone = ({
 
 const DemoStep = ({
   stepLabel, icon: StepIcon, title, desc, hotkey, hotkeyLabel, hotkeyFallback, onHotkeyChange,
-  session, activationMode, done, onDone, suggestedPhrase, instruction,
+  session, activationMode, done, onDone, suggestedPhrase, instruction, prefillText,
 }: {
   stepLabel: string
   icon: React.FC<{ size?: number; strokeWidth?: number }>
@@ -529,6 +534,7 @@ const DemoStep = ({
   onDone: () => void
   suggestedPhrase: string
   instruction: string
+  prefillText?: string
 }) => {
   const { t } = useTranslation()
   const status = session?.status ?? 'idle'
@@ -561,6 +567,8 @@ const DemoStep = ({
       ? (demoStatusLabel[status] ?? status)
       : t('onboarding.demoInstruction')
 
+  const demoZoneStatus = isRelevant ? status : done ? 'completed' : 'idle'
+
   return (
     <div>
       <div className="wizard-step-label">
@@ -569,61 +577,80 @@ const DemoStep = ({
       <div className="wizard-title">{title}</div>
       <div className="wizard-desc">{desc}</div>
 
-      {/* Hotkey config -- always visible at top */}
-      <div style={{ marginBottom: '0.75rem' }}>
-        <div className="text-xs font-medium" style={{ color: 'var(--text-2)', marginBottom: '0.3rem' }}>
-          {hotkeyLabel}
+      {/* Compact hotkey row */}
+      <div className="wizard-hotkey-row">
+        <span className="wizard-hotkey-label">{hotkeyLabel}</span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <HotkeyField
+            label={hotkeyLabel}
+            value={hotkey}
+            fallbackValue={hotkeyFallback}
+            onCommit={onHotkeyChange}
+          />
         </div>
-        <HotkeyField
-          label={hotkeyLabel}
-          value={hotkey}
-          fallbackValue={hotkeyFallback}
-          onCommit={onHotkeyChange}
+      </div>
+
+      {/* Demo zone */}
+      <div className="wizard-demo-zone" data-status={demoZoneStatus}>
+        {/* Status bar */}
+        <div className="wizard-demo-status-bar">
+          <StatusDot color={statusColor} pulse={isRelevant && status === 'listening'} />
+          <AnimatePresence mode="wait">
+            <motion.span
+              key={statusText}
+              style={{ color: statusColor, flex: 1, fontSize: '0.75rem', fontWeight: 500 }}
+              initial={{ opacity: 0, x: -5 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 5 }}
+              transition={{ duration: 0.15, ease: easeOutExpo }}
+            >
+              {statusText}
+            </motion.span>
+          </AnimatePresence>
+          <AnimatePresence>
+            {done && !isRelevant && (
+              <motion.div
+                initial={{ scale: 0, rotate: -20 }}
+                animate={{ scale: 1, rotate: 0 }}
+                exit={{ scale: 0 }}
+                transition={{ type: 'spring', stiffness: 450, damping: 18 }}
+              >
+                <CheckCircle size={15} style={{ color: 'var(--status-ok)' }} />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* Textarea */}
+        <textarea
+          ref={textareaRef}
+          className="wizard-demo-textarea"
+          defaultValue={prefillText ?? ''}
+          placeholder={!prefillText ? t('onboarding.textWillAppear') : ''}
+          rows={4}
+          spellCheck={false}
         />
+
+        {/* Footer: instruction + suggested phrase (hidden once done) */}
+        <AnimatePresence initial={false}>
+          {!done && (
+            <motion.div
+              className="wizard-demo-footer"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.22, ease: easeOutExpo }}
+              style={{ overflow: 'hidden' }}
+            >
+              <div className="wizard-demo-instruction">{instruction}</div>
+              <div className="wizard-demo-hint">
+                <MessageSquareQuote size={11} style={{ color: 'var(--accent)', flexShrink: 0, marginTop: 1 }} />
+                <span>&ldquo;{suggestedPhrase}&rdquo;</span>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
-
-      {/* Status bar */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: '0.5rem',
-        marginBottom: '0.4rem', minHeight: '1.5rem',
-      }}>
-        <StatusDot color={statusColor} pulse={isRelevant && status === 'listening'} />
-        <motion.span
-          key={statusText}
-          className="text-xs"
-          style={{ color: statusColor, flex: 1 }}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.18 }}
-        >
-          {statusText}
-        </motion.span>
-        {done && !isRelevant && (
-          <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ type: 'spring', stiffness: 450, damping: 18 }}
-          >
-            <CheckCircle size={14} style={{ color: 'var(--status-ok)' }} />
-          </motion.div>
-        )}
-      </div>
-
-      {/* Dictation textarea */}
-      <textarea
-        ref={textareaRef}
-        className="wizard-demo-textarea"
-        placeholder={`${instruction}\n\n${t('onboarding.textWillAppear')}`}
-        rows={4}
-        spellCheck={false}
-      />
-
-      {/* Suggested phrase */}
-      {!done && (
-        <div style={{ marginTop: '0.6rem' }}>
-          <SuggestedPhrase phrase={suggestedPhrase} label={t('onboarding.trySaying')} />
-        </div>
-      )}
     </div>
   )
 }

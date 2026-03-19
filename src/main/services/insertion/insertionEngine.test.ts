@@ -90,12 +90,14 @@ describe('InsertionEngine', () => {
     expect(automation.typeGrapheme.mock.calls).toEqual([['A'], ['\u{1F44D}\u{1F3FD}'], ['B']])
     expect(runShortcut).not.toHaveBeenCalled()
     expect(clipboard.writeNormal).toHaveBeenCalledWith(text)
-    expect(execution).toEqual({
+    expect(execution).toMatchObject({
       requestedMode: 'letter-by-letter',
       effectiveMode: 'letter-by-letter',
       insertionMethod: 'enigo-letter',
       fallbackUsed: false,
     })
+    expect(execution.startedAt).toBeTruthy()
+    expect(execution.completedAt).toBeTruthy()
   })
 
   it('keeps letter-by-letter typing on separate timer ticks instead of burst-writing chunks', async () => {
@@ -179,7 +181,7 @@ describe('InsertionEngine', () => {
     expect(clipboard.writeNormal).toHaveBeenNthCalledWith(1, 'hello')
     expect(clipboard.writeNormal).toHaveBeenNthCalledWith(2, 'hello')
     expect(runShortcut).toHaveBeenCalledTimes(1)
-    expect(execution).toEqual({
+    expect(execution).toMatchObject({
       requestedMode: 'letter-by-letter',
       effectiveMode: 'all-at-once',
       insertionMethod: 'clipboard-all-at-once',
@@ -210,7 +212,7 @@ describe('InsertionEngine', () => {
     expect(runShortcut).toHaveBeenCalledTimes(1)
     expect(clipboard.writeNormal).toHaveBeenNthCalledWith(1, 'AB')
     expect(clipboard.writeNormal).toHaveBeenNthCalledWith(2, 'AB')
-    expect(execution).toEqual({
+    expect(execution).toMatchObject({
       requestedMode: 'letter-by-letter',
       effectiveMode: 'all-at-once',
       insertionMethod: 'clipboard-all-at-once',
@@ -264,7 +266,7 @@ describe('InsertionEngine', () => {
     expect(clipboard.writeNormal).toHaveBeenNthCalledWith(1, 'hello world')
     expect(clipboard.writeNormal).toHaveBeenNthCalledWith(2, 'hello world')
     expect(runShortcut).toHaveBeenCalledTimes(1)
-    expect(execution).toEqual({
+    expect(execution).toMatchObject({
       requestedMode: 'all-at-once',
       effectiveMode: 'all-at-once',
       insertionMethod: 'clipboard-all-at-once',

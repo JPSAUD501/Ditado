@@ -56,12 +56,16 @@ describe('OpenRouterService', () => {
       modelId: 'google/gemini-3-flash-preview',
     }, async () => undefined)
 
-    expect(response).toEqual({
+    expect(response).toMatchObject({
       text: 'hello',
       latencyMs: 120,
       audioSendMs: 45,
       finishReason: 'stop',
+      provider: 'openrouter',
     })
+    expect(response.requestStartedAt).toBeTruthy()
+    expect(response.responseHeadersAt).toBeTruthy()
+    expect(response.completedAt).toBeTruthy()
 
     nowSpy.mockRestore()
   })

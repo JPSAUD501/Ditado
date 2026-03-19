@@ -326,7 +326,6 @@ export class DictationSessionOrchestrator {
       if (!this.speechEndedAtBySessionId.has(currentSession.id)) {
         this.speechEndedAtBySessionId.set(currentSession.id, performance.now())
       }
-      const speechEndedAt = this.speechEndedAtBySessionId.get(currentSession.id)!
 
       this.sessions.set({
         ...currentSession,
@@ -351,6 +350,7 @@ export class DictationSessionOrchestrator {
       let partialText = ''
       let streamingStarted = false
       let firstTokenAt = 0
+      let firstTokenAtIso: string | null = null
 
       const response = await this.llm.stream(
         {
@@ -368,6 +368,7 @@ export class DictationSessionOrchestrator {
           if (!streamingStarted) {
             streamingStarted = true
             firstTokenAt = performance.now()
+            firstTokenAtIso = new Date().toISOString()
             this.telemetry.sessionEvent(currentSession.id, 'streaming-started')
           }
           partialText += delta
@@ -396,13 +397,9 @@ export class DictationSessionOrchestrator {
       }
 
       const execution = await insertion.finalize(response.text)
-      const completedAt = performance.now()
       if (this.cancelledSessionIds.has(currentSession.id) || this.sessions.get()?.id !== currentSession.id) {
         return
       }
-
-      const timeToFirstTokenMs = firstTokenAt > 0 ? Math.round(firstTokenAt - speechEndedAt) : 0
-      const timeToCompleteMs = Math.round(completedAt - speechEndedAt)
 
       const finishedAt = new Date().toISOString()
       const completedSession = {
@@ -433,7 +430,9 @@ export class DictationSessionOrchestrator {
         effectiveMode: execution.effectiveMode,
       })
       try {
-        await this.history.appendCompletedSession(completedSession, response, payload, execution, { timeToFirstTokenMs, timeToCompleteMs })
+        await this.history.appendCompletedSession(completedSession, response, payload, execution, {
+          firstTokenAt: firstTokenAtIso,
+        })
         this.notifyHistoryUpdated()
       } catch {
         // History persistence must not delay or mask a successful dictation.

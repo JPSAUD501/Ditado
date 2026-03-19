@@ -66,6 +66,10 @@ export interface InsertionExecutionReport {
   effectiveMode: InsertionStreamingMode
   insertionMethod: InsertionMethod
   fallbackUsed: boolean
+  startedAt?: string | null
+  completedAt?: string | null
+  durationMs?: number | null
+  writtenCharacterCount?: number | null
 }
 
 class ProgressiveInsertionSession {
@@ -91,6 +95,8 @@ class ProgressiveInsertionSession {
   private renderRateEwma = 0
   private lastPumpTs = 0
   private lastTypedAt = 0
+  private readonly startedAt = new Date().toISOString()
+  private completedAt: string | null = null
 
   constructor(
     private readonly requestedMode: InsertionStreamingMode,
@@ -175,6 +181,7 @@ class ProgressiveInsertionSession {
     await this.waitForVisualSettle()
 
     if (this.aborted || !fullText.trim()) {
+      this.completedAt = new Date().toISOString()
       return this.getExecutionReport()
     }
 
@@ -183,6 +190,7 @@ class ProgressiveInsertionSession {
     }
 
     await this.clipboardService.writeNormal(fullText)
+    this.completedAt = new Date().toISOString()
     return this.getExecutionReport()
   }
 
@@ -196,14 +204,24 @@ class ProgressiveInsertionSession {
   async recoverToClipboard(text: string): Promise<void> {
     this.completed = true
     await this.clipboardService.writeNormal(text)
+    this.completedAt = new Date().toISOString()
   }
 
   getExecutionReport(): InsertionExecutionReport {
+    const durationMs =
+      this.completedAt && this.startedAt
+        ? Math.max(0, new Date(this.completedAt).getTime() - new Date(this.startedAt).getTime())
+        : null
+
     return {
       requestedMode: this.requestedMode,
       effectiveMode: this.effectiveMode,
       insertionMethod: this.insertionMethod,
       fallbackUsed: this.fallbackUsed,
+      startedAt: this.startedAt,
+      completedAt: this.completedAt,
+      durationMs,
+      writtenCharacterCount: this.writtenGraphemeCount > 0 ? this.writtenGraphemeCount : null,
     }
   }
 

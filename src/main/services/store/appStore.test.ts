@@ -45,7 +45,47 @@ describe('AppStore', () => {
 
     expect(store.getSettings().pushToTalkHotkey).toBe('Ctrl+Alt')
     expect(store.getSettings().toggleHotkey).toBe('Shift+Alt')
+    expect(store.getSettings().launchOnLogin).toBe(true)
     expect(store.getSettings().sendContextAutomatically).toBe(true)
+    expect(store.getSettings().autoUpdateEnabled).toBe(true)
+  })
+
+  it('defaults auto updates to enabled when older settings files omit the field', async () => {
+    const settingsFile = join(userDataDir, 'data', 'settings.json')
+    await mkdir(join(userDataDir, 'data'), { recursive: true })
+    await writeFile(
+      settingsFile,
+      JSON.stringify({
+        pushToTalkHotkey: 'Ctrl+Alt',
+        toggleHotkey: 'Shift+Alt',
+      }),
+      'utf8',
+    )
+
+    const AppStore = await loadStore()
+    const store = new AppStore()
+    await store.initialize()
+
+    expect(store.getSettings().autoUpdateEnabled).toBe(true)
+  })
+
+  it('defaults launch on login to enabled when older settings files omit the field', async () => {
+    const settingsFile = join(userDataDir, 'data', 'settings.json')
+    await mkdir(join(userDataDir, 'data'), { recursive: true })
+    await writeFile(
+      settingsFile,
+      JSON.stringify({
+        pushToTalkHotkey: 'Ctrl+Alt',
+        toggleHotkey: 'Shift+Alt',
+      }),
+      'utf8',
+    )
+
+    const AppStore = await loadStore()
+    const store = new AppStore()
+    await store.initialize()
+
+    expect(store.getSettings().launchOnLogin).toBe(true)
   })
 
   it('normalizes hotkeys and persists them through updateSettings', async () => {

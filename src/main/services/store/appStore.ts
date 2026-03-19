@@ -192,7 +192,7 @@ export class AppStore {
     }
   }
 
-  async appendHistory(entry: HistoryEntry): Promise<void> {
+  async appendHistory(entry: unknown): Promise<void> {
     await this.enqueueMutation(async () => {
       const parsedEntry = historyEntrySchema.parse(entry)
       this.history = this.history.filter((historyEntry) => historyEntry.id !== parsedEntry.id)
@@ -203,7 +203,10 @@ export class AppStore {
   }
 
   async appendHistoryWithAudio(
-    entry: Omit<HistoryEntry, 'audioFilePath' | 'audioDurationMs' | 'audioMimeType' | 'audioBytes'>,
+    entry: Record<string, unknown> & {
+      id: string
+      audio?: Record<string, unknown>
+    },
     payload: DictationAudioPayload,
   ): Promise<void> {
     await this.enqueueMutation(async () => {
@@ -211,6 +214,13 @@ export class AppStore {
       const parsedEntry = historyEntrySchema.parse({
         ...entry,
         ...audioMeta,
+        audio: {
+          ...entry.audio,
+          filePath: audioMeta.audioFilePath,
+          durationMs: audioMeta.audioDurationMs,
+          mimeType: audioMeta.audioMimeType,
+          bytes: audioMeta.audioBytes,
+        },
       })
       this.history = this.history.filter((historyEntry) => historyEntry.id !== parsedEntry.id)
       this.history.unshift(parsedEntry)

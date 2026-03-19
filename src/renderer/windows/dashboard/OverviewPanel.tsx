@@ -1,13 +1,28 @@
-import { useMemo } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { motion, useReducedMotion } from 'framer-motion'
-import { Mic, Type, CheckCircle, Clock, Zap, TrendingUp, Shield, AppWindow } from 'lucide-react'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { Check, Copy, Mic, Type, CheckCircle, Clock, Zap, TrendingUp, AppWindow, AlertTriangle, ArrowRight } from 'lucide-react'
 
 import { StatusPill } from '@renderer/components/StatusPill'
 import type { DashboardViewModel, DictationStatus, HistoryEntry } from '@shared/contracts'
-import { formatDate } from './formatters'
+import { formatAudioDuration, formatDate } from './formatters'
 
 const easeOutExpo = [0.16, 1, 0.3, 1] as const
+const _appStartTime = Date.now()
+
+const computeRelativeTime = (createdAt: string): string => {
+  const now = _appStartTime
+  const then = new Date(createdAt).getTime()
+  const diff = now - then
+  const mins = Math.floor(diff / 60000)
+  const hours = Math.floor(diff / 3600000)
+  const days = Math.floor(diff / 86400000)
+  if (mins < 1) return 'Just now'
+  if (mins < 60) return `${mins}m ago`
+  if (hours < 24) return `${hours}h ago`
+  if (days < 7) return `${days}d ago`
+  return formatDate(createdAt)
+}
 
 /* ── Stat computations ──────────────────────────────────────────────── */
 
@@ -21,7 +36,6 @@ const computeStats = (history: HistoryEntry[]) => {
     ? Math.round(history.reduce((sum, e) => sum + e.latencyMs, 0) / total)
     : 0
 
-  // Top apps
   const appCounts = new Map<string, number>()
   for (const e of history) {
     appCounts.set(e.appName, (appCounts.get(e.appName) ?? 0) + 1)
@@ -30,7 +44,6 @@ const computeStats = (history: HistoryEntry[]) => {
     .sort((a, b) => b[1] - a[1])
     .slice(0, 4)
 
-  // Activity last 7 days
   const now = Date.now()
   const dayMs = 86_400_000
   const weekActivity = Array.from({ length: 7 }, (_, i) => {
@@ -45,28 +58,53 @@ const computeStats = (history: HistoryEntry[]) => {
   return { total, completed, successRate, totalMinutes, totalChars, avgLatency, topApps, weekActivity }
 }
 
-/* ── Health dot ─────────────────────────────────────────────────────── */
+/* ── System issues banner ── only renders when something is wrong ── */
 
-const HealthDot = ({ ok, label }: { ok: boolean; label: string }) => (
-  <span
-    title={label}
-    style={{
-      width: 7, height: 7, borderRadius: '50%',
-      background: ok ? 'var(--status-ok)' : 'var(--status-error)',
-      display: 'inline-block', flexShrink: 0,
-    }}
-  />
-)
+const SystemIssuesBanner = ({
+  apiOk,
+  micOk,
+  accOk,
+  reducedMotion,
+}: {
+  apiOk: boolean
+  micOk: boolean
+  accOk: boolean
+  reducedMotion: boolean | null
+}) => {
+  const { t } = useTranslation()
+  const issues: string[] = []
+  if (!apiOk) issues.push(t('overview.apiKey'))
+  if (!micOk) issues.push(t('overview.microphone'))
+  if (!accOk) issues.push(t('overview.accessibility'))
+
+  if (issues.length === 0) return null
+
+  return (
+    <motion.div
+      className="system-issues-banner"
+      initial={reducedMotion ? false : { opacity: 0, y: -6 }}
+      animate={reducedMotion ? undefined : { opacity: 1, y: 0 }}
+      transition={{ duration: 0.28, ease: easeOutExpo }}
+    >
+      <AlertTriangle size={13} style={{ flexShrink: 0, color: 'var(--status-error)' }} />
+      <span style={{ flex: 1 }}>
+        <span style={{ fontWeight: 600 }}>
+          {issues.length === 1 ? t('overview.issueDetected') : t('overview.issuesDetected')}:{' '}
+        </span>
+        {issues.join(', ')}
+      </span>
+    </motion.div>
+  )
+}
 
 /* ── Stat card ──────────────────────────────────────────────────────── */
 
 const StatCard = ({
-  icon: Icon, label, value, subtitle, color, index, reducedMotion,
+  icon: Icon, label, value, color, index, reducedMotion,
 }: {
   icon: React.FC<{ size?: number; strokeWidth?: number }>
   label: string
   value: string
-  subtitle?: string
   color: string
   index: number
   reducedMotion: boolean | null
@@ -83,36 +121,53 @@ const StatCard = ({
     <div className="stat-card-content">
       <div className="stat-card-value">{value}</div>
       <div className="stat-card-label">{label}</div>
-      {subtitle && <div className="stat-card-subtitle">{subtitle}</div>}
     </div>
   </motion.div>
 )
 
 /* ── Mini bar chart ─────────────────────────────────────────────────── */
 
+// Must stay in sync with .week-chart { height: 100px } in CSS
+// 100px total - ~15px value label - ~10px day label - ~6px gaps = ~69px bar area
+const BAR_AREA_PX = 68
+
 const WeekChart = ({ data, reducedMotion }: { data: number[]; reducedMotion: boolean | null }) => {
   const max = Math.max(...data, 1)
-  const days = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
+  const days = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
   const today = new Date().getDay()
-  // Reorder days labels to end on today
   const orderedDays = Array.from({ length: 7 }, (_, i) => days[((today - 6 + i) % 7 + 7) % 7])
 
   return (
     <div className="week-chart">
-      {data.map((count, i) => (
-        <div key={i} className="week-chart-col">
-          <div className="week-chart-bar-track">
-            <motion.div
-              className="week-chart-bar"
-              initial={reducedMotion ? false : { height: 0 }}
-              animate={{ height: `${Math.max((count / max) * 100, count > 0 ? 8 : 0)}%` }}
-              transition={{ duration: 0.5, ease: easeOutExpo, delay: 0.15 + i * 0.05 }}
-              style={{ background: count > 0 ? 'var(--accent)' : 'var(--bg-3)' }}
-            />
+      {data.map((count, i) => {
+        const barPx = count === 0 ? 0 : Math.max(Math.round((count / max) * BAR_AREA_PX), 6)
+        return (
+          <div key={i} className="week-chart-col">
+            <div className="week-chart-value-label">
+              {count > 0 ? count : ''}
+            </div>
+            <div className="week-chart-bar-track">
+              <motion.div
+                className="week-chart-bar"
+                initial={reducedMotion ? false : { height: 0 }}
+                animate={{ height: barPx }}
+                transition={{ duration: 0.5, ease: easeOutExpo, delay: 0.15 + i * 0.05 }}
+                style={{
+                  background: i === 6
+                    ? 'var(--accent)'
+                    : count > 0 ? 'color-mix(in oklch, var(--accent) 55%, transparent)' : 'transparent',
+                }}
+              />
+            </div>
+            <span
+              className="week-chart-label"
+              style={{ color: i === 6 ? 'var(--accent)' : 'var(--text-3)', fontWeight: i === 6 ? 700 : 600 }}
+            >
+              {orderedDays[i]}
+            </span>
           </div>
-          <span className="week-chart-label">{orderedDays[i]}</span>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }
@@ -131,17 +186,108 @@ const stageCopyKeys: Record<string, string> = {
   error: 'overview.error',
 }
 
+/* ── Mini history entry ─────────────────────────────────────────────── */
+
+const MiniHistoryEntry = ({
+  entry,
+  index,
+  reducedMotion,
+}: {
+  entry: HistoryEntry
+  index: number
+  reducedMotion: boolean | null
+}) => {
+  const { t } = useTranslation()
+  const [copied, setCopied] = useState(false)
+  const isError = entry.outcome === 'error'
+  const hasText = Boolean(entry.outputText)
+  const textPreview = entry.outputText
+    || (isError ? (entry.errorMessage ?? t('history.noTextInserted')) : t('history.noTextInserted'))
+  const modeLabel = entry.activationMode === 'push-to-talk' ? t('common.push') : t('common.toggle')
+
+  const handleCopy = useCallback(() => {
+    if (!entry.outputText) return
+    void navigator.clipboard.writeText(entry.outputText).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    })
+  }, [entry.outputText])
+
+  return (
+    <motion.div
+      className="hentry-card"
+      data-outcome={entry.outcome}
+      initial={reducedMotion ? false : { opacity: 0, y: -6 }}
+      animate={reducedMotion ? undefined : { opacity: 1, y: 0 }}
+      transition={{ duration: 0.25, ease: easeOutExpo, delay: 0.35 + index * 0.06 }}
+    >
+      <div className="hentry-row">
+        <div className="hentry-content" style={{ cursor: 'default' }}>
+          <div className="hentry-top">
+            <div className="hentry-app-row">
+              <span className="hentry-app">{entry.appName}</span>
+              {entry.audioDurationMs > 0 && (
+                <span className="hentry-duration-badge">
+                  <span className="hentry-duration-icon">
+                    <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+                      <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                      <line x1="12" x2="12" y1="19" y2="22"/>
+                    </svg>
+                  </span>
+                  {formatAudioDuration(entry.audioDurationMs)}
+                </span>
+              )}
+            </div>
+            <div className="hentry-time-row">
+              <span className="hentry-mode">{modeLabel}</span>
+              <span className="hentry-time">{computeRelativeTime(entry.createdAt)}</span>
+            </div>
+          </div>
+          <p className="hentry-preview" data-error={isError ? 'true' : undefined} data-muted={!hasText ? 'true' : undefined}>
+            {textPreview}
+          </p>
+        </div>
+        {hasText && (
+          <div className="hentry-actions">
+            <button
+              type="button"
+              className="hentry-action-btn"
+              aria-label={copied ? t('history.copied') : t('history.copyText')}
+              onClick={handleCopy}
+            >
+              <AnimatePresence mode="wait" initial={false}>
+                {copied ? (
+                  <motion.span key="check" initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }} transition={{ duration: 0.15 }} style={{ display: 'flex', color: 'var(--status-ok)' }}>
+                    <Check size={12} />
+                  </motion.span>
+                ) : (
+                  <motion.span key="copy" initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }} transition={{ duration: 0.15 }} style={{ display: 'flex' }}>
+                    <Copy size={12} />
+                  </motion.span>
+                )}
+              </AnimatePresence>
+            </button>
+          </div>
+        )}
+      </div>
+    </motion.div>
+  )
+}
+
 /* ── Main component ─────────────────────────────────────────────────── */
 
 export const OverviewPanel = ({
   state,
+  onNavigateToHistory,
 }: {
   state: DashboardViewModel
+  onNavigateToHistory: () => void
 }) => {
   const { t } = useTranslation()
   const reducedMotion = useReducedMotion()
   const stats = useMemo(() => computeStats(state.history), [state.history])
-  const latestEntry = state.history[0] ?? null
+  const recentEntries = state.history.slice(0, 3)
   const sessionStatus: DictationStatus = state.session?.status ?? 'idle'
   const stageLabel = t(stageCopyKeys[sessionStatus] ?? 'overview.unknown')
   const micOk = state.permissions.microphone === 'granted'
@@ -152,6 +298,9 @@ export const OverviewPanel = ({
 
   return (
     <div className="grid gap-3">
+      {/* System issues banner — only shown when something is wrong */}
+      <SystemIssuesBanner apiOk={apiOk} micOk={micOk} accOk={accOk} reducedMotion={reducedMotion} />
+
       {/* Row 1: Live status strip */}
       <motion.div
         className="surface-panel p-4"
@@ -164,17 +313,11 @@ export const OverviewPanel = ({
             <StatusPill status={sessionStatus} />
             <span className="text-sm font-semibold" style={{ color: 'var(--text-1)' }}>{stageLabel}</span>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1.5" title={t('overview.systemHealth')}>
-              <Shield size={10} style={{ color: 'var(--text-3)' }} />
-              <HealthDot ok={apiOk} label={t('overview.apiKey')} />
-              <HealthDot ok={micOk} label={t('overview.microphone')} />
-              <HealthDot ok={accOk} label={t('overview.accessibility')} />
-            </div>
+          {state.session?.targetApp && (
             <span className="text-xs" style={{ color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>
-              {state.session?.targetApp ?? '—'}
+              {state.session.targetApp}
             </span>
-          </div>
+          )}
         </div>
         {state.session?.partialText && (
           <motion.div
@@ -236,7 +379,7 @@ export const OverviewPanel = ({
               animate={reducedMotion ? undefined : { opacity: 1, y: 0 }}
               transition={{ duration: 0.35, ease: easeOutExpo, delay: 0.2 }}
             >
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center justify-between mb-4">
                 <span className="eyebrow">{t('overview.usageThisWeek')}</span>
                 <span className="text-xs" style={{ color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>
                   {t('overview.dictationsCount', { count: stats.weekActivity.reduce((a, b) => a + b, 0) })}
@@ -260,22 +403,36 @@ export const OverviewPanel = ({
                       <motion.div
                         key={app}
                         className="flex items-center justify-between"
-                        style={{ padding: '0.25rem 0' }}
+                        style={{ padding: '0.2rem 0' }}
                         initial={reducedMotion ? false : { opacity: 0, x: -8 }}
                         animate={reducedMotion ? undefined : { opacity: 1, x: 0 }}
                         transition={{ duration: 0.25, ease: easeOutExpo, delay: 0.35 + i * 0.05 }}
                       >
-                        <div className="flex items-center gap-1.5">
-                          <AppWindow size={11} style={{ color: 'var(--text-3)' }} />
-                          <span className="text-xs" style={{ color: 'var(--text-1)' }}>{app}</span>
+                        <div className="flex items-center gap-1.5" style={{ minWidth: 0, flex: 1 }}>
+                          <AppWindow size={11} style={{ color: 'var(--text-3)', flexShrink: 0 }} />
+                          <span
+                            className="text-xs"
+                            style={{
+                              color: 'var(--text-1)',
+                              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                            }}
+                          >
+                            {app}
+                          </span>
                         </div>
-                        <span className="text-xs" style={{ color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>{count}</span>
+                        <span className="text-xs" style={{ color: 'var(--text-3)', fontFamily: 'var(--font-mono)', flexShrink: 0, paddingLeft: '0.5rem' }}>{count}</span>
                       </motion.div>
                     ))}
                   </div>
                 </div>
               )}
-              <div className="flex items-center justify-between" style={{ paddingTop: stats.topApps.length > 0 ? '0.5rem' : 0, borderTop: stats.topApps.length > 0 ? '1px solid var(--border)' : 'none' }}>
+              <div
+                className="flex items-center justify-between"
+                style={{
+                  paddingTop: stats.topApps.length > 0 ? '0.5rem' : 0,
+                  borderTop: stats.topApps.length > 0 ? '1px solid var(--border)' : 'none',
+                }}
+              >
                 <div className="flex items-center gap-1.5">
                   <Zap size={11} style={{ color: 'var(--accent)' }} />
                   <span className="text-xs" style={{ color: 'var(--text-2)' }}>{t('overview.avgLatency')}</span>
@@ -287,41 +444,37 @@ export const OverviewPanel = ({
             </motion.div>
           </div>
 
-          {/* Row 4: Last output */}
+          {/* Row 4: Recent outputs (last 3) */}
           <motion.div
             className="surface-panel p-4"
             initial={reducedMotion ? false : { opacity: 0, y: 12 }}
             animate={reducedMotion ? undefined : { opacity: 1, y: 0 }}
             transition={{ duration: 0.35, ease: easeOutExpo, delay: 0.35 }}
           >
-            <div className="eyebrow mb-2">{t('overview.lastOutput')}</div>
-            {latestEntry ? (
-              <>
-                <div className="flex items-center gap-2 mb-1.5">
-                  <span className="text-sm font-medium" style={{ color: 'var(--text-1)' }}>{latestEntry.appName}</span>
-                  <span
-                    style={{
-                      display: 'inline-flex', alignItems: 'center', height: '1rem',
-                      padding: '0 0.35rem', borderRadius: '999px', fontSize: '0.58rem', fontWeight: 600,
-                      letterSpacing: '0.08em', textTransform: 'uppercase' as const,
-                      border: latestEntry.outcome === 'error' ? '1px solid rgba(210,90,80,0.22)' : '1px solid rgba(112,192,134,0.2)',
-                      background: latestEntry.outcome === 'error' ? 'rgba(210,90,80,0.06)' : 'rgba(112,192,134,0.06)',
-                      color: latestEntry.outcome === 'error' ? 'var(--status-error)' : 'var(--status-ok)',
-                    }}
-                  >
-                    {latestEntry.outcome === 'error' ? t('history.err') : t('history.ok')}
-                  </span>
-                  <span className="text-xs" style={{ color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>
-                    {latestEntry.modelId.split('/').at(-1)}
-                  </span>
-                </div>
-                <p className="text-sm wrap-safe line-clamp-3" style={{ color: 'var(--text-2)', lineHeight: 1.55 }}>
-                  {latestEntry.outputText || t('history.noTextInserted')}
-                </p>
-                <div className="mt-2 text-xs" style={{ color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>
-                  {formatDate(latestEntry.createdAt)}
-                </div>
-              </>
+            <div className="flex items-center justify-between mb-3">
+              <span className="eyebrow">{t('overview.recentOutputs')}</span>
+              {state.history.length > 3 && (
+                <button
+                  type="button"
+                  className="view-all-btn"
+                  onClick={onNavigateToHistory}
+                >
+                  {t('overview.viewAll')} <ArrowRight size={11} />
+                </button>
+              )}
+            </div>
+
+            {recentEntries.length > 0 ? (
+              <div className="mini-history-list">
+                {recentEntries.map((entry, i) => (
+                  <MiniHistoryEntry
+                    key={entry.id}
+                    entry={entry}
+                    index={i}
+                    reducedMotion={reducedMotion}
+                  />
+                ))}
+              </div>
             ) : (
               <p className="text-xs" style={{ color: 'var(--text-3)' }}>{t('overview.noHistory')}</p>
             )}
@@ -355,14 +508,6 @@ export const OverviewPanel = ({
           <p className="text-xs" style={{ color: 'var(--text-3)', lineHeight: 1.5, maxWidth: '28rem', margin: '0 auto' }}>
             {t('overview.welcomeDesc')}
           </p>
-          <div className="flex items-center justify-center gap-3 mt-3">
-            <div className="flex items-center gap-1.5" title={t('overview.systemHealth')}>
-              <Shield size={10} style={{ color: 'var(--text-3)' }} />
-              <HealthDot ok={apiOk} label={t('overview.apiKey')} />
-              <HealthDot ok={micOk} label={t('overview.microphone')} />
-              <HealthDot ok={accOk} label={t('overview.accessibility')} />
-            </div>
-          </div>
         </motion.div>
       )}
     </div>

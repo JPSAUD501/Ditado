@@ -276,6 +276,7 @@ export const DashboardWindow = ({ initialTab }: { initialTab: DashboardTab }) =>
               >
                 <OverviewPanel
                   state={{ ...state, settings, history: state.history }}
+                  onNavigateToHistory={() => setActiveTab('history')}
                 />
               </motion.div>
             )}

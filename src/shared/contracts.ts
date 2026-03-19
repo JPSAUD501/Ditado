@@ -74,12 +74,102 @@ export const dictationSessionSchema = z.object({
 
 export type DictationSession = z.infer<typeof dictationSessionSchema>
 
-export const historyEntrySchema = z.object({
+const nullableTimestampSchema = z.string().datetime().nullable().default(null)
+const nullableNumberSchema = z.number().nonnegative().nullable().default(null)
+const nullableIntSchema = z.number().int().nonnegative().nullable().default(null)
+
+export const historySessionTimingSchema = z.object({
+  sessionStartedAt: nullableTimestampSchema,
+  recordingStartedAt: nullableTimestampSchema,
+  recordingEndedAt: nullableTimestampSchema,
+  audioPreparationStartedAt: nullableTimestampSchema,
+  audioPreparationEndedAt: nullableTimestampSchema,
+  processingStartedAt: nullableTimestampSchema,
+  llmRequestStartedAt: nullableTimestampSchema,
+  llmResponseHeadersAt: nullableTimestampSchema,
+  firstTokenAt: nullableTimestampSchema,
+  llmCompletedAt: nullableTimestampSchema,
+  insertionStartedAt: nullableTimestampSchema,
+  insertionCompletedAt: nullableTimestampSchema,
+  sessionFinishedAt: nullableTimestampSchema,
+})
+
+export type HistorySessionTiming = z.infer<typeof historySessionTimingSchema>
+
+export const historySessionDurationsSchema = z.object({
+  recordingMs: nullableNumberSchema,
+  audioPreparationMs: nullableNumberSchema,
+  networkHandshakeMs: nullableNumberSchema,
+  modelUntilFirstTokenMs: nullableNumberSchema,
+  modelStreamingMs: nullableNumberSchema,
+  llmTotalMs: nullableNumberSchema,
+  insertionMs: nullableNumberSchema,
+  totalSessionMs: nullableNumberSchema,
+})
+
+export type HistorySessionDurations = z.infer<typeof historySessionDurationsSchema>
+
+export const historyAudioMetadataSchema = z.object({
+  filePath: z.string().nullable().default(null),
+  durationMs: z.number().int().nonnegative().default(0),
+  mimeType: z.string().nullable().default(null),
+  bytes: z.number().int().nonnegative().default(0),
+  speechDetected: z.boolean().default(false),
+  peakAmplitude: z.number().nonnegative().default(0),
+  rmsAmplitude: z.number().nonnegative().default(0),
+  languageHint: z.string().nullable().default(null),
+  stopReason: z.enum(['user-stop', 'max-duration', 'cancelled', 'unknown']).default('unknown'),
+  maxDurationReached: z.boolean().default(false),
+})
+
+export type HistoryAudioMetadata = z.infer<typeof historyAudioMetadataSchema>
+
+export const historyLlmMetadataSchema = z.object({
+  provider: z.string().default('openrouter'),
+  modelId: z.string(),
+  finishReason: z.string().nullable().default(null),
+  usedContext: z.boolean().default(false),
+})
+
+export type HistoryLlmMetadata = z.infer<typeof historyLlmMetadataSchema>
+
+export const historyInsertionMetadataSchema = z.object({
+  strategy: insertionStrategySchema,
+  requestedMode: insertionStreamingModeSchema,
+  effectiveMode: insertionStreamingModeSchema,
+  method: insertionMethodSchema.default('clipboard-all-at-once'),
+  fallbackUsed: z.boolean().default(false),
+  targetApp: z.string(),
+  writtenCharacterCount: nullableIntSchema,
+})
+
+export type HistoryInsertionMetadata = z.infer<typeof historyInsertionMetadataSchema>
+
+export const historyContextMetadataSchema = contextSnapshotSchema.nullable().default(null)
+
+export type HistoryContextMetadata = z.infer<typeof historyContextMetadataSchema>
+
+export const historyOutcomeMetadataSchema = z.object({
+  status: z.enum(['completed', 'error', 'notice', 'cancelled', 'permission-required']).default('completed'),
+  errorMessage: z.string().nullable().default(null),
+  noticeMessage: z.string().nullable().default(null),
+})
+
+export type HistoryOutcomeMetadata = z.infer<typeof historyOutcomeMetadataSchema>
+
+export const historyTextMetadataSchema = z.object({
+  finalText: z.string().default(''),
+  partialText: z.string().default(''),
+})
+
+export type HistoryTextMetadata = z.infer<typeof historyTextMetadataSchema>
+
+const historyEntryBaseSchema = z.object({
   id: z.string(),
   createdAt: z.string(),
   outcome: z.enum(['completed', 'error']).default('completed'),
   appName: z.string(),
-  windowTitle: z.string().nullable(),
+  windowTitle: z.string().nullable().default(null),
   activationMode: activationModeSchema,
   modelId: z.string(),
   outputText: z.string(),
@@ -102,6 +192,137 @@ export const historyEntrySchema = z.object({
   fallbackUsed: z.boolean().default(false),
 })
 
+const normalizedHistoryEntrySchema = historyEntryBaseSchema.extend({
+  timing: historySessionTimingSchema,
+  durations: historySessionDurationsSchema,
+  audio: historyAudioMetadataSchema,
+  llm: historyLlmMetadataSchema,
+  insertion: historyInsertionMetadataSchema,
+  context: historyContextMetadataSchema,
+  outcomeDetail: historyOutcomeMetadataSchema,
+  text: historyTextMetadataSchema,
+})
+
+const legacyHistoryEntrySchema = historyEntryBaseSchema
+
+const safeDiffMs = (start: string | null, end: string | null): number | null => {
+  if (!start || !end) {
+    return null
+  }
+  const diff = new Date(end).getTime() - new Date(start).getTime()
+  if (!Number.isFinite(diff)) {
+    return null
+  }
+  return Math.max(0, Math.round(diff))
+}
+
+const deriveNormalizedHistoryEntry = (entry: z.infer<typeof historyEntryBaseSchema>) => {
+  const timing: HistorySessionTiming = {
+    sessionStartedAt: null,
+    recordingStartedAt: null,
+    recordingEndedAt: null,
+    audioPreparationStartedAt: null,
+    audioPreparationEndedAt: null,
+    processingStartedAt: null,
+    llmRequestStartedAt: null,
+    llmResponseHeadersAt: null,
+    firstTokenAt: null,
+    llmCompletedAt: null,
+    insertionStartedAt: null,
+    insertionCompletedAt: null,
+    sessionFinishedAt: entry.createdAt,
+  }
+
+  const durations: HistorySessionDurations = {
+    recordingMs: entry.audioDurationMs > 0 ? entry.audioDurationMs : null,
+    audioPreparationMs: entry.audioProcessingMs > 0 ? entry.audioProcessingMs : null,
+    networkHandshakeMs: entry.audioSendMs > 0 ? entry.audioSendMs : null,
+    modelUntilFirstTokenMs: entry.timeToFirstTokenMs > 0 ? entry.timeToFirstTokenMs : null,
+    modelStreamingMs: null,
+    llmTotalMs: entry.latencyMs > 0 ? entry.latencyMs : null,
+    insertionMs: null,
+    totalSessionMs: null,
+  }
+
+  return normalizedHistoryEntrySchema.parse({
+    ...entry,
+    timing,
+    durations,
+    audio: {
+      filePath: entry.audioFilePath,
+      durationMs: entry.audioDurationMs,
+      mimeType: entry.audioMimeType,
+      bytes: entry.audioBytes,
+      speechDetected: entry.audioDurationMs > 0,
+      peakAmplitude: 0,
+      rmsAmplitude: 0,
+      languageHint: null,
+      stopReason: 'unknown',
+      maxDurationReached: false,
+    },
+    llm: {
+      provider: 'openrouter',
+      modelId: entry.modelId,
+      finishReason: null,
+      usedContext: entry.usedContext,
+    },
+    insertion: {
+      strategy: entry.insertionStrategy,
+      requestedMode: entry.requestedMode,
+      effectiveMode: entry.effectiveMode,
+      method: entry.insertionMethod,
+      fallbackUsed: entry.fallbackUsed,
+      targetApp: entry.appName,
+      writtenCharacterCount: entry.outputText.length || null,
+    },
+    context: entry.submittedContext,
+    outcomeDetail: {
+      status: entry.outcome,
+      errorMessage: entry.errorMessage,
+      noticeMessage: null,
+    },
+    text: {
+      finalText: entry.outputText,
+      partialText: '',
+    },
+  })
+}
+
+export const historyEntrySchema = z.union([normalizedHistoryEntrySchema, legacyHistoryEntrySchema]).transform((entry) => {
+  if ('timing' in entry && 'durations' in entry && 'audio' in entry) {
+    return normalizedHistoryEntrySchema.parse({
+      ...entry,
+      appName: entry.context?.appName ?? entry.appName,
+      windowTitle: entry.context?.windowTitle ?? entry.windowTitle,
+      modelId: entry.llm.modelId,
+      outputText: entry.text.finalText || entry.text.partialText || entry.outputText,
+      errorMessage: entry.outcomeDetail.errorMessage,
+      audioFilePath: entry.audio.filePath,
+      audioDurationMs: entry.audio.durationMs,
+      audioMimeType: entry.audio.mimeType,
+      audioBytes: entry.audio.bytes,
+      submittedContext: entry.context,
+      usedContext: entry.llm.usedContext,
+      latencyMs: entry.durations.llmTotalMs ?? 0,
+      audioProcessingMs: entry.durations.audioPreparationMs ?? 0,
+      audioSendMs: entry.durations.networkHandshakeMs ?? 0,
+      timeToFirstTokenMs: entry.durations.modelUntilFirstTokenMs ?? 0,
+      timeToCompleteMs:
+        entry.durations.llmTotalMs !== null && entry.durations.insertionMs !== null
+          ? entry.durations.llmTotalMs + entry.durations.insertionMs
+          : entry.timeToCompleteMs,
+      insertionStrategy: entry.insertion.strategy,
+      requestedMode: entry.insertion.requestedMode,
+      effectiveMode: entry.insertion.effectiveMode,
+      insertionMethod: entry.insertion.method,
+      fallbackUsed: entry.insertion.fallbackUsed,
+      outcome: entry.outcome,
+    })
+  }
+
+  return deriveNormalizedHistoryEntry(entry)
+})
+
 export type HistoryEntry = z.infer<typeof historyEntrySchema>
 
 export const telemetryRecordSchema = z.object({
@@ -115,7 +336,7 @@ export const telemetryRecordSchema = z.object({
 export type TelemetryRecord = z.infer<typeof telemetryRecordSchema>
 
 export const settingsSchema = z.object({
-  launchOnLogin: z.boolean().default(false),
+  launchOnLogin: z.boolean().default(true),
   pushToTalkHotkey: z.string().default('Ctrl+Alt'),
   toggleHotkey: z.string().default('Shift+Alt'),
   preferredMicrophoneId: z.string().nullable().default(null),
@@ -171,9 +392,13 @@ export const llmResponseSchema = z.object({
   latencyMs: z.number().nonnegative(),
   audioSendMs: z.number().nonnegative().default(0),
   finishReason: z.string().nullable(),
+  provider: z.string().default('openrouter'),
+  requestStartedAt: z.string().nullable().default(null),
+  responseHeadersAt: z.string().nullable().default(null),
+  completedAt: z.string().nullable().default(null),
 })
 
-export type LlmResponse = z.infer<typeof llmResponseSchema>
+export type LlmResponse = z.input<typeof llmResponseSchema>
 
 export const deviceInfoSchema = z.object({
   deviceId: z.string(),
@@ -267,10 +492,41 @@ export const dictationAudioPayloadSchema = z.object({
   speechDetected: z.boolean(),
   peakAmplitude: z.number().nonnegative(),
   rmsAmplitude: z.number().nonnegative(),
+  recordingStartedAt: z.string().nullable().default(null),
+  recordingEndedAt: z.string().nullable().default(null),
+  audioPreparationStartedAt: z.string().nullable().default(null),
+  audioPreparationEndedAt: z.string().nullable().default(null),
+  stopReason: z.enum(['user-stop', 'max-duration', 'cancelled', 'unknown']).default('unknown'),
+  maxDurationReached: z.boolean().default(false),
 })
 
-export type DictationAudioPayload = z.infer<typeof dictationAudioPayloadSchema>
+export type DictationAudioPayload = z.input<typeof dictationAudioPayloadSchema>
 
 export const apiKeyInputSchema = z.string().trim().max(4096)
 export const historyAudioRequestSchema = z.string().min(1)
 export const sessionIdInputSchema = z.string().min(1)
+
+export const deriveHistoryDurations = (timing: HistorySessionTiming): HistorySessionDurations => {
+  const recordingMs = safeDiffMs(timing.recordingStartedAt, timing.recordingEndedAt)
+  const audioPreparationMs = safeDiffMs(timing.audioPreparationStartedAt, timing.audioPreparationEndedAt)
+  const networkHandshakeMs = safeDiffMs(timing.llmRequestStartedAt, timing.llmResponseHeadersAt)
+  const modelUntilFirstTokenMs = safeDiffMs(timing.llmResponseHeadersAt, timing.firstTokenAt)
+  const llmTotalMs = safeDiffMs(timing.llmRequestStartedAt, timing.llmCompletedAt)
+  const insertionMs = safeDiffMs(timing.insertionStartedAt, timing.insertionCompletedAt)
+  const totalSessionMs = safeDiffMs(timing.sessionStartedAt, timing.sessionFinishedAt)
+  const modelStreamingMs =
+    llmTotalMs !== null && networkHandshakeMs !== null && modelUntilFirstTokenMs !== null
+      ? Math.max(0, llmTotalMs - networkHandshakeMs - modelUntilFirstTokenMs)
+      : safeDiffMs(timing.firstTokenAt, timing.llmCompletedAt)
+
+  return {
+    recordingMs,
+    audioPreparationMs,
+    networkHandshakeMs,
+    modelUntilFirstTokenMs,
+    modelStreamingMs,
+    llmTotalMs,
+    insertionMs,
+    totalSessionMs,
+  }
+}

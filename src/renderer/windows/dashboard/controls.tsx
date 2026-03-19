@@ -5,9 +5,24 @@ import { Check, ChevronDown, Copy, Pause, Play, Trash2 } from 'lucide-react'
 
 import type { HistoryEntry } from '@shared/contracts'
 import { formatHotkeyForDisplay, hotkeyFromKeyboardEvent, isSupportedHotkey, normalizeHotkey } from '@shared/hotkeys'
-import { formatDate, summarizeContext } from './formatters'
+import { formatAudioDuration, formatDate } from './formatters'
 
 const easeOutExpo = [0.16, 1, 0.3, 1] as const
+const _appStartTime = Date.now()
+
+const computeRelativeTime = (createdAt: string): string => {
+  const now = _appStartTime
+  const then = new Date(createdAt).getTime()
+  const diff = now - then
+  const mins = Math.floor(diff / 60000)
+  const hours = Math.floor(diff / 3600000)
+  const days = Math.floor(diff / 86400000)
+  if (mins < 1) return 'Just now'
+  if (mins < 60) return `${mins}m ago`
+  if (hours < 24) return `${hours}h ago`
+  if (days < 7) return `${days}d ago`
+  return formatDate(createdAt)
+}
 
 /* ── Hotkey capture field ──────────────────────────────────────────── */
 
@@ -157,9 +172,99 @@ export const MicrophoneSelect = ({
 /* ── Custom audio player ──────────────────────────────────────────── */
 
 const formatTime = (seconds: number): string => {
-  const m = Math.floor(seconds / 60)
-  const s = Math.floor(seconds % 60)
-  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+  const mins = Math.floor(seconds / 60)
+  const secs = Math.floor(seconds % 60)
+  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+}
+
+const MetricChip = ({
+  icon: Icon,
+  label,
+  value,
+  warn = false,
+}: {
+  icon: React.FC<{ size?: number; strokeWidth?: number }>
+  label: string
+  value: string
+  warn?: boolean
+}) => (
+  <div
+    className="metric-chip"
+    data-warn={warn ? 'true' : undefined}
+  >
+    <Icon size={10} strokeWidth={2.5} />
+    <span className="metric-chip-label">{label}</span>
+    <span className="metric-chip-value">{value}</span>
+  </div>
+)
+
+type TimelineStage = {
+  label: string
+  ms: number
+  color: string
+}
+
+const buildTimelineStages = (entry: HistoryEntry): TimelineStage[] => {
+  return [
+    { label: 'Recording', ms: entry.durations.recordingMs ?? 0, color: 'var(--status-listen)' },
+    {
+      label: 'Processing',
+      ms: [
+        entry.durations.audioPreparationMs,
+        entry.durations.networkHandshakeMs,
+        entry.durations.modelUntilFirstTokenMs,
+        entry.durations.modelStreamingMs,
+      ].reduce((sum: number, value) => sum + (value ?? 0), 0),
+      color: 'var(--status-process)',
+    },
+    { label: 'Writing', ms: entry.durations.insertionMs ?? 0, color: 'var(--status-write)' },
+  ].filter((stage): stage is TimelineStage => stage.ms > 0)
+}
+
+const ProcessingTimeline = ({
+  stages,
+}: {
+  stages: TimelineStage[]
+}) => {
+  const [tooltip, setTooltip] = useState<{ label: string; x: number; y: number } | null>(null)
+
+  const total = stages.reduce((sum, s) => sum + s.ms, 0)
+
+  if (total <= 0) {
+    return null
+  }
+
+  return (
+    <div className="proc-timeline">
+      <div className="proc-timeline-track">
+        {stages.map((stage, i) => {
+          if (stage.ms <= 0) return null
+          const pct = (stage.ms / total) * 100
+          return (
+            <div
+              key={stage.label}
+              className="proc-timeline-segment"
+              style={{
+                width: `${pct}%`,
+                background: stage.color,
+                borderRadius: i === 0 ? '3px 0 0 3px' : i === stages.length - 1 ? '0 3px 3px 0' : '0',
+              }}
+              onMouseMove={(e) => setTooltip({ label: `${stage.label}: ${stage.ms}ms`, x: e.clientX, y: e.clientY })}
+              onMouseLeave={() => setTooltip(null)}
+            />
+          )
+        })}
+      </div>
+      {tooltip && (
+        <div
+          className="proc-timeline-tooltip"
+          style={{ left: tooltip.x, top: tooltip.y - 38 }}
+        >
+          {tooltip.label}
+        </div>
+      )}
+    </div>
+  )
 }
 
 export const HistoryAudioPlayer = ({ entryId, hasAudio }: { entryId: string; hasAudio: boolean }) => {
@@ -176,7 +281,6 @@ export const HistoryAudioPlayer = ({ entryId, hasAudio }: { entryId: string; has
     let mounted = true
     let objectUrl: string | null = null
     if (!hasAudio) return () => { mounted = false }
-
     void window.ditado.getHistoryAudio(entryId)
       .then((value) => {
         if (!mounted || !value) { if (mounted) setLoadFailed(true); return }
@@ -187,7 +291,6 @@ export const HistoryAudioPlayer = ({ entryId, hasAudio }: { entryId: string; has
         setLoadFailed(false)
       })
       .catch(() => { if (mounted) setLoadFailed(true) })
-
     return () => { mounted = false; if (objectUrl) URL.revokeObjectURL(objectUrl) }
   }, [entryId, hasAudio])
 
@@ -213,11 +316,19 @@ export const HistoryAudioPlayer = ({ entryId, hasAudio }: { entryId: string; has
   }, [])
 
   if (!hasAudio) return null
-  if (loadFailed) return <div className="mt-2 text-xs" style={{ color: 'var(--status-error)' }}>{t('history.audioUnavailable')}</div>
-  if (!src) return <div className="mt-2 text-xs" style={{ color: 'var(--text-3)' }}>{t('history.loadingAudio')}</div>
+  if (loadFailed) return (
+    <div className="audio-player-error">
+      <span>{t('history.audioUnavailable')}</span>
+    </div>
+  )
+  if (!src) return (
+    <div className="audio-player-loading">
+      <span>{t('history.loadingAudio')}</span>
+    </div>
+  )
 
   return (
-    <div className="mt-2 flex items-center gap-2" style={{ maxWidth: '20rem' }}>
+    <div className="audio-player">
       <audio
         ref={audioRef}
         src={src}
@@ -230,26 +341,23 @@ export const HistoryAudioPlayer = ({ entryId, hasAudio }: { entryId: string; has
       />
       <button
         type="button"
-        className="button-ghost"
-        style={{ width: 26, height: 26, padding: 0, borderRadius: '50%', flexShrink: 0 }}
+        className="audio-player-btn"
         onClick={togglePlayback}
         aria-label={isPlaying ? 'Pause' : 'Play'}
       >
-        {isPlaying ? <Pause size={12} /> : <Play size={12} />}
+        {isPlaying ? <Pause size={14} /> : <Play size={14} />}
       </button>
       <div
-        style={{ flex: 1, height: 4, borderRadius: 2, background: 'var(--bg-3)', cursor: 'pointer', position: 'relative' }}
+        className="audio-player-progress"
         onClick={handleSeek}
       >
         <div
-          style={{
-            height: '100%', borderRadius: 2, background: 'var(--accent)',
-            width: `${progress}%`, transition: 'width 100ms linear',
-          }}
+          className="audio-player-progress-fill"
+          style={{ width: `${progress}%` }}
         />
       </div>
-      <span className="text-xs" style={{ color: 'var(--text-3)', fontFamily: 'var(--font-mono)', fontSize: '0.6rem', flexShrink: 0 }}>
-        {formatTime(currentTime)}/{formatTime(duration)}
+      <span className="audio-player-time">
+        {formatTime(currentTime)} / {formatTime(duration)}
       </span>
     </div>
   )
@@ -301,14 +409,26 @@ export const ConfirmModal = ({
   )
 }
 
-/* ── History row (expandable) ─────────────────────────────────────── */
+/* ── History row (card) ───────────────────────────────────────────── */
 
-export const HistoryRow = ({ entry, index }: { entry: HistoryEntry; index: number }) => {
+export const HistoryRow = ({
+  entry,
+}: {
+  entry: HistoryEntry
+}) => {
   const { t } = useTranslation()
   const [expanded, setExpanded] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [copied, setCopied] = useState(false)
-  const outputPreview = entry.outputText || (entry.outcome === 'error' ? t('history.noTextInserted') : '')
+  const isError = entry.outcome === 'error'
+  const hasText = Boolean(entry.outputText)
+  const textPreview = entry.outputText
+    || (isError ? (entry.errorMessage ?? t('history.noTextInserted')) : t('history.noTextInserted'))
+  const modeLabel = entry.activationMode === 'push-to-talk' ? t('common.push') : t('common.toggle')
+  const hasAudio = Boolean(entry.audioFilePath)
+  const hasContext = Boolean(entry.submittedContext?.selectedText)
+  const timelineStages = buildTimelineStages(entry)
+  const hasMetrics = timelineStages.length > 0
 
   const handleCopy = useCallback(() => {
     if (!entry.outputText) return
@@ -319,120 +439,84 @@ export const HistoryRow = ({ entry, index }: { entry: HistoryEntry; index: numbe
   }, [entry.outputText])
 
   return (
-    <div className="surface-panel" style={{ overflow: 'hidden' }}>
-      {/* Header row: expand button + delete button as siblings */}
-      <div style={{ display: 'flex', alignItems: 'stretch' }}>
+    <div className="hentry-card" data-outcome={entry.outcome}>
+      {/* Main row - always visible */}
+      <div className="hentry-row">
+        {/* Content */}
         <button
           type="button"
-          className="text-left"
-          style={{
-            flex: 1, minWidth: 0,
-            padding: '0.625rem 0.75rem',
-            background: 'transparent',
-            border: 'none',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.5rem',
-          }}
+          className="hentry-content"
           onClick={() => setExpanded(!expanded)}
           aria-expanded={expanded}
         >
-          <span className="text-xs" style={{ color: 'var(--text-3)', fontFamily: 'var(--font-mono)', width: '1.5rem', flexShrink: 0 }}>
-            {String(index + 1).padStart(2, '0')}
-          </span>
-          <span className="text-sm font-medium" style={{ color: 'var(--text-1)', flexShrink: 0 }}>{entry.appName}</span>
-          <span
-            style={{
-              display: 'inline-flex', alignItems: 'center', height: '1rem',
-              padding: '0 0.35rem', borderRadius: '999px', fontSize: '0.58rem', fontWeight: 600,
-              letterSpacing: '0.08em', textTransform: 'uppercase' as const, flexShrink: 0,
-              border: entry.outcome === 'error' ? '1px solid rgba(210,90,80,0.22)' : '1px solid rgba(112,192,134,0.2)',
-              background: entry.outcome === 'error' ? 'rgba(210,90,80,0.06)' : 'rgba(112,192,134,0.06)',
-              color: entry.outcome === 'error' ? 'var(--status-error)' : 'var(--status-ok)',
-            }}
-          >
-            {entry.outcome === 'error' ? t('history.err') : t('history.ok')}
-          </span>
-          <span
-            className="text-xs"
-            style={{
-              color: 'var(--text-2)', flex: 1, minWidth: 0,
-              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            }}
-          >
-            {outputPreview}
-          </span>
-          <span className="text-xs" style={{ color: 'var(--text-3)', fontFamily: 'var(--font-mono)', fontSize: '0.6rem', flexShrink: 0 }}>
-            {formatDate(entry.createdAt)}
-          </span>
-          <motion.span
-            animate={{ rotate: expanded ? 180 : 0 }}
-            transition={{ duration: 0.2, ease: easeOutExpo }}
-            style={{ flexShrink: 0, color: 'var(--text-3)' }}
-          >
-            <ChevronDown size={14} />
-          </motion.span>
+          <div className="hentry-top">
+            <div className="hentry-app-row">
+              <span className="hentry-app">{entry.appName}</span>
+              {entry.audioDurationMs > 0 && (
+                <span className="hentry-duration-badge">
+                  <span className="hentry-duration-icon">
+                    <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+                      <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                      <line x1="12" x2="12" y1="19" y2="22"/>
+                    </svg>
+                  </span>
+                  {formatAudioDuration(entry.audioDurationMs)}
+                </span>
+              )}
+            </div>
+            <div className="hentry-time-row">
+              <span className="hentry-mode">{modeLabel}</span>
+              <span className="hentry-time">{computeRelativeTime(entry.createdAt)}</span>
+              <motion.div
+                className="hentry-chevron"
+                animate={{ rotate: expanded ? 180 : 0 }}
+                transition={{ duration: 0.2, ease: easeOutExpo }}
+              >
+                <ChevronDown size={13} />
+              </motion.div>
+            </div>
+          </div>
+          <p className="hentry-preview" data-error={isError ? 'true' : undefined} data-muted={!hasText ? 'true' : undefined}>
+            {textPreview}
+          </p>
         </button>
-        {entry.outputText && (
+
+        {/* Actions — always present, only opacity changes */}
+        <div className="hentry-actions">
+          {hasText && (
+            <button
+              type="button"
+              className="hentry-action-btn"
+              aria-label={copied ? t('history.copied') : t('history.copyText')}
+              onClick={handleCopy}
+            >
+              <AnimatePresence mode="wait" initial={false}>
+                {copied ? (
+                  <motion.span key="check" initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }} transition={{ duration: 0.15 }} style={{ display: 'flex', color: 'var(--status-ok)' }}>
+                    <Check size={12} />
+                  </motion.span>
+                ) : (
+                  <motion.span key="copy" initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }} transition={{ duration: 0.15 }} style={{ display: 'flex' }}>
+                    <Copy size={12} />
+                  </motion.span>
+                )}
+              </AnimatePresence>
+            </button>
+          )}
           <button
             type="button"
-            className="history-row-copy"
-            aria-label={t('history.copyText')}
-            title={copied ? t('history.copied') : t('history.copyText')}
-            onClick={handleCopy}
+            className="hentry-action-btn hentry-action-btn--danger"
+            aria-label={t('history.deleteEntry')}
+            onClick={() => setConfirmDelete(true)}
           >
-            <AnimatePresence mode="wait" initial={false}>
-              {copied ? (
-                <motion.span
-                  key="check"
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  exit={{ scale: 0 }}
-                  transition={{ duration: 0.15, ease: easeOutExpo }}
-                  style={{ display: 'flex', color: 'var(--status-ok)' }}
-                >
-                  <Check size={13} />
-                </motion.span>
-              ) : (
-                <motion.span
-                  key="copy"
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  exit={{ scale: 0 }}
-                  transition={{ duration: 0.15, ease: easeOutExpo }}
-                  style={{ display: 'flex' }}
-                >
-                  <Copy size={13} />
-                </motion.span>
-              )}
-            </AnimatePresence>
+            <Trash2 size={12} />
           </button>
-        )}
-        <button
-          type="button"
-          className="history-row-delete"
-          aria-label={t('history.deleteEntry')}
-          title={t('history.deleteEntry')}
-          onClick={() => setConfirmDelete(true)}
-        >
-          <Trash2 size={13} />
-        </button>
+        </div>
+
       </div>
 
-      <AnimatePresence>
-        {confirmDelete && (
-          <ConfirmModal
-            title={t('history.confirmDeleteEntry')}
-            desc={t('history.confirmDeleteEntryDesc')}
-            confirmLabel={t('history.deleteEntry')}
-            onConfirm={() => { void window.ditado.deleteHistoryEntry(entry.id); setConfirmDelete(false) }}
-            onCancel={() => setConfirmDelete(false)}
-          />
-        )}
-      </AnimatePresence>
-
-      {/* Expandable details */}
+      {/* Expanded details */}
       <AnimatePresence initial={false}>
         {expanded && (
           <motion.div
@@ -443,79 +527,119 @@ export const HistoryRow = ({ entry, index }: { entry: HistoryEntry; index: numbe
             transition={{ duration: 0.25, ease: easeOutExpo }}
             style={{ overflow: 'hidden' }}
           >
-            <div style={{ padding: '0 0.75rem 0.75rem', borderTop: '1px solid var(--border)' }}>
-              <div style={{ paddingTop: '0.625rem' }}>
-                {/* Error message */}
-                {entry.errorMessage && (
-                  <p className="text-xs mb-1.5" style={{ color: 'var(--status-error)', lineHeight: 1.45 }}>{entry.errorMessage}</p>
+            <div className="hentry-expanded">
+              {/* Error message */}
+              {entry.errorMessage && (
+                <div className="hentry-error">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="12" y1="8" x2="12" y2="12"/>
+                    <line x1="12" y1="16" x2="12.01" y2="16"/>
+                  </svg>
+                  <span>{entry.errorMessage}</span>
+                </div>
+              )}
+
+              {/* Context */}
+              {hasContext && (
+                <div className="hentry-context">
+                  <div className="hentry-context-header">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                    </svg>
+                    <span>{t('history.selectionLabel')}</span>
+                  </div>
+                  <p className="hentry-context-text">{entry.submittedContext!.selectedText}</p>
+                </div>
+              )}
+
+              {/* Processing timeline */}
+              {hasMetrics && (
+                <div className="hentry-section">
+                  <div className="hentry-section-label">Processing</div>
+                  <ProcessingTimeline stages={timelineStages} />
+                </div>
+              )}
+
+              {/* Metrics grid */}
+              <div className="hentry-metrics">
+                <MetricChip
+                  icon={() => (
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <circle cx="12" cy="12" r="3"/>
+                      <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+                    </svg>
+                  )}
+                  label={t('history.meta.model')}
+                  value={entry.modelId.split('/').at(-1) ?? entry.modelId}
+                />
+                <MetricChip
+                  icon={() => (
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                    </svg>
+                  )}
+                  label={t('history.meta.latency')}
+                  value={entry.durations.totalSessionMs ? `${Math.round(entry.durations.totalSessionMs)}ms` : entry.latencyMs > 0 ? `${Math.round(entry.latencyMs)}ms` : '—'}
+                />
+                <MetricChip
+                  icon={() => (
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+                    </svg>
+                  )}
+                  label={t('history.meta.mode')}
+                  value={entry.insertion.effectiveMode === 'letter-by-letter' ? t('history.meta.letterByLetter') : t('history.meta.allAtOnce')}
+                />
+                <MetricChip
+                  icon={() => (
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <rect x="2" y="4" width="20" height="16" rx="2"/>
+                      <path d="M7 15h0M2 9.5h20"/>
+                    </svg>
+                  )}
+                  label={t('history.meta.method')}
+                  value={entry.insertion.method === 'enigo-letter' ? t('history.meta.keyboard') : t('history.meta.clipboard')}
+                />
+                {entry.insertion.fallbackUsed && (
+                  <MetricChip
+                    icon={() => (
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                        <line x1="12" y1="9" x2="12" y2="13"/>
+                        <line x1="12" y1="17" x2="12.01" y2="17"/>
+                      </svg>
+                    )}
+                    label={t('history.meta.fallback')}
+                    value={t('history.meta.yes')}
+                    warn
+                  />
                 )}
-
-                {/* Full output text */}
-                <p className="text-sm wrap-safe" style={{ color: 'var(--text-2)', lineHeight: 1.5 }}>
-                  {outputPreview}
-                </p>
-
-                {/* Meta info — labeled chips */}
-                <div className="mt-2.5 flex flex-wrap gap-1.5">
-                  {(
-                    [
-                      { label: t('history.meta.model'),  value: entry.modelId.split('/').at(-1) ?? entry.modelId },
-                      entry.audioProcessingMs > 0
-                        ? { label: t('history.meta.audioProcessing'), value: `${entry.audioProcessingMs}ms` }
-                        : null,
-                      entry.audioSendMs > 0
-                        ? { label: t('history.meta.audioSend'), value: `${entry.audioSendMs}ms` }
-                        : null,
-                      entry.timeToFirstTokenMs > 0
-                        ? { label: t('history.meta.ttft'), value: `${entry.timeToFirstTokenMs}ms` }
-                        : null,
-                      entry.timeToCompleteMs > 0
-                        ? { label: t('history.meta.totalTime'), value: `${(entry.timeToCompleteMs / 1000).toFixed(1)}s` }
-                        : null,
-                      entry.latencyMs > 0
-                        ? { label: t('history.meta.latency'), value: `${Math.round(entry.latencyMs)}ms` }
-                        : null,
-                      { label: t('history.meta.mode'),   value: entry.effectiveMode === 'letter-by-letter' ? t('history.meta.letterByLetter') : t('history.meta.allAtOnce') },
-                      { label: t('history.meta.method'), value: entry.insertionMethod === 'enigo-letter' ? t('history.meta.keyboard') : t('history.meta.clipboard') },
-                      entry.fallbackUsed
-                        ? { label: t('history.meta.fallback'), value: t('history.meta.yes'), warn: true }
-                        : null,
-                    ] as Array<{ label: string; value: string; warn?: boolean } | null>
-                  ).filter(Boolean).map((chip) => chip && (
-                    <span
-                      key={chip.label}
-                      style={{
-                        display: 'inline-flex', flexDirection: 'column', gap: '0.1rem',
-                        padding: '0.2rem 0.45rem', borderRadius: '0.3rem',
-                        background: chip.warn ? 'rgba(210,175,110,0.08)' : 'var(--bg-2)',
-                        border: `1px solid ${chip.warn ? 'rgba(210,175,110,0.22)' : 'var(--border)'}`,
-                      }}
-                    >
-                      <span style={{ fontSize: '0.55rem', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: chip.warn ? 'var(--status-process)' : 'var(--text-3)' }}>
-                        {chip.label}
-                      </span>
-                      <span style={{ fontSize: '0.65rem', fontFamily: 'var(--font-mono)', color: chip.warn ? 'var(--status-process)' : 'var(--text-1)' }}>
-                        {chip.value}
-                      </span>
-                    </span>
-                  ))}
-                </div>
-
-                {/* Audio player */}
-                <HistoryAudioPlayer entryId={entry.id} hasAudio={Boolean(entry.audioFilePath)} />
-
-                {/* Context */}
-                <div className="mt-2 text-xs" style={{ color: 'var(--text-3)' }}>
-                  <span style={{ textTransform: 'uppercase', letterSpacing: '0.12em', fontSize: '0.6rem', fontWeight: 600 }}>
-                    {t('history.context')}
-                  </span>
-                  <p className="mt-1 wrap-safe" style={{ color: 'var(--text-2)', lineHeight: 1.45 }}>
-                    {summarizeContext(entry)}
-                  </p>
-                </div>
               </div>
+
+              {/* Audio player */}
+              {hasAudio && (
+                <div className="hentry-section">
+                  <div className="hentry-section-label">Recording</div>
+                  <HistoryAudioPlayer entryId={entry.id} hasAudio={hasAudio} />
+                </div>
+              )}
+
             </div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Confirm delete */}
+      <AnimatePresence>
+        {confirmDelete && (
+          <ConfirmModal
+            title={t('history.confirmDeleteEntry')}
+            desc={t('history.confirmDeleteEntryDesc')}
+            confirmLabel={t('history.deleteEntry')}
+            onConfirm={() => { void window.ditado.deleteHistoryEntry(entry.id); setConfirmDelete(false) }}
+            onCancel={() => setConfirmDelete(false)}
+          />
         )}
       </AnimatePresence>
     </div>
