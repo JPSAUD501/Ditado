@@ -82,6 +82,8 @@ export const ensureMockDesktopApi = (): void => {
     cancelDictation: async () => undefined,
     notifyRecorderStarted: async () => undefined,
     notifyRecorderFailed: async () => undefined,
+    notifyRecorderReady: async () => undefined,
+    notifyRecorderWarmupFinished: async () => undefined,
     updateSettings,
     setApiKey: async () => {
       dashboardState.settings.apiKeyPresent = true

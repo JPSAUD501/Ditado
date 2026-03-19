@@ -183,6 +183,10 @@ export const deviceInfoSchema = z.object({
 
 export type DeviceInfo = z.infer<typeof deviceInfoSchema>
 
+export const recorderWarmupStatusSchema = z.enum(['warmed', 'skipped', 'failed'])
+
+export type RecorderWarmupStatus = z.infer<typeof recorderWarmupStatusSchema>
+
 export const historyAudioAssetSchema = z.object({
   mimeType: z.string(),
   base64: z.string(),

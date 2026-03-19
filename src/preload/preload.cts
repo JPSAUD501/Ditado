@@ -8,6 +8,7 @@ import type {
   HistoryAudioAsset,
   OverlayViewModel,
   PermissionState,
+  RecorderWarmupStatus,
   Settings,
   TelemetryRecord,
 } from '../shared/contracts.js'
@@ -51,6 +52,9 @@ contextBridge.exposeInMainWorld('ditado', {
   notifyRecorderStarted: (sessionId: string) => ipcRenderer.invoke(ipcChannels.dictation.recorderStarted, sessionId),
   notifyRecorderFailed: (sessionId: string, reason: string) =>
     ipcRenderer.invoke(ipcChannels.dictation.recorderFailed, sessionId, reason),
+  notifyRecorderReady: () => ipcRenderer.invoke(ipcChannels.startup.recorderReady),
+  notifyRecorderWarmupFinished: (status: RecorderWarmupStatus) =>
+    ipcRenderer.invoke(ipcChannels.startup.recorderWarmupFinished, status),
   updateSettings: (patch: Partial<Settings>) => ipcRenderer.invoke(ipcChannels.settings.update, patch),
   setApiKey: (apiKey: string) => ipcRenderer.invoke(ipcChannels.settings.setApiKey, apiKey),
 setHotkeyCaptureActive: (active: boolean) => ipcRenderer.invoke(ipcChannels.hotkeys.setCaptureMode, active),

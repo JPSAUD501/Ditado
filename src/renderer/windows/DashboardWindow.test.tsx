@@ -80,6 +80,8 @@ const installDesktopApi = (
     cancelDictation: vi.fn(async () => undefined),
     notifyRecorderStarted: vi.fn(async () => undefined),
     notifyRecorderFailed: vi.fn(async () => undefined),
+    notifyRecorderReady: vi.fn(async () => undefined),
+    notifyRecorderWarmupFinished: vi.fn(async () => undefined),
     updateSettings,
     setApiKey,
     setHotkeyCaptureActive,

@@ -7,6 +7,10 @@ export const ipcChannels = {
     state: 'dashboard:state',
     getState: 'dashboard:getState',
   },
+  startup: {
+    recorderReady: 'startup:recorderReady',
+    recorderWarmupFinished: 'startup:recorderWarmupFinished',
+  },
   dictation: {
     startPushToTalk: 'dictation:startPushToTalk',
     stopPushToTalk: 'dictation:stopPushToTalk',

@@ -8,6 +8,7 @@ import type {
   HistoryAudioAsset,
   OverlayViewModel,
   PermissionState,
+  RecorderWarmupStatus,
   Settings,
   TelemetryRecord,
 } from '@shared/contracts'
@@ -23,6 +24,8 @@ interface DitadoDesktopApi {
   cancelDictation: () => Promise<void>
   notifyRecorderStarted: (sessionId: string) => Promise<void>
   notifyRecorderFailed: (sessionId: string, reason: string) => Promise<void>
+  notifyRecorderReady: () => Promise<void>
+  notifyRecorderWarmupFinished: (status: RecorderWarmupStatus) => Promise<void>
   updateSettings: (patch: Partial<Settings>) => Promise<Settings>
   setApiKey: (apiKey: string) => Promise<Settings>
 setHotkeyCaptureActive: (active: boolean) => Promise<void>

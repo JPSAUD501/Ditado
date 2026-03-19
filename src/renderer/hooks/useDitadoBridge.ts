@@ -91,9 +91,11 @@ export const useAudioLevel = (): number => {
 export const useDictationRecorder = (
   session: DictationSession | null,
   preferredMicrophoneId: string | null,
+  startupWarmupEnabled = false,
 ): { isRecording: boolean } => {
   const recorder = useMemo(() => new WavRecorder(), [])
   const warmedMicrophone = useRef<string | null | undefined>(undefined)
+  const startupWarmupReported = useRef(false)
 
   useEffect(() => {
     recorder.setOnAudioLevel((rms) => {
@@ -101,6 +103,10 @@ export const useDictationRecorder = (
     })
     return () => { recorder.setOnAudioLevel(null) }
   }, [recorder])
+
+  useEffect(() => {
+    void window.ditado.notifyRecorderReady().catch(() => undefined)
+  }, [])
 
   const [isRecording, setIsRecording] = useState(false)
   const handledIntent = useRef<string | null>(null)
@@ -160,8 +166,25 @@ export const useDictationRecorder = (
     }
 
     warmedMicrophone.current = warmupKey
-    void recorder.warmup(preferredMicrophoneId).catch(() => undefined)
-  }, [preferredMicrophoneId, recorder])
+    void recorder
+      .warmup(preferredMicrophoneId)
+      .then((status) => {
+        if (!startupWarmupEnabled || startupWarmupReported.current) {
+          return
+        }
+
+        startupWarmupReported.current = true
+        void window.ditado.notifyRecorderWarmupFinished(status)
+      })
+      .catch(() => {
+        if (!startupWarmupEnabled || startupWarmupReported.current) {
+          return
+        }
+
+        startupWarmupReported.current = true
+        void window.ditado.notifyRecorderWarmupFinished('failed')
+      })
+  }, [preferredMicrophoneId, recorder, startupWarmupEnabled])
 
   useEffect(() => {
     if (!session) {

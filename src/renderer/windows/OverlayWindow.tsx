@@ -224,6 +224,9 @@ export const OverlayWindow = () => {
   // Notice text translation
   const noticeText = useNoticeText(session?.noticeMessage)
   const detail = status === 'notice' ? (noticeText || appName) : appName
+  const detailClassName = status === 'notice'
+    ? 'overlay-app-name overlay-app-name-notice'
+    : 'overlay-app-name'
 
   const IconComponent = iconMap[status] ?? Mic
   const iconClass = reducedMotion ? '' : (iconAnimation[status] ?? '')
@@ -323,7 +326,7 @@ export const OverlayWindow = () => {
                 ) : (
                   <motion.span
                     key={detail}
-                    className="overlay-app-name"
+                    className={detailClassName}
                     initial={reducedMotion ? false : { opacity: 0, filter: 'blur(4px)' }}
                     animate={reducedMotion ? undefined : { opacity: 1, filter: 'blur(0px)' }}
                     exit={reducedMotion ? undefined : { opacity: 0, filter: 'blur(4px)', transition: contentExit }}

@@ -26,6 +26,7 @@ native/target-wsl/
 .codex-*.cjs
 .codex-*.log
 tmp-*
+public/audio/ui/*.wav
 
 # Editor directories and files
 .vscode/*

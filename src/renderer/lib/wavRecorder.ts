@@ -1,4 +1,4 @@
-import type { DictationAudioPayload } from '@shared/contracts'
+import type { DictationAudioPayload, RecorderWarmupStatus } from '@shared/contracts'
 import recorderWorkletUrl from './ditadoRecorderProcessor.js?url&no-inline'
 
 export const MAX_RECORDING_DURATION_MS = 10 * 60 * 1000
@@ -120,7 +120,7 @@ export class WavRecorder {
   private chunks: Float32Array[] = []
   private recording = false
   private startedAtMs = 0
-  private warmupPromise: Promise<void> | null = null
+  private warmupPromise: Promise<RecorderWarmupStatus> | null = null
 
   /** Called with a normalized audio level (0–1) roughly every ~80ms while recording. */
   onAudioLevel: ((level: number) => void) | null = null
@@ -129,9 +129,9 @@ export class WavRecorder {
     this.onAudioLevel = listener
   }
 
-  async warmup(deviceId: string | null): Promise<void> {
+  async warmup(deviceId: string | null): Promise<RecorderWarmupStatus> {
     if (this.recording || this.audioContext || this.warmupPromise) {
-      return this.warmupPromise ?? Promise.resolve()
+      return this.warmupPromise ?? Promise.resolve('warmed')
     }
 
     this.warmupPromise = this.performWarmup(deviceId).finally(() => {
@@ -285,9 +285,9 @@ export class WavRecorder {
     this.startedAtMs = 0
   }
 
-  private async performWarmup(deviceId: string | null): Promise<void> {
+  private async performWarmup(deviceId: string | null): Promise<RecorderWarmupStatus> {
     if (!(await this.shouldWarmupMicrophone())) {
-      return
+      return 'skipped'
     }
 
     let stream: MediaStream | null = null
@@ -302,8 +302,10 @@ export class WavRecorder {
       if (audioContext.state === 'suspended') {
         await audioContext.resume()
       }
+      return 'warmed'
     } catch {
       // Startup warmup is opportunistic; normal capture remains the source of truth.
+      return 'failed'
     } finally {
       stream?.getTracks().forEach((track) => track.stop())
       if (audioContext) {

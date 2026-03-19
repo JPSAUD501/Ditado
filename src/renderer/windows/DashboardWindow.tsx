@@ -132,7 +132,7 @@ export const DashboardWindow = ({ initialTab }: { initialTab: DashboardTab }) =>
   const [forceOnboarding, setForceOnboarding] = useState(false)
   const latestStateSettings = useRef(state.settings)
   const latestSettingsMutationId = useRef(0)
-  useDictationRecorder(state.session, state.settings.preferredMicrophoneId)
+  useDictationRecorder(state.session, state.settings.preferredMicrophoneId, true)
   const { t } = useTranslation()
   const settings =
     draftSettings && !areSettingsEqual(draftSettings, state.settings)

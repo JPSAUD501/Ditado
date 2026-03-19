@@ -72,6 +72,10 @@ const loadActiveWindow = async (): Promise<ActiveWindowResult | null> => {
 export class ActiveContextService {
   constructor(private readonly clipboardService: ClipboardService) {}
 
+  async warmup(): Promise<void> {
+    await loadActiveWindow()
+  }
+
   async capture(sendContextAutomatically: boolean, includeSelection = true): Promise<ContextSnapshot> {
     const activeWindow = await loadActiveWindow()
     const base: ContextSnapshot = {

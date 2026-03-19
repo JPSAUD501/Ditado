@@ -4,7 +4,14 @@ import { pathToFileURL } from 'node:url'
 
 import { defaultPermissionState } from '../shared/defaults.js'
 import { ipcChannels } from '../shared/ipc.js'
-import type { DashboardTab, DictationSession, OverlayViewModel, Settings, WindowKind } from '../shared/contracts.js'
+import type {
+  DashboardTab,
+  DictationSession,
+  OverlayViewModel,
+  RecorderWarmupStatus,
+  Settings,
+  WindowKind,
+} from '../shared/contracts.js'
 import { createWindowIcon } from './bootstrap/appIcon.js'
 import { registerIpc } from './bootstrap/registerIpc.js'
 import { configureMediaPermissions } from './bootstrap/configureMediaPermissions.js'
@@ -39,13 +46,13 @@ let hotkeyCaptureActive = false
 let uiohookRunning = false
 let overlayHideTimer: NodeJS.Timeout | null = null
 let overlayLoaded = false
+let onOverlayLoaded: (() => void) | null = null
 let lastOverlayState: OverlayViewModel | null = null
 let currentDashboardTheme: Settings['theme'] = 'system'
-const OVERLAY_WIDTH = 340
+const OVERLAY_WIDTH = 420
 const OVERLAY_HEIGHT = 54
 const OVERLAY_EXIT_DURATION_MS = 140
 const STARTUP_UPDATE_CHECK_DELAY_MS = 12_000
-const LETTER_INPUT_WARMUP_DELAY_MS = 1_800
 const STABLE_USER_DATA_DIR_NAME = 'Ditado'
 const DASHBOARD_TITLEBAR_HEIGHT = 36
 
@@ -147,6 +154,7 @@ const createOverlayWindow = (): BrowserWindow => {
   window.setIgnoreMouseEvents(true)
   window.webContents.on('did-finish-load', () => {
     overlayLoaded = true
+    onOverlayLoaded?.()
   })
 
   window.on('close', (event) => {
@@ -310,6 +318,30 @@ void app.whenReady().then(async () => {
   })
   await updates.initialize()
 
+  const startupWarmupState: {
+    required: boolean
+    sequenceStarted: boolean
+    ready: boolean
+    noticeShown: boolean
+    recorderRendererReady: boolean
+    automationSettled: boolean
+    contextSettled: boolean
+    audioWarmupStatus: RecorderWarmupStatus | null
+  } = {
+    required: false,
+    sequenceStarted: false,
+    ready: false,
+    noticeShown: false,
+    recorderRendererReady: false,
+    automationSettled: false,
+    contextSettled: false,
+    audioWarmupStatus: null,
+  }
+
+  const canStartDictation = (): boolean => (
+    isAppReady(store.getSettings()) && (!startupWarmupState.required || startupWarmupState.ready)
+  )
+
   syncLoginItemSettings(app, store.getSettings().launchOnLogin)
 
   windows.overlay = createOverlayWindow()
@@ -326,7 +358,97 @@ void app.whenReady().then(async () => {
     }
   })
 
-  const refreshShortcuts = registerShortcuts(store, orchestrator, () => hotkeyCaptureActive, (running) => { uiohookRunning = running })
+  const showStartupNotice = (): void => {
+    const now = new Date().toISOString()
+    const startupSession: DictationSession = {
+      id: 'startup',
+      activationMode: 'toggle',
+      status: 'notice',
+      captureIntent: 'none',
+      startedAt: now,
+      finishedAt: null,
+      processingStartedAt: null,
+      targetApp: '',
+      context: { appName: '', windowTitle: null, selectedText: '', permissionsGranted: false, confidence: 'low', capturedAt: now },
+      partialText: '',
+      finalText: '',
+      insertionPlan: { strategy: 'insert-at-cursor', targetApp: '', capability: 'clipboard' },
+      errorMessage: null,
+      noticeMessage: 'notices.ready',
+    }
+    const startupNoticeState: OverlayViewModel = {
+      session: startupSession,
+      settings: store.getSettings(),
+      permissions: defaultPermissionState,
+    }
+    lastOverlayState = startupNoticeState
+    windows.overlay?.webContents.send(ipcChannels.overlay.state, startupNoticeState)
+    showOverlay()
+    overlayHideTimer = setTimeout(() => {
+      dismissOverlay()
+    }, 1600)
+  }
+
+  const maybeFinalizeStartupWarmup = (): void => {
+    if (!startupWarmupState.required || startupWarmupState.ready) {
+      return
+    }
+
+    if (
+      !overlayLoaded ||
+      !startupWarmupState.recorderRendererReady ||
+      !startupWarmupState.automationSettled ||
+      !startupWarmupState.contextSettled ||
+      startupWarmupState.audioWarmupStatus === null
+    ) {
+      return
+    }
+
+    startupWarmupState.ready = true
+
+    if (!startupWarmupState.noticeShown) {
+      startupWarmupState.noticeShown = true
+      showStartupNotice()
+    }
+  }
+
+  const beginStartupWarmup = (): void => {
+    if (!isAppReady(store.getSettings()) || startupWarmupState.sequenceStarted) {
+      return
+    }
+
+    startupWarmupState.required = true
+    startupWarmupState.sequenceStarted = true
+
+    void Promise.resolve()
+      .then(() => {
+        insertion.warmupLetterInput()
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        startupWarmupState.automationSettled = true
+        maybeFinalizeStartupWarmup()
+      })
+
+    void context
+      .warmup()
+      .catch(() => undefined)
+      .finally(() => {
+        startupWarmupState.contextSettled = true
+        maybeFinalizeStartupWarmup()
+      })
+  }
+
+  onOverlayLoaded = () => {
+    maybeFinalizeStartupWarmup()
+  }
+
+  const refreshShortcuts = registerShortcuts(
+    store,
+    orchestrator,
+    () => hotkeyCaptureActive || !canStartDictation(),
+    (running) => { uiohookRunning = running },
+  )
 
   const { refresh: refreshTray } = registerTray(
     {
@@ -356,6 +478,7 @@ void app.whenReady().then(async () => {
       hotkeyCaptureActive = active
     },
     getShortcutStatus: () => ({ captureActive: hotkeyCaptureActive, uiohookRunning }),
+    canStartDictation,
     onSettingsChanged: async () => {
       currentDashboardTheme = store.getSettings().theme
       syncLoginItemSettings(app, store.getSettings().launchOnLogin)
@@ -364,12 +487,21 @@ void app.whenReady().then(async () => {
       refreshShortcuts()
       refreshTray()
       await broadcastState(store, orchestrator, permissions, telemetry, updates)
+      beginStartupWarmup()
     },
     broadcastState: async () => {
       await broadcastState(store, orchestrator, permissions, telemetry, updates)
     },
     openDashboardTab: (tab) => showDashboard(tab),
     getOverlayWindow: () => windows.overlay,
+    onRecorderReady: () => {
+      startupWarmupState.recorderRendererReady = true
+      maybeFinalizeStartupWarmup()
+    },
+    onRecorderWarmupFinished: (status) => {
+      startupWarmupState.audioWarmupStatus = status
+      maybeFinalizeStartupWarmup()
+    },
   })
 
   orchestrator.subscribe((session) => {
@@ -426,72 +558,12 @@ void app.whenReady().then(async () => {
 
   await broadcastState(store, orchestrator, permissions, telemetry, updates)
 
-  // Show "Ditado is ready" notice on startup using the existing overlay system
-  const showStartupNotice = (): void => {
-    const now = new Date().toISOString()
-    const startupSession: DictationSession = {
-      id: 'startup',
-      activationMode: 'toggle',
-      status: 'notice',
-      captureIntent: 'none',
-      startedAt: now,
-      finishedAt: null,
-      processingStartedAt: null,
-      targetApp: '',
-      context: { appName: '', windowTitle: null, selectedText: '', permissionsGranted: false, confidence: 'low', capturedAt: now },
-      partialText: '',
-      finalText: '',
-      insertionPlan: { strategy: 'insert-at-cursor', targetApp: '', capability: 'clipboard' },
-      errorMessage: null,
-      noticeMessage: 'notices.ready',
-    }
-    const startupNoticeState: OverlayViewModel = {
-      session: startupSession,
-      settings: store.getSettings(),
-      permissions: defaultPermissionState,
-    }
-    lastOverlayState = startupNoticeState
-    windows.overlay?.webContents.send(ipcChannels.overlay.state, startupNoticeState)
-    showOverlay()
-    overlayHideTimer = setTimeout(() => {
-      dismissOverlay()
-    }, 1600)
-  }
-
   const settings = store.getSettings()
   if (isAppReady(settings)) {
-    if (overlayLoaded) {
-      showStartupNotice()
-    } else {
-      windows.overlay?.webContents.once('did-finish-load', () => {
-        // Small delay to let React mount and register IPC listeners
-        setTimeout(showStartupNotice, 150)
-      })
-    }
+    beginStartupWarmup()
+    maybeFinalizeStartupWarmup()
   } else {
     showDashboard(getPreferredDashboardTab(settings))
-  }
-
-  const runLetterInputWarmup = (): void => {
-    if (isQuitting || updates.isInstallingUpdate()) {
-      return
-    }
-
-    try {
-      insertion.warmupLetterInput()
-    } catch {
-      // Warmup is best-effort; the live insertion path still handles fallback.
-    }
-  }
-
-  const scheduleLetterInputWarmup = (): void => {
-    setTimeout(runLetterInputWarmup, LETTER_INPUT_WARMUP_DELAY_MS)
-  }
-
-  if (windows.dashboard?.webContents.isLoadingMainFrame()) {
-    windows.dashboard.webContents.once('did-finish-load', scheduleLetterInputWarmup)
-  } else {
-    scheduleLetterInputWarmup()
   }
 
   setTimeout(() => {

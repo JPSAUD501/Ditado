@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
+import i18n from '@renderer/i18n'
 import { OverlayWindow } from './OverlayWindow'
 import { defaultPermissionState, defaultSettings } from '@shared/defaults'
 import type { DictationSession } from '@shared/contracts'
@@ -52,6 +53,12 @@ const unknownAppSession: DictationSession = {
   },
 }
 
+const noSpeechNoticeSession: DictationSession = {
+  ...noticeSession,
+  id: 'session-4',
+  noticeMessage: 'notices.noSpeechDetected',
+}
+
 const installOverlayApi = (session: DictationSession | null): void => {
   window.ditado = {
     getOverlayState: vi.fn(async () => ({
@@ -75,6 +82,8 @@ const installOverlayApi = (session: DictationSession | null): void => {
     cancelDictation: vi.fn(async () => undefined),
     notifyRecorderStarted: vi.fn(async () => undefined),
     notifyRecorderFailed: vi.fn(async () => undefined),
+    notifyRecorderReady: vi.fn(async () => undefined),
+    notifyRecorderWarmupFinished: vi.fn(async () => undefined),
     updateSettings: vi.fn(async () => defaultSettings),
     setApiKey: vi.fn(async () => defaultSettings),
     setHotkeyCaptureActive: vi.fn(async () => undefined),
@@ -97,6 +106,14 @@ const installOverlayApi = (session: DictationSession | null): void => {
 }
 
 describe('OverlayWindow', () => {
+  it('renders the translated no speech notice without falling back to the raw key', async () => {
+    installOverlayApi(noSpeechNoticeSession)
+    render(<OverlayWindow />)
+
+    expect(await screen.findByText(i18n.t('notices.noSpeechDetected'))).toBeInTheDocument()
+    expect(screen.queryByText('notices.noSpeechDetected')).toBeNull()
+  })
+
   it('renders nothing while there is no active dictation session', async () => {
     installOverlayApi(null)
 

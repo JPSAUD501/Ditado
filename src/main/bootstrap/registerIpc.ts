@@ -5,11 +5,12 @@ import {
   dashboardTabSchema,
   dictationAudioPayloadSchema,
   historyAudioRequestSchema,
+  recorderWarmupStatusSchema,
   sessionIdInputSchema,
   settingsPatchSchema,
 } from '../../shared/contracts.js'
 import { ipcChannels } from '../../shared/ipc.js'
-import type { DashboardTab } from '../../shared/contracts.js'
+import type { DashboardTab, RecorderWarmupStatus } from '../../shared/contracts.js'
 import type { PermissionService } from '../services/permissions/permissionService.js'
 import type { DictationSessionOrchestrator } from '../services/session/dictationSessionOrchestrator.js'
 import type { AppStore } from '../services/store/appStore.js'
@@ -24,10 +25,13 @@ interface RegisterIpcOptions {
   updates: UpdateService
   setHotkeyCaptureActive: (active: boolean) => void
   getShortcutStatus: () => { captureActive: boolean; uiohookRunning: boolean }
+  canStartDictation: () => boolean
   onSettingsChanged: () => Promise<void>
   broadcastState: () => Promise<void>
   openDashboardTab: (tab: DashboardTab) => void
   getOverlayWindow: () => BrowserWindow | null
+  onRecorderReady: () => void
+  onRecorderWarmupFinished: (status: RecorderWarmupStatus) => void
 }
 
 export const registerIpc = ({
@@ -38,10 +42,13 @@ export const registerIpc = ({
   updates,
   setHotkeyCaptureActive,
   getShortcutStatus,
+  canStartDictation,
   onSettingsChanged,
   broadcastState,
   openDashboardTab,
   getOverlayWindow,
+  onRecorderReady,
+  onRecorderWarmupFinished,
 }: RegisterIpcOptions): void => {
   ipcMain.handle(ipcChannels.overlay.getState, async () => ({
     session: orchestrator.getSession(),
@@ -59,13 +66,23 @@ export const registerIpc = ({
     appVersion: app.getVersion(),
   }))
 
-  ipcMain.handle(ipcChannels.dictation.startPushToTalk, () => orchestrator.startCapture('push-to-talk'))
+  ipcMain.handle(ipcChannels.dictation.startPushToTalk, () => {
+    if (!canStartDictation()) {
+      return
+    }
+
+    return orchestrator.startCapture('push-to-talk')
+  })
   ipcMain.handle(ipcChannels.dictation.stopPushToTalk, (_event, payload) =>
     orchestrator.submitAudio('push-to-talk', dictationAudioPayloadSchema.parse(payload)),
   )
   ipcMain.handle(ipcChannels.dictation.toggle, (_event, payload) => {
     if (payload) {
       return orchestrator.submitAudio('toggle', dictationAudioPayloadSchema.parse(payload))
+    }
+
+    if (!canStartDictation()) {
+      return
     }
 
     return orchestrator.toggleCapture()
@@ -110,6 +127,12 @@ export const registerIpc = ({
 
   ipcMain.handle(ipcChannels.permissions.requestMicrophone, () => permissions.requestMicrophoneAccess())
   ipcMain.handle(ipcChannels.permissions.get, () => permissions.getState())
+  ipcMain.handle(ipcChannels.startup.recorderReady, () => {
+    onRecorderReady()
+  })
+  ipcMain.handle(ipcChannels.startup.recorderWarmupFinished, (_event, status) => {
+    onRecorderWarmupFinished(recorderWarmupStatusSchema.parse(status))
+  })
   ipcMain.handle(ipcChannels.history.clear, async () => {
     await store.clearHistory()
     await broadcastState()
