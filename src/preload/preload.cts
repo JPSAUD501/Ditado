@@ -86,8 +86,12 @@ setHotkeyCaptureActive: (active: boolean) => ipcRenderer.invoke(ipcChannels.hotk
       }))
   },
   requestMicrophoneAccess: async (): Promise<PermissionState> => {
-    const rendererStatus = await requestRendererMicrophoneAccess()
     const permissionState = (await ipcRenderer.invoke(ipcChannels.permissions.requestMicrophone)) as PermissionState
+    if (permissionState.microphone !== 'granted') {
+      return permissionState
+    }
+
+    const rendererStatus = await requestRendererMicrophoneAccess()
     return {
       ...permissionState,
       microphone: rendererStatus === 'granted' ? 'granted' : permissionState.microphone,

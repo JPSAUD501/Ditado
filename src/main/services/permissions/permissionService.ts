@@ -1,8 +1,11 @@
-import { systemPreferences } from 'electron'
+import { shell, systemPreferences } from 'electron'
 
 import type { PermissionState } from '../../../shared/contracts.js'
 
 export class PermissionService {
+  private static readonly MAC_MICROPHONE_SETTINGS_URL =
+    'x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone'
+
   async getState(): Promise<PermissionState> {
     return {
       microphone: this.getMicrophoneState(),
@@ -11,8 +14,14 @@ export class PermissionService {
   }
 
   async requestMicrophoneAccess(): Promise<PermissionState> {
-    if (process.platform === 'darwin' && typeof systemPreferences.askForMediaAccess === 'function') {
-      await systemPreferences.askForMediaAccess('microphone')
+    if (process.platform === 'darwin') {
+      const currentState = this.getMicrophoneState()
+
+      if (currentState === 'not-determined' && typeof systemPreferences.askForMediaAccess === 'function') {
+        await systemPreferences.askForMediaAccess('microphone')
+      } else if ((currentState === 'denied' || currentState === 'restricted')) {
+        await shell.openExternal(PermissionService.MAC_MICROPHONE_SETTINGS_URL).catch(() => undefined)
+      }
     }
 
     return this.getState()

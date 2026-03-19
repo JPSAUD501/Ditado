@@ -6,12 +6,6 @@ import { defaultPushToTalkHotkey, defaultToggleHotkey } from '@shared/defaults'
 import { HotkeyField, MicrophoneSelect, ToggleRow } from './controls'
 
 const requestBrowserMicrophonePermission = async (): Promise<void> => {
-  if (!navigator.mediaDevices?.getUserMedia) {
-    await window.ditado.requestMicrophoneAccess()
-    return
-  }
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-  stream.getTracks().forEach((track) => track.stop())
   await window.ditado.requestMicrophoneAccess()
 }
 

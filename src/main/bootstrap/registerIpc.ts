@@ -125,7 +125,11 @@ export const registerIpc = ({
   })
   ipcMain.handle(ipcChannels.hotkeys.getStatus, () => getShortcutStatus())
 
-  ipcMain.handle(ipcChannels.permissions.requestMicrophone, () => permissions.requestMicrophoneAccess())
+  ipcMain.handle(ipcChannels.permissions.requestMicrophone, async () => {
+    const state = await permissions.requestMicrophoneAccess()
+    await broadcastState()
+    return state
+  })
   ipcMain.handle(ipcChannels.permissions.get, () => permissions.getState())
   ipcMain.handle(ipcChannels.startup.recorderReady, () => {
     onRecorderReady()

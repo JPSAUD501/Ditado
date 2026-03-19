@@ -320,6 +320,19 @@ export class WavRecorder {
     }
 
     const isMac = /\bMac\b/i.test(navigator.userAgent)
+    const desktopPermissions = await window.ditado.getPermissions().catch(() => null)
+    if (desktopPermissions?.microphone === 'granted') {
+      return true
+    }
+
+    if (desktopPermissions?.microphone === 'denied' || desktopPermissions?.microphone === 'restricted') {
+      return false
+    }
+
+    if (desktopPermissions?.microphone === 'not-determined') {
+      return !isMac
+    }
+
     if (!navigator.permissions?.query) {
       return !isMac
     }

@@ -477,10 +477,6 @@ const StepMicrophone = ({
 }) => {
   const { t } = useTranslation()
   const requestMic = async () => {
-    if (navigator.mediaDevices?.getUserMedia) {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      stream.getTracks().forEach((tr) => tr.stop())
-    }
     await window.ditado.requestMicrophoneAccess()
     refreshMicrophones()
   }

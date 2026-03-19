@@ -57,6 +57,9 @@ describe('WavRecorder', () => {
         query: vi.fn(async () => ({ state: 'granted' })),
       },
     })
+    window.ditado = {
+      getPermissions: vi.fn(async () => ({ microphone: 'granted', accessibility: 'granted' })),
+    } as unknown as typeof window.ditado
     vi.stubGlobal('AudioContext', class {
       audioWorklet = { addModule }
       state = 'suspended'
@@ -86,9 +89,34 @@ describe('WavRecorder', () => {
         query: vi.fn(async () => ({ state: 'prompt' })),
       },
     })
+    window.ditado = {
+      getPermissions: vi.fn(async () => ({ microphone: 'not-determined', accessibility: 'granted' })),
+    } as unknown as typeof window.ditado
 
     const recorder = new WavRecorder()
     await recorder.warmup(null)
+
+    expect(getUserMedia).not.toHaveBeenCalled()
+  })
+
+  it('skips warmup when the desktop bridge reports microphone access denied', async () => {
+    const getUserMedia = vi.fn(async () => ({
+      getTracks: () => [{ stop: vi.fn() }],
+    }))
+
+    vi.stubGlobal('navigator', {
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0)',
+      mediaDevices: { getUserMedia },
+      permissions: {
+        query: vi.fn(async () => ({ state: 'granted' })),
+      },
+    })
+    window.ditado = {
+      getPermissions: vi.fn(async () => ({ microphone: 'denied', accessibility: 'granted' })),
+    } as unknown as typeof window.ditado
+
+    const recorder = new WavRecorder()
+    await recorder.warmup('mic-1')
 
     expect(getUserMedia).not.toHaveBeenCalled()
   })
