@@ -31,6 +31,20 @@ const ensureParentDir = async (filePath: string): Promise<void> => {
   await mkdir(dirname(filePath), { recursive: true })
 }
 
+const sleep = async (ms: number): Promise<void> =>
+  new Promise((resolve) => {
+    setTimeout(resolve, ms)
+  })
+
+const isRetryableRenameError = (error: unknown): boolean => {
+  if (!(error instanceof Error)) {
+    return false
+  }
+
+  const code = 'code' in error ? error.code : undefined
+  return code === 'EPERM' || code === 'EBUSY' || code === 'EACCES'
+}
+
 const audioExtensionFromMimeType = (mimeType: string): string => {
   const normalized = mimeType.toLowerCase()
   if (normalized.includes('mpeg') || normalized.includes('mp3')) {
@@ -69,7 +83,20 @@ const writeAtomicJson = async (filePath: string, payload: unknown): Promise<void
   // On Windows, fs.rename atomically replaces the destination if it exists
   // (uses MoveFileExW with MOVEFILE_REPLACE_EXISTING). The prior rm() call is
   // unnecessary and can throw EPERM/EBUSY under AV scanning, so it's removed.
-  await rename(tempPath, filePath)
+  // In practice scanners and file watchers can still race the replacement, so
+  // we retry a few times before surfacing the failure.
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      await rename(tempPath, filePath)
+      return
+    } catch (error) {
+      if (!isRetryableRenameError(error) || attempt === 4) {
+        throw error
+      }
+
+      await sleep(25 * (attempt + 1))
+    }
+  }
 }
 
 export class AppStore {

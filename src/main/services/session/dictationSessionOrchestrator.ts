@@ -349,7 +349,6 @@ export class DictationSessionOrchestrator {
       }
       let partialText = ''
       let streamingStarted = false
-      let firstTokenAt = 0
       let firstTokenAtIso: string | null = null
 
       const response = await this.llm.stream(
@@ -367,7 +366,6 @@ export class DictationSessionOrchestrator {
 
           if (!streamingStarted) {
             streamingStarted = true
-            firstTokenAt = performance.now()
             firstTokenAtIso = new Date().toISOString()
             this.telemetry.sessionEvent(currentSession.id, 'streaming-started')
           }
