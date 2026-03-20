@@ -55,6 +55,7 @@ let currentDashboardTheme: Settings['theme'] = 'system'
 const OVERLAY_WIDTH = 420
 const OVERLAY_HEIGHT = 54
 const OVERLAY_EXIT_DURATION_MS = 140
+const STARTUP_UPDATING_NOTICE_DURATION_MS = 900
 const STABLE_USER_DATA_DIR_NAME = 'Ditado'
 const DASHBOARD_TITLEBAR_HEIGHT = 36
 
@@ -486,7 +487,10 @@ void app.whenReady().then(async () => {
     const result = await runStartupUpdateFlow({
       updates,
       showNotice: (message) => {
-        showStartupNotice(message, 0)
+        showStartupNotice(
+          message,
+          message === 'notices.updating' ? STARTUP_UPDATING_NOTICE_DURATION_MS : 0,
+        )
       },
     })
 
