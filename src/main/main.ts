@@ -5,6 +5,7 @@ import { pathToFileURL } from 'node:url'
 import { defaultPermissionState } from '../shared/defaults.js'
 import { translate } from '../shared/i18n.js'
 import { ipcChannels } from '../shared/ipc.js'
+import { canUseDictation, isAppReady } from '../shared/readiness.js'
 import type {
   DashboardTab,
   DictationSession,
@@ -110,10 +111,6 @@ const getPreferredDashboardTab = (settings: Settings): DashboardTab => {
 
   return 'overview'
 }
-
-const isAppReady = (settings: Settings): boolean => (
-  settings.onboardingCompleted && settings.apiKeyPresent
-)
 
 const applyDashboardChrome = (window: BrowserWindow | null, theme: Settings['theme']): void => {
   if (!window || process.platform === 'darwin') {
@@ -360,7 +357,7 @@ void app.whenReady().then(async () => {
   }
 
   const canStartDictation = (): boolean => (
-    isAppReady(store.getSettings()) && (!startupWarmupState.required || startupWarmupState.ready)
+    canUseDictation(store.getSettings()) && (!startupWarmupState.required || startupWarmupState.ready)
   )
 
   syncLoginItemSettings(app, store.getSettings().launchOnLogin)
