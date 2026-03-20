@@ -235,14 +235,7 @@ jobs:
         run: |
           RELEASE_TAG="${{ needs.prepare-release.outputs.release_tag }}"
           PRERELEASE="${{ needs.prepare-release.outputs.prerelease }}"
-          RELEASE_ID="$(gh api "repos/${GH_REPO}/releases" --paginate --jq ".[] | select(.tag_name == \"${RELEASE_TAG}\") | .id" | head -n 1)"
-          if [ -z "${RELEASE_ID}" ]; then
-            echo "Unable to find draft release for tag ${RELEASE_TAG}."
-            exit 1
+          gh release edit "${RELEASE_TAG}" --repo "${GH_REPO}" --draft=false
+          if [ "${PRERELEASE}" = "true" ]; then
+            gh release edit "${RELEASE_TAG}" --repo "${GH_REPO}" --prerelease
           fi
-          gh api \
-            --method PATCH \
-            -H "Accept: application/vnd.github+json" \
-            "repos/${GH_REPO}/releases/${RELEASE_ID}" \
-            -f draft=false \
-            -f prerelease="${PRERELEASE}"
