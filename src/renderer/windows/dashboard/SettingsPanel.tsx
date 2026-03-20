@@ -330,12 +330,6 @@ export const SettingsPanel = ({
         <div className="surface-panel p-4">
           <Section title={t('settings.updatesAndTelemetry')} icon={Globe}>
             <ToggleRow
-              label={t('settings.autoUpdate')}
-              description={t('settings.autoUpdateDesc')}
-              value={settings.autoUpdateEnabled}
-              onChange={(v) => void updateSettings({ autoUpdateEnabled: v })}
-            />
-            <ToggleRow
               label={t('settings.betaChannel')}
               description={t('settings.betaChannelDesc')}
               value={settings.updateChannel === 'beta'}

@@ -10,7 +10,7 @@ import {
   settingsPatchSchema,
 } from '../../shared/contracts.js'
 import { ipcChannels } from '../../shared/ipc.js'
-import type { DashboardTab, RecorderWarmupStatus } from '../../shared/contracts.js'
+import type { DashboardTab, OverlayViewModel, RecorderWarmupStatus } from '../../shared/contracts.js'
 import type { PermissionService } from '../services/permissions/permissionService.js'
 import type { DictationSessionOrchestrator } from '../services/session/dictationSessionOrchestrator.js'
 import type { AppStore } from '../services/store/appStore.js'
@@ -23,6 +23,7 @@ interface RegisterIpcOptions {
   permissions: PermissionService
   telemetry: TelemetryService
   updates: UpdateService
+  getOverlayState: () => Promise<OverlayViewModel> | OverlayViewModel
   setHotkeyCaptureActive: (active: boolean) => void
   getShortcutStatus: () => { captureActive: boolean; uiohookRunning: boolean }
   canStartDictation: () => boolean
@@ -40,6 +41,7 @@ export const registerIpc = ({
   permissions,
   telemetry,
   updates,
+  getOverlayState,
   setHotkeyCaptureActive,
   getShortcutStatus,
   canStartDictation,
@@ -50,11 +52,7 @@ export const registerIpc = ({
   onRecorderReady,
   onRecorderWarmupFinished,
 }: RegisterIpcOptions): void => {
-  ipcMain.handle(ipcChannels.overlay.getState, async () => ({
-    session: orchestrator.getSession(),
-    settings: store.getSettings(),
-    permissions: await permissions.getState(),
-  }))
+  ipcMain.handle(ipcChannels.overlay.getState, () => getOverlayState())
 
   ipcMain.handle(ipcChannels.dashboard.getState, async () => ({
     session: orchestrator.getSession(),

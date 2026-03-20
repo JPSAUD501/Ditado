@@ -107,6 +107,21 @@ describe('uiSoundEvents', () => {
       errorMessage: 'boom',
     })).toBe('error')
   })
+
+  it('does not replay the short-press sound when the same notice is rebroadcast', () => {
+    const shortPressNotice = {
+      ...createIdleSession(),
+      id: 'session-1',
+      activationMode: 'push-to-talk' as const,
+      status: 'notice' as const,
+      captureIntent: 'none' as const,
+      noticeMessage: 'notices.holdToDictate::Shift+Alt',
+    }
+
+    expect(getUiSoundForSessionTransition(shortPressNotice, {
+      ...shortPressNotice,
+    })).toBeNull()
+  })
 })
 
 describe('uiSoundPlayer', () => {

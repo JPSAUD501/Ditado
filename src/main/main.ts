@@ -30,6 +30,7 @@ import { syncLoginItemSettings } from './services/system/loginItem.js'
 import { loadTelemetryBuildConfig } from './services/telemetry/telemetryBuildConfig.js'
 import { createRemoteTelemetryRuntime } from './services/telemetry/telemetryRemoteRuntime.js'
 import { TelemetryService } from './services/telemetry/telemetryService.js'
+import { runStartupUpdateFlow } from './services/update/startupUpdateFlow.js'
 import { UpdateService } from './services/update/updateService.js'
 
 type Windows = {
@@ -48,11 +49,11 @@ let overlayHideTimer: NodeJS.Timeout | null = null
 let overlayLoaded = false
 let onOverlayLoaded: (() => void) | null = null
 let lastOverlayState: OverlayViewModel | null = null
+let startupOverlayState: OverlayViewModel | null = null
 let currentDashboardTheme: Settings['theme'] = 'system'
 const OVERLAY_WIDTH = 420
 const OVERLAY_HEIGHT = 54
 const OVERLAY_EXIT_DURATION_MS = 140
-const STARTUP_UPDATE_CHECK_DELAY_MS = 12_000
 const STABLE_USER_DATA_DIR_NAME = 'Ditado'
 const DASHBOARD_TITLEBAR_HEIGHT = 36
 
@@ -245,12 +246,27 @@ const hideOverlay = (): void => {
 }
 
 const dismissOverlay = (): void => {
+  startupOverlayState = null
   if (lastOverlayState?.session) {
     const nextOverlayState = { ...lastOverlayState, session: null }
     lastOverlayState = nextOverlayState
     windows.overlay?.webContents.send(ipcChannels.overlay.state, nextOverlayState)
   }
   hideOverlay()
+}
+
+const runWhenOverlayReady = (callback: () => void): void => {
+  const overlay = windows.overlay
+  if (!overlay) {
+    return
+  }
+
+  if (overlayLoaded) {
+    callback()
+    return
+  }
+
+  overlay.webContents.once('did-finish-load', callback)
 }
 
 const showDashboard = (tab: DashboardTab = 'overview'): void => {
@@ -272,11 +288,11 @@ const broadcastState = async (
   updates: UpdateService,
 ): Promise<void> => {
   const permissionState = await permissions.getState().catch(() => defaultPermissionState)
-  const session = orchestrator.getSession()
+  const session = startupOverlayState?.session ?? orchestrator.getSession()
   const overlayState = {
     session,
     settings: store.getSettings(),
-    permissions: permissionState,
+    permissions: startupOverlayState?.permissions ?? permissionState,
   }
   lastOverlayState = overlayState
   const dashboardState = {
@@ -337,6 +353,9 @@ void app.whenReady().then(async () => {
     contextSettled: false,
     audioWarmupStatus: null,
   }
+  const startupUpdateState = {
+    complete: false,
+  }
 
   const canStartDictation = (): boolean => (
     isAppReady(store.getSettings()) && (!startupWarmupState.required || startupWarmupState.ready)
@@ -358,7 +377,7 @@ void app.whenReady().then(async () => {
     }
   })
 
-  const showStartupNotice = (): void => {
+  const showStartupNotice = (message: string, autoHideAfterMs = 1_600): void => {
     const now = new Date().toISOString()
     const startupSession: DictationSession = {
       id: 'startup',
@@ -374,23 +393,32 @@ void app.whenReady().then(async () => {
       finalText: '',
       insertionPlan: { strategy: 'insert-at-cursor', targetApp: '', capability: 'clipboard' },
       errorMessage: null,
-      noticeMessage: 'notices.ready',
+      noticeMessage: message,
     }
     const startupNoticeState: OverlayViewModel = {
       session: startupSession,
       settings: store.getSettings(),
       permissions: defaultPermissionState,
     }
-    lastOverlayState = startupNoticeState
-    windows.overlay?.webContents.send(ipcChannels.overlay.state, startupNoticeState)
-    showOverlay()
-    overlayHideTimer = setTimeout(() => {
-      dismissOverlay()
-    }, 1600)
+    startupOverlayState = startupNoticeState
+    runWhenOverlayReady(() => {
+      lastOverlayState = startupNoticeState
+      windows.overlay?.webContents.send(ipcChannels.overlay.state, startupNoticeState)
+      showOverlay()
+      if (overlayHideTimer) {
+        clearTimeout(overlayHideTimer)
+        overlayHideTimer = null
+      }
+      if (autoHideAfterMs > 0) {
+        overlayHideTimer = setTimeout(() => {
+          dismissOverlay()
+        }, autoHideAfterMs)
+      }
+    })
   }
 
   const maybeFinalizeStartupWarmup = (): void => {
-    if (!startupWarmupState.required || startupWarmupState.ready) {
+    if (!startupWarmupState.required || startupWarmupState.ready || !startupUpdateState.complete) {
       return
     }
 
@@ -408,7 +436,7 @@ void app.whenReady().then(async () => {
 
     if (!startupWarmupState.noticeShown) {
       startupWarmupState.noticeShown = true
-      showStartupNotice()
+      showStartupNotice('notices.ready')
     }
   }
 
@@ -437,6 +465,33 @@ void app.whenReady().then(async () => {
         startupWarmupState.contextSettled = true
         maybeFinalizeStartupWarmup()
       })
+  }
+
+  const completeStartupUpdateFlow = (): void => {
+    if (startupUpdateState.complete) {
+      return
+    }
+
+    startupUpdateState.complete = true
+    maybeFinalizeStartupWarmup()
+  }
+
+  const runStartupUpdateGate = async (): Promise<void> => {
+    if (!isAppReady(store.getSettings())) {
+      startupUpdateState.complete = true
+      return
+    }
+
+    const result = await runStartupUpdateFlow({
+      updates,
+      showNotice: (message) => {
+        showStartupNotice(message, 0)
+      },
+    })
+
+    if (result === 'continue') {
+      completeStartupUpdateFlow()
+    }
   }
 
   onOverlayLoaded = () => {
@@ -474,6 +529,14 @@ void app.whenReady().then(async () => {
     permissions,
     telemetry,
     updates,
+    getOverlayState: async () => {
+      const permissionState = await permissions.getState().catch(() => defaultPermissionState)
+      return startupOverlayState ?? {
+        session: orchestrator.getSession(),
+        settings: store.getSettings(),
+        permissions: permissionState,
+      }
+    },
     setHotkeyCaptureActive: (active) => {
       hotkeyCaptureActive = active
     },
@@ -506,22 +569,27 @@ void app.whenReady().then(async () => {
 
   orchestrator.subscribe((session) => {
     void broadcastState(store, orchestrator, permissions, telemetry, updates)
-    if (!session || session.status === 'idle') {
+    if ((!session || session.status === 'idle') && !startupOverlayState?.session) {
       hideOverlay()
+      return
+    }
+
+    const activeOverlaySession = session ?? startupOverlayState?.session
+    if (!activeOverlaySession) {
       return
     }
 
     showOverlay()
 
     if (
-      session.status === 'completed' ||
-      session.status === 'notice' ||
-      session.status === 'error' ||
-      session.status === 'permission-required'
+      activeOverlaySession.status === 'completed' ||
+      activeOverlaySession.status === 'notice' ||
+      activeOverlaySession.status === 'error' ||
+      activeOverlaySession.status === 'permission-required'
     ) {
       overlayHideTimer = setTimeout(() => {
         dismissOverlay()
-      }, session.status === 'notice' ? 1600 : 1200)
+      }, activeOverlaySession.status === 'notice' ? 1600 : 1200)
     }
   })
 
@@ -561,12 +629,9 @@ void app.whenReady().then(async () => {
   const settings = store.getSettings()
   if (isAppReady(settings)) {
     beginStartupWarmup()
-    maybeFinalizeStartupWarmup()
+    void runStartupUpdateGate()
   } else {
+    startupUpdateState.complete = true
     showDashboard(getPreferredDashboardTab(settings))
   }
-
-  setTimeout(() => {
-    void updates.checkForUpdates()
-  }, STARTUP_UPDATE_CHECK_DELAY_MS)
 })

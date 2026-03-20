@@ -121,6 +121,7 @@ export class AppStore {
     this.settings = settingsSchema.parse({
       ...defaultSettings,
       ...persistedSettings,
+      autoUpdateEnabled: true,
       pushToTalkHotkey:
         normalizeHotkey(persistedSettings.pushToTalkHotkey ?? defaultSettings.pushToTalkHotkey)
         ?? defaultSettings.pushToTalkHotkey,
@@ -152,6 +153,7 @@ export class AppStore {
   async updateSettings(patch: Partial<Settings>): Promise<Settings> {
     return this.enqueueMutation(async () => {
       const normalizedPatch = { ...patch }
+      delete normalizedPatch.autoUpdateEnabled
       if (typeof normalizedPatch.pushToTalkHotkey === 'string') {
         normalizedPatch.pushToTalkHotkey =
           normalizeHotkey(normalizedPatch.pushToTalkHotkey) ?? this.settings.pushToTalkHotkey
@@ -164,6 +166,7 @@ export class AppStore {
       this.settings = settingsSchema.parse({
         ...this.settings,
         ...normalizedPatch,
+        autoUpdateEnabled: true,
         apiKeyPresent: await this.hasStoredApiKey(),
       })
       await this.pruneHistory()

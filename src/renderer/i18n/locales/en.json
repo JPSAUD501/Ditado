@@ -234,6 +234,8 @@
   },
   "notices": {
     "ready": "Ditado is ready",
+    "updating": "Updating Ditado…",
+    "updateFailed": "Ditado update failed.",
     "noSpeechDetected": "No speech detected.",
     "holdToDictate": "Hold to dictate. Toggle: {{hotkey}}",
     "noFinalText": "No final text returned."

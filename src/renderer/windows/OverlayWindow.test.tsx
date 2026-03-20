@@ -59,6 +59,12 @@ const noSpeechNoticeSession: DictationSession = {
   noticeMessage: 'notices.noSpeechDetected',
 }
 
+const updatingNoticeSession: DictationSession = {
+  ...noticeSession,
+  id: 'session-5',
+  noticeMessage: 'notices.updating',
+}
+
 const installOverlayApi = (session: DictationSession | null): void => {
   window.ditado = {
     getOverlayState: vi.fn(async () => ({
@@ -106,6 +112,14 @@ const installOverlayApi = (session: DictationSession | null): void => {
 }
 
 describe('OverlayWindow', () => {
+  it('renders the translated updating notice for startup updates', async () => {
+    installOverlayApi(updatingNoticeSession)
+    render(<OverlayWindow />)
+
+    expect(await screen.findByText(i18n.t('notices.updating'))).toBeInTheDocument()
+    expect(screen.queryByText('notices.updating')).toBeNull()
+  })
+
   it('renders the translated no speech notice without falling back to the raw key', async () => {
     installOverlayApi(noSpeechNoticeSession)
     render(<OverlayWindow />)

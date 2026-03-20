@@ -234,6 +234,8 @@
   },
   "notices": {
     "ready": "Ditado está pronto",
+    "updating": "Atualizando Ditado…",
+    "updateFailed": "Falha ao atualizar o Ditado.",
     "noSpeechDetected": "Nenhuma fala detectada.",
     "holdToDictate": "Segure para ditar. Alternar: {{hotkey}}",
     "noFinalText": "Nenhum texto final retornado."

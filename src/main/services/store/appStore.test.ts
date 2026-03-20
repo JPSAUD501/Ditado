@@ -69,6 +69,29 @@ describe('AppStore', () => {
     expect(store.getSettings().autoUpdateEnabled).toBe(true)
   })
 
+  it('forces auto updates back to enabled when older settings files persisted false', async () => {
+    const settingsFile = join(userDataDir, 'data', 'settings.json')
+    await mkdir(join(userDataDir, 'data'), { recursive: true })
+    await writeFile(
+      settingsFile,
+      JSON.stringify({
+        pushToTalkHotkey: 'Ctrl+Alt',
+        toggleHotkey: 'Shift+Alt',
+        autoUpdateEnabled: false,
+      }),
+      'utf8',
+    )
+
+    const AppStore = await loadStore()
+    const store = new AppStore()
+    await store.initialize()
+
+    expect(store.getSettings().autoUpdateEnabled).toBe(true)
+
+    const persisted = JSON.parse(await readFile(settingsFile, 'utf8'))
+    expect(persisted.autoUpdateEnabled).toBe(true)
+  })
+
   it('defaults launch on login to enabled when older settings files omit the field', async () => {
     const settingsFile = join(userDataDir, 'data', 'settings.json')
     await mkdir(join(userDataDir, 'data'), { recursive: true })
@@ -104,6 +127,21 @@ describe('AppStore', () => {
     const persisted = JSON.parse(await readFile(join(userDataDir, 'data', 'settings.json'), 'utf8'))
     expect(persisted.pushToTalkHotkey).toBe('Ctrl+Alt')
     expect(persisted.toggleHotkey).toBe('Shift+Alt')
+  })
+
+  it('ignores attempts to disable auto updates through updateSettings', async () => {
+    const AppStore = await loadStore()
+    const store = new AppStore()
+    await store.initialize()
+
+    await store.updateSettings({
+      autoUpdateEnabled: false,
+    })
+
+    expect(store.getSettings().autoUpdateEnabled).toBe(true)
+
+    const persisted = JSON.parse(await readFile(join(userDataDir, 'data', 'settings.json'), 'utf8'))
+    expect(persisted.autoUpdateEnabled).toBe(true)
   })
 
   it('persists the API key across store instances when secure storage is available', async () => {

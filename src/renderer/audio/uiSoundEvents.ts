@@ -4,6 +4,14 @@ import type { UiSoundName } from '@shared/uiSounds'
 const isShortPressNotice = (session: DictationSession | null): boolean =>
   session?.status === 'notice' && session.noticeMessage?.startsWith('notices.holdToDictate::') === true
 
+const isNewShortPressNotice = (previous: DictationSession | null, next: DictationSession): boolean =>
+  isShortPressNotice(next)
+  && (
+    previous?.id !== next.id
+    || previous?.status !== next.status
+    || previous?.noticeMessage !== next.noticeMessage
+  )
+
 const isStartTransition = (previous: DictationSession | null, next: DictationSession): boolean =>
   next.captureIntent === 'start'
   && ['arming', 'listening'].includes(next.status)
@@ -23,7 +31,7 @@ export const getUiSoundForSessionTransition = (
     return null
   }
 
-  if (isShortPressNotice(next)) {
+  if (isNewShortPressNotice(previous, next)) {
     return 'pttTooShort'
   }
 

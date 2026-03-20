@@ -17,6 +17,7 @@ export class UpdateService {
   private state: UpdateState = defaultUpdateState
   private initialized = false
   private installingUpdate = false
+  private readonly listeners = new Set<StateListener>()
 
   constructor(
     private readonly store: AppStore,
@@ -55,6 +56,13 @@ export class UpdateService {
 
   getState(): UpdateState {
     return this.state
+  }
+
+  subscribe(listener: StateListener): () => void {
+    this.listeners.add(listener)
+    return () => {
+      this.listeners.delete(listener)
+    }
   }
 
   isInstallingUpdate(): boolean {
@@ -105,11 +113,12 @@ export class UpdateService {
     }
   }
 
-  installUpdate(): void {
+  installUpdate(options?: { silent?: boolean }): void {
     if (!this.isPackaged || this.state.status !== 'downloaded' || this.installingUpdate) {
       return
     }
 
+    const silent = options?.silent ?? false
     this.installingUpdate = true
     this.setState({
       status: 'installing',
@@ -117,7 +126,7 @@ export class UpdateService {
     })
 
     setTimeout(() => {
-      this.updater.quitAndInstall(false, true)
+      this.updater.quitAndInstall(silent, true)
     }, 120)
   }
 
@@ -174,6 +183,9 @@ export class UpdateService {
     this.state = {
       ...this.state,
       ...patch,
+    }
+    for (const listener of this.listeners) {
+      listener(this.state)
     }
     this.onStateChanged(this.state)
   }
