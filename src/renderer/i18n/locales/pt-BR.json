@@ -43,6 +43,13 @@
   "sidebar": {
     "rec": "Grav"
   },
+  "tray": {
+    "openApp": "Abrir Ditado",
+    "openHistory": "Abrir Histórico",
+    "openSettings": "Abrir Configurações",
+    "version": "Versão",
+    "quit": "Sair"
+  },
   "overview": {
     "standingBy": "Aguardando",
     "openingMic": "Abrindo microfone",

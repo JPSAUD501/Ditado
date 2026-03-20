@@ -43,6 +43,13 @@
   "sidebar": {
     "rec": "Rec"
   },
+  "tray": {
+    "openApp": "Open Ditado",
+    "openHistory": "Open History",
+    "openSettings": "Open Settings",
+    "version": "Version",
+    "quit": "Quit"
+  },
   "overview": {
     "standingBy": "Standing by",
     "openingMic": "Opening mic",

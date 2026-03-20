@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 import { defaultPermissionState } from '../shared/defaults.js'
+import { translate } from '../shared/i18n.js'
 import { ipcChannels } from '../shared/ipc.js'
 import type {
   DashboardTab,
@@ -509,6 +510,7 @@ void app.whenReady().then(async () => {
     {
       openOverview: () => showDashboard(getPreferredDashboardTab(store.getSettings())),
       openHistory: () => showDashboard('history'),
+      openSettings: () => showDashboard('settings'),
       quit: () => {
         isQuitting = true
         app.quit()
@@ -521,6 +523,21 @@ void app.whenReady().then(async () => {
         toggleHotkey: settings.toggleHotkey,
       }
     },
+    () => {
+      const language = store.getSettings().language
+      const systemLocale = app.getLocale()
+
+      return {
+        openApp: translate(language, systemLocale, 'tray.openApp'),
+        openHistory: translate(language, systemLocale, 'tray.openHistory'),
+        openSettings: translate(language, systemLocale, 'tray.openSettings'),
+        version: translate(language, systemLocale, 'tray.version'),
+        toggle: translate(language, systemLocale, 'common.toggle'),
+        pushToTalk: translate(language, systemLocale, 'common.pushToTalk'),
+        quit: translate(language, systemLocale, 'tray.quit'),
+      }
+    },
+    app.getVersion(),
   )
 
   registerIpc({

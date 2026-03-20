@@ -102,6 +102,10 @@
     "dmg": {
       "background": "build/background.png",
       "iconSize": 96,
+      "window": {
+        "width": 540,
+        "height": 380
+      },
       "contents": [
         {
           "x": 160,

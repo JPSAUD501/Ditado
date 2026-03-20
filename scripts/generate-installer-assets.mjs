@@ -27,6 +27,21 @@ const colors = {
   goldDark: '#c8a96e',
 }
 
+/**
+ * Extract inner SVG content (without outer <svg> tags) and rename gradient IDs
+ * to avoid conflicts when embedded inside another SVG.
+ */
+const extractIconContent = (svgString, prefix) => {
+  return svgString
+    .replace(/id="bg"/g, `id="${prefix}-bg"`)
+    .replace(/url\(#bg\)/g, `url(#${prefix}-bg)`)
+    .replace(/id="mic"/g, `id="${prefix}-mic"`)
+    .replace(/url\(#mic\)/g, `url(#${prefix}-mic)`)
+    .replace(/<svg[^>]*>/g, '')
+    .replace(/<\/svg>/g, '')
+    .trim()
+}
+
 // Linux icon sizes
 const linuxIconSizes = [16, 32, 48, 64, 128, 256, 512]
 
@@ -65,6 +80,11 @@ const createGradientSvg = (width, height, direction = 'diagonal') => {
 const createSidebarSvg = (iconSvg) => {
   const width = 164
   const height = 314
+  const iconSize = 88
+  const iconX = (width - iconSize) / 2
+  const iconY = 28
+
+  const iconContent = extractIconContent(iconSvg, 'sb')
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">
     <defs>
@@ -72,29 +92,30 @@ const createSidebarSvg = (iconSvg) => {
         <stop offset="0%" stop-color="${colors.darkStart}"/>
         <stop offset="100%" stop-color="${colors.darkEnd}"/>
       </linearGradient>
-      <linearGradient id="gold" x1="0.5" y1="0" x2="0.5" y2="1">
+      <linearGradient id="gold-v" x1="0.5" y1="0" x2="0.5" y2="1">
         <stop offset="0%" stop-color="${colors.goldLight}"/>
         <stop offset="100%" stop-color="${colors.goldDark}"/>
       </linearGradient>
     </defs>
     <rect width="${width}" height="${height}" fill="url(#bg)"/>
-    
-    <!-- App icon scaled and positioned -->
-    <g transform="translate(${(width - 80) / 2}, 60)">
-      <svg viewBox="0 0 512 512" width="80" height="80">
-        <rect x="216" y="120" width="80" height="130" rx="40" fill="url(#gold)"/>
-        <path d="M168 245c0 55 39 100 88 100s88-45 88-100" fill="none" stroke="url(#gold)" stroke-width="24" stroke-linecap="round"/>
-        <line x1="256" y1="345" x2="256" y2="392" stroke="url(#gold)" stroke-width="24" stroke-linecap="round"/>
-        <line x1="208" y1="392" x2="304" y2="392" stroke="url(#gold)" stroke-width="24" stroke-linecap="round"/>
+
+    <!-- App icon (actual favicon SVG) -->
+    <g transform="translate(${iconX}, ${iconY})">
+      <svg width="${iconSize}" height="${iconSize}" viewBox="0 0 512 512">
+        ${iconContent}
       </svg>
     </g>
-    
+
     <!-- App name -->
-    <text x="${width / 2}" y="180" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" font-weight="bold" fill="${colors.goldLight}">DITADO</text>
-    <text x="${width / 2}" y="200" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="#888888">AI Dictation</text>
-    
-    <!-- Decorative line -->
-    <line x1="30" y1="220" x2="${width - 30}" y2="220" stroke="${colors.goldDark}" stroke-width="1" opacity="0.5"/>
+    <text x="${width / 2}" y="${iconY + iconSize + 24}" text-anchor="middle"
+      font-family="Arial, sans-serif" font-size="17" font-weight="bold"
+      letter-spacing="3" fill="${colors.goldLight}">DITADO</text>
+    <text x="${width / 2}" y="${iconY + iconSize + 40}" text-anchor="middle"
+      font-family="Arial, sans-serif" font-size="9" fill="#777777">AI Dictation</text>
+
+    <!-- Decorative separator -->
+    <line x1="28" y1="${iconY + iconSize + 56}" x2="${width - 28}" y2="${iconY + iconSize + 56}"
+      stroke="${colors.goldDark}" stroke-width="0.5" opacity="0.5"/>
   </svg>`
 }
 
@@ -102,9 +123,14 @@ const createSidebarSvg = (iconSvg) => {
  * Create the installer header SVG (150x57 px)
  * Small banner with app name
  */
-const createHeaderSvg = () => {
+const createHeaderSvg = (iconSvg) => {
   const width = 150
   const height = 57
+  const iconSize = 30
+  const iconX = 12
+  const iconY = Math.round((height - iconSize) / 2)
+
+  const iconContent = extractIconContent(iconSvg, 'hdr')
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">
     <defs>
@@ -112,79 +138,124 @@ const createHeaderSvg = () => {
         <stop offset="0%" stop-color="${colors.darkStart}"/>
         <stop offset="100%" stop-color="${colors.darkEnd}"/>
       </linearGradient>
-      <linearGradient id="gold" x1="0.5" y1="0" x2="0.5" y2="1">
-        <stop offset="0%" stop-color="${colors.goldLight}"/>
-        <stop offset="100%" stop-color="${colors.goldDark}"/>
-      </linearGradient>
     </defs>
     <rect width="${width}" height="${height}" fill="url(#bg)"/>
-    
-    <!-- Small microphone icon -->
-    <g transform="translate(12, ${(height - 24) / 2})">
-      <svg viewBox="0 0 512 512" width="24" height="24">
-        <rect x="216" y="120" width="80" height="130" rx="40" fill="url(#gold)"/>
-        <path d="M168 245c0 55 39 100 88 100s88-45 88-100" fill="none" stroke="url(#gold)" stroke-width="24" stroke-linecap="round"/>
-        <line x1="256" y1="345" x2="256" y2="392" stroke="url(#gold)" stroke-width="24" stroke-linecap="round"/>
-        <line x1="208" y1="392" x2="304" y2="392" stroke="url(#gold)" stroke-width="24" stroke-linecap="round"/>
+
+    <!-- Bottom gold accent line -->
+    <line x1="0" y1="${height - 1}" x2="${width}" y2="${height - 1}"
+      stroke="${colors.goldDark}" stroke-width="1" opacity="0.6"/>
+
+    <!-- App icon (actual favicon SVG) -->
+    <g transform="translate(${iconX}, ${iconY})">
+      <svg width="${iconSize}" height="${iconSize}" viewBox="0 0 512 512">
+        ${iconContent}
       </svg>
     </g>
-    
+
     <!-- App name -->
-    <text x="45" y="${height / 2 + 5}" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="${colors.goldLight}">DITADO</text>
+    <text x="${iconX + iconSize + 10}" y="${Math.round(height / 2) + 5}"
+      font-family="Arial, sans-serif" font-size="14" font-weight="bold"
+      letter-spacing="1" fill="${colors.goldLight}">Ditado</text>
   </svg>`
 }
 
 /**
- * Create the DMG background SVG
- * Shows app icon and Applications folder with drag instruction
+ * Create the DMG background SVG (540x380 or 1080x760 for retina)
+ *
+ * The electron-builder places the real icons ON TOP of this background:
+ *   - App icon:          center at (160, 190) in display points
+ *   - Applications link: center at (380, 190) in display points
+ *
+ * So the background must NOT render anything at those positions.
+ * Instead it provides: branding at top, a clean arrow guide, labels and
+ * instruction text below.
  */
-const createDmgBackgroundSvg = (width, height, isRetina = false) => {
-  const scale = isRetina ? 2 : 1
-  const iconSize = 96 * scale
-  const fontSize = 14 * scale
-  const smallFontSize = 12 * scale
+const createDmgBackgroundSvg = (width, height) => {
+  // Scale factor: 1 for 540×380, 2 for 1080×760 (retina @2x)
+  const s = width / 540
+
+  // Icon zone coordinates (display points × scale = pixels in this image)
+  const appX = 160 * s
+  const appsX = 380 * s
+  const iconsY = 190 * s
+  const iconHalf = (96 * s) / 2
+
+  // Arrow sits horizontally between the two icon bounding boxes
+  const arrowX1 = appX + iconHalf + 10 * s
+  const arrowX2 = appsX - iconHalf - 10 * s
+  const arrowY = iconsY
+
+  // Typography sizes
+  const fsBrand = Math.round(22 * s)
+  const fsTagline = Math.round(11 * s)
+  const fsLabel = Math.round(11 * s)
+  const fsInstruction = Math.round(12 * s)
+  const letterSpacing = Math.round(4 * s)
+
+  // Vertical positions
+  const brandY = Math.round(40 * s)
+  const taglineY = Math.round(58 * s)
+  const separatorY = Math.round(73 * s)
+  const labelsY = Math.round(iconsY + iconHalf + 22 * s)
+  const instructionY = Math.round(height - 28 * s)
+
+  // Arrowhead size
+  const ah = Math.round(7 * s)
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">
     <defs>
-      <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0%" stop-color="${colors.darkStart}"/>
+      <linearGradient id="bg" x1="0.5" y1="0" x2="0.5" y2="1">
+        <stop offset="0%" stop-color="#20203a"/>
         <stop offset="100%" stop-color="${colors.darkEnd}"/>
       </linearGradient>
-      <linearGradient id="gold" x1="0.5" y1="0" x2="0.5" y2="1">
-        <stop offset="0%" stop-color="${colors.goldLight}"/>
-        <stop offset="100%" stop-color="${colors.goldDark}"/>
+      <radialGradient id="topglow" cx="50%" cy="0%" r="55%">
+        <stop offset="0%" stop-color="#2c2c50" stop-opacity="1"/>
+        <stop offset="100%" stop-color="${colors.darkEnd}" stop-opacity="0"/>
+      </radialGradient>
+      <linearGradient id="arrow-grad" x1="0" y1="0.5" x2="1" y2="0.5">
+        <stop offset="0%" stop-color="${colors.goldDark}"/>
+        <stop offset="100%" stop-color="${colors.goldLight}"/>
       </linearGradient>
     </defs>
+
+    <!-- Background layers -->
     <rect width="${width}" height="${height}" fill="url(#bg)"/>
-    
-    <!-- App icon (left side) -->
-    <g transform="translate(${160 * scale - iconSize / 2}, ${190 * scale - iconSize / 2})">
-      <svg viewBox="0 0 512 512" width="${iconSize}" height="${iconSize}">
-        <rect width="512" height="512" rx="112" fill="url(#bg)"/>
-        <rect x="216" y="120" width="80" height="130" rx="40" fill="url(#gold)"/>
-        <path d="M168 245c0 55 39 100 88 100s88-45 88-100" fill="none" stroke="url(#gold)" stroke-width="24" stroke-linecap="round"/>
-        <line x1="256" y1="345" x2="256" y2="392" stroke="url(#gold)" stroke-width="24" stroke-linecap="round"/>
-        <line x1="208" y1="392" x2="304" y2="392" stroke="url(#gold)" stroke-width="24" stroke-linecap="round"/>
-      </svg>
-    </g>
-    
-    <!-- Applications folder icon (right side) - simplified representation -->
-    <g transform="translate(${380 * scale - iconSize / 2}, ${190 * scale - iconSize / 2})">
-      <rect width="${iconSize}" height="${iconSize}" rx="${12 * scale}" fill="#4a5568"/>
-      <rect x="${8 * scale}" y="${8 * scale}" width="${iconSize - 16 * scale}" height="${iconSize - 16 * scale}" rx="${8 * scale}" fill="#2d3748"/>
-      <text x="${iconSize / 2}" y="${iconSize / 2 + 6 * scale}" text-anchor="middle" font-family="Arial, sans-serif" font-size="${smallFontSize}" fill="#a0aec0">Apps</text>
-    </g>
-    
-    <!-- Arrow between icons -->
-    <g transform="translate(${240 * scale}, ${190 * scale - 10 * scale})">
-      <svg width="${80 * scale}" height="${20 * scale}" viewBox="0 0 80 20">
-        <line x1="0" y1="10" x2="60" y2="10" stroke="${colors.goldLight}" stroke-width="2" stroke-dasharray="4,2"/>
-        <polygon points="60,5 70,10 60,15" fill="${colors.goldLight}"/>
-      </svg>
-    </g>
-    
-    <!-- Instruction text -->
-    <text x="${width / 2}" y="${320 * scale}" text-anchor="middle" font-family="Arial, sans-serif" font-size="${fontSize}" fill="#a0aec0">
+    <rect width="${width}" height="${height}" fill="url(#topglow)"/>
+
+    <!-- Branding: app name -->
+    <text x="${width / 2}" y="${brandY}"
+      text-anchor="middle" font-family="Arial, sans-serif"
+      font-size="${fsBrand}" font-weight="bold" letter-spacing="${letterSpacing}"
+      fill="${colors.goldLight}">DITADO</text>
+
+    <!-- Branding: tagline -->
+    <text x="${width / 2}" y="${taglineY}"
+      text-anchor="middle" font-family="Arial, sans-serif"
+      font-size="${fsTagline}" fill="#777777">AI Dictation</text>
+
+    <!-- Separator line below branding -->
+    <line x1="${40 * s}" y1="${separatorY}" x2="${width - 40 * s}" y2="${separatorY}"
+      stroke="${colors.goldDark}" stroke-width="${0.5 * s}" opacity="0.4"/>
+
+    <!-- Arrow between icon positions (clear of the icon zones) -->
+    <line x1="${arrowX1}" y1="${arrowY}" x2="${arrowX2 - ah * 1.5}" y2="${arrowY}"
+      stroke="url(#arrow-grad)" stroke-width="${1.5 * s}" stroke-linecap="round"/>
+    <polygon
+      points="${arrowX2 - ah * 2},${arrowY - ah} ${arrowX2},${arrowY} ${arrowX2 - ah * 2},${arrowY + ah}"
+      fill="${colors.goldLight}"/>
+
+    <!-- Labels below icon positions -->
+    <text x="${appX}" y="${labelsY}"
+      text-anchor="middle" font-family="Arial, sans-serif"
+      font-size="${fsLabel}" fill="#666666">Ditado</text>
+    <text x="${appsX}" y="${labelsY}"
+      text-anchor="middle" font-family="Arial, sans-serif"
+      font-size="${fsLabel}" fill="#666666">Applications</text>
+
+    <!-- Install instruction -->
+    <text x="${width / 2}" y="${instructionY}"
+      text-anchor="middle" font-family="Arial, sans-serif"
+      font-size="${fsInstruction}" fill="#555555">
       Drag Ditado to Applications to install
     </text>
   </svg>`
@@ -291,7 +362,7 @@ const main = async () => {
 
   // Generate Windows NSIS header (150x57 BMP)
   console.log('Generating installerHeader.bmp...')
-  const headerSvg = createHeaderSvg()
+  const headerSvg = createHeaderSvg(sourceSvg)
   const headerBmp = await svgToBmp(headerSvg, 150, 57)
   await writeFile(join(buildDir, 'installerHeader.bmp'), headerBmp)
 
@@ -299,7 +370,7 @@ const main = async () => {
   console.log('Generating DMG backgrounds...')
   
   // Normal resolution (540x380)
-  const bgSvg = createDmgBackgroundSvg(540, 380, false)
+  const bgSvg = createDmgBackgroundSvg(540, 380)
   const bgPng = await sharp(Buffer.from(bgSvg))
     .resize(540, 380)
     .png()
@@ -308,7 +379,7 @@ const main = async () => {
   console.log('  Created background.png (540x380)')
 
   // Retina resolution (1080x760)
-  const bg2xSvg = createDmgBackgroundSvg(1080, 760, true)
+  const bg2xSvg = createDmgBackgroundSvg(1080, 760)
   const bg2xPng = await sharp(Buffer.from(bg2xSvg))
     .resize(1080, 760)
     .png()

@@ -10,7 +10,18 @@ type TrayHotkeys = {
 type TrayHandlers = {
   openOverview: () => void
   openHistory: () => void
+  openSettings: () => void
   quit: () => void
+}
+
+type TrayLabels = {
+  openApp: string
+  openHistory: string
+  openSettings: string
+  version: string
+  toggle: string
+  pushToTalk: string
+  quit: string
 }
 
 type TrayRegistration = {
@@ -18,24 +29,28 @@ type TrayRegistration = {
   refresh: () => void
 }
 
-const buildTrayMenu = (handlers: TrayHandlers, hotkeys: TrayHotkeys) => Menu.buildFromTemplate([
-  { label: 'Open Ditado', click: handlers.openOverview },
-  { label: 'Open History', click: handlers.openHistory },
+const buildTrayMenu = (handlers: TrayHandlers, hotkeys: TrayHotkeys, labels: TrayLabels, appVersion: string) => Menu.buildFromTemplate([
+  { label: labels.openApp, click: handlers.openOverview },
+  { label: labels.openHistory, click: handlers.openHistory },
+  { label: labels.openSettings, click: handlers.openSettings },
   { type: 'separator' },
-  { label: `Toggle: ${hotkeys.toggleHotkey}`, enabled: false },
-  { label: `Push-to-talk: ${hotkeys.pushToTalkHotkey}`, enabled: false },
+  { label: `${labels.version}: v${appVersion}`, enabled: false },
+  { label: `${labels.toggle}: ${hotkeys.toggleHotkey}`, enabled: false },
+  { label: `${labels.pushToTalk}: ${hotkeys.pushToTalkHotkey}`, enabled: false },
   { type: 'separator' },
-  { label: 'Quit', click: handlers.quit },
+  { label: labels.quit, click: handlers.quit },
 ])
 
 export const registerTray = (
   handlers: TrayHandlers,
   getHotkeys: () => TrayHotkeys,
+  getLabels: () => TrayLabels,
+  appVersion: string,
 ): TrayRegistration => {
   const tray = new Tray(createTrayIcon())
   tray.setToolTip('Ditado')
   const refresh = (): void => {
-    tray.setContextMenu(buildTrayMenu(handlers, getHotkeys()))
+    tray.setContextMenu(buildTrayMenu(handlers, getHotkeys(), getLabels(), appVersion))
   }
 
   refresh()

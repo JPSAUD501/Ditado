@@ -113,8 +113,8 @@ const UpdateWidget = ({ updateState, appVersion }: { updateState: UpdateState; a
 
 const navTabs: Array<{ id: DashboardTab; labelKey: string; Icon: React.FC<{ size?: number; strokeWidth?: number }> }> = [
   { id: 'overview', labelKey: 'common.overview', Icon: LayoutDashboard },
-  { id: 'settings', labelKey: 'common.settings', Icon: Settings2 },
   { id: 'history', labelKey: 'common.history', Icon: Clock },
+  { id: 'settings', labelKey: 'common.settings', Icon: Settings2 },
 ]
 
 const easeOutExpo = [0.16, 1, 0.3, 1] as const

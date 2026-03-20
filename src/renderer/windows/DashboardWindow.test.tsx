@@ -141,6 +141,23 @@ describe('DashboardWindow', () => {
     expect(screen.queryByText(/connect api/i)).toBeNull()
   })
 
+  it('renders the sidebar tabs in overview, history, settings order', async () => {
+    installDesktopApi()
+    render(<DashboardWindow initialTab="overview" />)
+
+    const navButtons = await screen.findAllByRole('button')
+    const sidebarButtons = navButtons.filter((button) => {
+      const label = button.getAttribute('aria-label')?.toLowerCase() ?? ''
+      return label === 'overview' || label === 'history' || label === 'settings'
+    })
+
+    expect(sidebarButtons.map((button) => button.getAttribute('aria-label'))).toEqual([
+      'Overview',
+      'History',
+      'Settings',
+    ])
+  })
+
   it('updates toggles immediately and persists the change through the desktop bridge', async () => {
     const { updateSettings } = installDesktopApi()
     render(<DashboardWindow initialTab="settings" />)
