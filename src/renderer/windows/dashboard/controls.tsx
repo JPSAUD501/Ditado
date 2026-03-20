@@ -204,20 +204,50 @@ type TimelineStage = {
   color: string
 }
 
+const safeDiffMs = (start: number | null, end: number | null): number => {
+  if (start === null || end === null) {
+    return 0
+  }
+
+  const diff = end - start
+  return Number.isFinite(diff) ? Math.max(0, Math.round(diff)) : 0
+}
+
+const formatTimelineDuration = (ms: number): string => `${(ms / 1000).toFixed(2)}s`
+
 const buildTimelineStages = (entry: HistoryEntry): TimelineStage[] => {
+  const processingStartedAt = entry.timing.processingStartedMs
+  const llmCompletedAt = entry.timing.llmCompletedMs
+  const insertionStartedAt = entry.timing.insertionStartedMs
+  const insertionCompletedAt = entry.timing.insertionCompletedMs
+  const processingWindowEndAt =
+    insertionStartedAt && llmCompletedAt
+      ? Math.min(insertionStartedAt, llmCompletedAt)
+      : llmCompletedAt
+
+  const recordingMs = entry.durations.recordingMs ?? 0
+  const processingMs =
+    processingStartedAt && processingWindowEndAt
+      ? safeDiffMs(processingStartedAt, processingWindowEndAt)
+      : [
+          entry.durations.audioPreparationMs,
+          entry.durations.networkHandshakeMs,
+          entry.durations.modelUntilFirstTokenMs,
+          entry.durations.modelStreamingMs,
+        ].reduce((sum: number, value) => sum + (value ?? 0), 0)
+  const writingMs =
+    insertionStartedAt && insertionCompletedAt
+      ? safeDiffMs(insertionStartedAt, insertionCompletedAt)
+      : entry.durations.insertionMs ?? 0
+
   return [
-    { label: 'Recording', ms: entry.durations.recordingMs ?? 0, color: 'var(--status-listen)' },
+    { label: 'Recording', ms: recordingMs, color: 'var(--status-listen)' },
     {
       label: 'Processing',
-      ms: [
-        entry.durations.audioPreparationMs,
-        entry.durations.networkHandshakeMs,
-        entry.durations.modelUntilFirstTokenMs,
-        entry.durations.modelStreamingMs,
-      ].reduce((sum: number, value) => sum + (value ?? 0), 0),
+      ms: processingMs,
       color: 'var(--status-process)',
     },
-    { label: 'Writing', ms: entry.durations.insertionMs ?? 0, color: 'var(--status-write)' },
+    { label: 'Writing', ms: writingMs, color: 'var(--status-write)' },
   ].filter((stage): stage is TimelineStage => stage.ms > 0)
 }
 
@@ -249,7 +279,12 @@ const ProcessingTimeline = ({
                 background: stage.color,
                 borderRadius: i === 0 ? '3px 0 0 3px' : i === stages.length - 1 ? '0 3px 3px 0' : '0',
               }}
-              onMouseMove={(e) => setTooltip({ label: `${stage.label}: ${stage.ms}ms`, x: e.clientX, y: e.clientY })}
+              onMouseMove={(e) =>
+                setTooltip({
+                  label: `${stage.label}: ${formatTimelineDuration(stage.ms)}`,
+                  x: e.clientX,
+                  y: e.clientY,
+                })}
               onMouseLeave={() => setTooltip(null)}
             />
           )

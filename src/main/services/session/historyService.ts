@@ -9,6 +9,29 @@ import {
   type LlmResponse,
 } from '../../../shared/contracts.js'
 
+export interface HistoryTimingMarks {
+  contextPreviewStartedAt?: string | null
+  contextPreviewCompletedAt?: string | null
+  contextRefreshStartedAt?: string | null
+  contextRefreshCompletedAt?: string | null
+  submissionStartedAt?: string | null
+  stopRequestedAt?: string | null
+}
+
+const toOffsetMs = (sessionStartedAt: string, timestamp: string | null | undefined): number | null => {
+  if (!timestamp) {
+    return null
+  }
+
+  const start = new Date(sessionStartedAt).getTime()
+  const at = new Date(timestamp).getTime()
+  if (!Number.isFinite(start) || !Number.isFinite(at)) {
+    return null
+  }
+
+  return Math.max(0, Math.round(at - start))
+}
+
 export class HistoryService {
   constructor(private readonly store: AppStore) {}
 
@@ -17,7 +40,7 @@ export class HistoryService {
     response: LlmResponse,
     audio: DictationAudioPayload,
     execution: InsertionExecutionReport,
-    timing?: { firstTokenAt: string | null },
+    timing?: { firstTokenAt: string | null; marks?: HistoryTimingMarks },
   ): Promise<void> {
     const historyEntry = this.createEntry({
       session,
@@ -25,6 +48,7 @@ export class HistoryService {
       response,
       execution,
       firstTokenAt: timing?.firstTokenAt ?? null,
+      marks: timing?.marks,
       status: 'completed',
       errorMessage: null,
       noticeMessage: null,
@@ -39,6 +63,7 @@ export class HistoryService {
     session: DictationSession,
     audio: DictationAudioPayload,
     execution?: InsertionExecutionReport,
+    marks?: HistoryTimingMarks,
   ): Promise<void> {
     const fallbackExecution: InsertionExecutionReport = execution ?? {
       requestedMode: this.store.getSettings().insertionStreamingMode,
@@ -57,6 +82,7 @@ export class HistoryService {
       response: null,
       execution: fallbackExecution,
       firstTokenAt: null,
+      marks,
       status: 'error',
       errorMessage: session.errorMessage,
       noticeMessage: session.noticeMessage,
@@ -73,6 +99,7 @@ export class HistoryService {
     response,
     execution,
     firstTokenAt,
+    marks,
     status,
     errorMessage,
     noticeMessage,
@@ -84,6 +111,7 @@ export class HistoryService {
     response: LlmResponse | null
     execution: InsertionExecutionReport
     firstTokenAt: string | null
+    marks?: HistoryTimingMarks
     status: 'completed' | 'error'
     errorMessage: string | null
     noticeMessage: string | null
@@ -93,19 +121,29 @@ export class HistoryService {
     const sessionFinishedAt = session.finishedAt ?? new Date().toISOString()
     const createdAt = sessionFinishedAt
     const timing: HistorySessionTiming = {
-      sessionStartedAt: session.startedAt,
-      recordingStartedAt: audio.recordingStartedAt ?? null,
-      recordingEndedAt: audio.recordingEndedAt ?? null,
-      audioPreparationStartedAt: audio.audioPreparationStartedAt ?? null,
-      audioPreparationEndedAt: audio.audioPreparationEndedAt ?? null,
-      processingStartedAt: session.processingStartedAt,
-      llmRequestStartedAt: response?.requestStartedAt ?? null,
-      llmResponseHeadersAt: response?.responseHeadersAt ?? null,
-      firstTokenAt,
-      llmCompletedAt: response?.completedAt ?? null,
-      insertionStartedAt: execution.startedAt ?? null,
-      insertionCompletedAt: execution.completedAt ?? null,
-      sessionFinishedAt,
+      sessionStartedMs: 0,
+      contextPreviewStartedMs: toOffsetMs(session.startedAt, marks?.contextPreviewStartedAt),
+      contextPreviewCompletedMs: toOffsetMs(session.startedAt, marks?.contextPreviewCompletedAt),
+      contextRefreshStartedMs: toOffsetMs(session.startedAt, marks?.contextRefreshStartedAt),
+      contextRefreshCompletedMs: toOffsetMs(session.startedAt, marks?.contextRefreshCompletedAt),
+      submissionStartedMs: toOffsetMs(session.startedAt, marks?.submissionStartedAt),
+      stopRequestedMs: toOffsetMs(session.startedAt, marks?.stopRequestedAt),
+      microphoneRequestStartedMs: toOffsetMs(session.startedAt, audio.microphoneRequestStartedAt),
+      microphoneRequestCompletedMs: toOffsetMs(session.startedAt, audio.microphoneRequestCompletedAt),
+      recordingStartedMs: toOffsetMs(session.startedAt, audio.recordingStartedAt),
+      recordingEndedMs: toOffsetMs(session.startedAt, audio.recordingEndedAt),
+      recorderStopStartedMs: toOffsetMs(session.startedAt, audio.recorderStopStartedAt),
+      mediaRecorderStopCompletedMs: toOffsetMs(session.startedAt, audio.mediaRecorderStopCompletedAt),
+      audioPreparationStartedMs: toOffsetMs(session.startedAt, audio.audioPreparationStartedAt),
+      audioPreparationEndedMs: toOffsetMs(session.startedAt, audio.audioPreparationEndedAt),
+      processingStartedMs: toOffsetMs(session.startedAt, session.processingStartedAt),
+      llmRequestStartedMs: toOffsetMs(session.startedAt, response?.requestStartedAt),
+      llmResponseHeadersMs: toOffsetMs(session.startedAt, response?.responseHeadersAt),
+      firstTokenMs: toOffsetMs(session.startedAt, firstTokenAt),
+      llmCompletedMs: toOffsetMs(session.startedAt, response?.completedAt),
+      insertionStartedMs: toOffsetMs(session.startedAt, execution.startedAt),
+      insertionCompletedMs: toOffsetMs(session.startedAt, execution.completedAt),
+      sessionFinishedMs: toOffsetMs(session.startedAt, sessionFinishedAt),
     }
     const durations = deriveHistoryDurations(timing)
     const llmTotalMs = durations.llmTotalMs ?? response?.latencyMs ?? 0

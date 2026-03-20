@@ -95,7 +95,7 @@ class ProgressiveInsertionSession {
   private renderRateEwma = 0
   private lastPumpTs = 0
   private lastTypedAt = 0
-  private readonly startedAt = new Date().toISOString()
+  private startedAt: string | null = null
   private completedAt: string | null = null
 
   constructor(
@@ -180,8 +180,11 @@ class ProgressiveInsertionSession {
     this.throwUnexpectedErrorIfNeeded()
     await this.waitForVisualSettle()
 
-    if (this.aborted || !fullText.trim()) {
+    if (this.effectiveMode === 'letter-by-letter' && this.startedAt) {
       this.completedAt = new Date().toISOString()
+    }
+
+    if (this.aborted || !fullText.trim()) {
       return this.getExecutionReport()
     }
 
@@ -190,7 +193,6 @@ class ProgressiveInsertionSession {
     }
 
     await this.clipboardService.writeNormal(fullText)
-    this.completedAt = new Date().toISOString()
     return this.getExecutionReport()
   }
 
@@ -204,7 +206,6 @@ class ProgressiveInsertionSession {
   async recoverToClipboard(text: string): Promise<void> {
     this.completed = true
     await this.clipboardService.writeNormal(text)
-    this.completedAt = new Date().toISOString()
   }
 
   getExecutionReport(): InsertionExecutionReport {
@@ -244,11 +245,13 @@ class ProgressiveInsertionSession {
       return
     }
 
+    this.markInsertionStarted()
     await this.clipboardService.writeNormal(remainingText)
     const pasted = await runShortcut('paste')
     if (!pasted) {
       throw new Error('Clipboard paste shortcut unavailable')
     }
+    this.completedAt = new Date().toISOString()
   }
 
   private observeArrival(chunkLen: number, now: number): void {
@@ -551,6 +554,7 @@ class ProgressiveInsertionSession {
     }
 
     try {
+      this.markInsertionStarted()
       this.automationService.typeGrapheme(nextChar)
       this.writtenGraphemeCount += 1
       this.lastTypedAt = now
@@ -585,6 +589,12 @@ class ProgressiveInsertionSession {
     )
 
     this.nextRevealAt += stepMs
+  }
+
+  private markInsertionStarted(): void {
+    if (!this.startedAt) {
+      this.startedAt = new Date().toISOString()
+    }
   }
 
   private waitForPendingInsertion(): Promise<void> {

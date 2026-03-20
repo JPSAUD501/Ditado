@@ -120,7 +120,10 @@ export class WavRecorder {
   private chunks: Float32Array[] = []
   private recording = false
   private startedAtMs = 0
+  private microphoneRequestStartedAt: string | null = null
+  private microphoneRequestCompletedAt: string | null = null
   private recordingStartedAt: string | null = null
+  private mediaRecorderStopCompletedAt: string | null = null
   private warmupPromise: Promise<RecorderWarmupStatus> | null = null
 
   /** Called with a normalized audio level (0–1) roughly every ~80ms while recording. */
@@ -146,9 +149,11 @@ export class WavRecorder {
       return
     }
 
+    this.microphoneRequestStartedAt = new Date().toISOString()
     this.stream = await navigator.mediaDevices.getUserMedia({
       audio: deviceId ? { deviceId: { exact: deviceId } } : true,
     })
+    this.microphoneRequestCompletedAt = new Date().toISOString()
     this.audioContext = new AudioContext()
     await this.audioContext.audioWorklet.addModule(recorderWorkletUrl)
     if (this.audioContext.state === 'suspended') {
@@ -231,8 +236,12 @@ export class WavRecorder {
 
     const processingStartedAt = performance.now()
     const durationMs = Math.min(Math.max(Date.now() - this.startedAtMs, 0), MAX_RECORDING_DURATION_MS)
+    const audioEncodingStartedAt = new Date().toISOString()
+    const microphoneRequestStartedAt = this.microphoneRequestStartedAt
+    const microphoneRequestCompletedAt = this.microphoneRequestCompletedAt
     const recordingStartedAt = this.recordingStartedAt
     const recordingEndedAt = new Date().toISOString()
+    const recorderStopStartedAt = new Date().toISOString()
     this.recording = false
     const sampleRate = this.audioContext.sampleRate
     const encodedBlobPromise = this.stopMediaRecorder()
@@ -244,13 +253,14 @@ export class WavRecorder {
     }
     const analysis = analyzeSamples(samples)
     const encodedBlob = await encodedBlobPromise
+    const mediaRecorderStopCompletedAt = this.mediaRecorderStopCompletedAt
     const audioBytes = encodedBlob
       ? new Uint8Array(await encodedBlob.arrayBuffer())
       : encodeWav(samples, sampleRate)
     const mimeType = encodedBlob?.type || 'audio/wav'
     this.chunks = []
     const audioProcessingMs = Math.round(performance.now() - processingStartedAt)
-    const audioPreparationStartedAt = new Date(Date.now() - audioProcessingMs).toISOString()
+    const audioPreparationStartedAt = audioEncodingStartedAt
     const audioPreparationEndedAt = new Date().toISOString()
     this.cleanup()
 
@@ -263,8 +273,12 @@ export class WavRecorder {
       speechDetected: analysis.speechDetected,
       peakAmplitude: analysis.peakAmplitude,
       rmsAmplitude: analysis.rmsAmplitude,
+      microphoneRequestStartedAt,
+      microphoneRequestCompletedAt,
       recordingStartedAt,
       recordingEndedAt,
+      recorderStopStartedAt,
+      mediaRecorderStopCompletedAt,
       audioPreparationStartedAt,
       audioPreparationEndedAt,
       stopReason: durationMs >= MAX_RECORDING_DURATION_MS ? 'max-duration' : 'user-stop',
@@ -275,7 +289,10 @@ export class WavRecorder {
   async cancel(): Promise<void> {
     this.recording = false
     this.startedAtMs = 0
+    this.microphoneRequestStartedAt = null
+    this.microphoneRequestCompletedAt = null
     this.recordingStartedAt = null
+    this.mediaRecorderStopCompletedAt = null
     this.chunks = []
     this.cleanup()
   }
@@ -296,7 +313,10 @@ export class WavRecorder {
     this.stream = null
     this.audioContext = null
     this.startedAtMs = 0
+    this.microphoneRequestStartedAt = null
+    this.microphoneRequestCompletedAt = null
     this.recordingStartedAt = null
+    this.mediaRecorderStopCompletedAt = null
   }
 
   private async performWarmup(deviceId: string | null): Promise<RecorderWarmupStatus> {
@@ -379,6 +399,9 @@ export class WavRecorder {
     if (this.mediaRecorder.state !== 'inactive') {
       this.mediaRecorder.stop()
     }
-    return stopPromise
+    return stopPromise.then((blob) => {
+      this.mediaRecorderStopCompletedAt = new Date().toISOString()
+      return blob
+    })
   }
 }

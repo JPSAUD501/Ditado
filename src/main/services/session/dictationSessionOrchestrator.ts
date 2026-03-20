@@ -7,7 +7,7 @@ import type { OpenRouterService } from '../llm/openRouterService.js'
 import type { PermissionService } from '../permissions/permissionService.js'
 import type { AppStore } from '../store/appStore.js'
 import type { TelemetryService } from '../telemetry/telemetryService.js'
-import { HistoryService } from './historyService.js'
+import { HistoryService, type HistoryTimingMarks } from './historyService.js'
 import { SessionStore } from './sessionStore.js'
 
 type SessionListener = (session: DictationSession | null) => void
@@ -22,6 +22,7 @@ export class DictationSessionOrchestrator {
   private cancelledSessionIds = new Set<string>()
   private contextCaptureBySessionId = new Map<string, Promise<Awaited<ReturnType<ActiveContextService['capture']>>>>()
   private speechEndedAtBySessionId = new Map<string, number>()
+  private timingMarksBySessionId = new Map<string, HistoryTimingMarks>()
 
   constructor(
     private readonly store: AppStore,
@@ -61,6 +62,7 @@ export class DictationSessionOrchestrator {
 
     const sessionId = createId('session')
     const startedAt = new Date().toISOString()
+    const contextPreviewStartedAt = new Date().toISOString()
 
     this.sessions.set({
       ...createIdleSession(),
@@ -94,6 +96,10 @@ export class DictationSessionOrchestrator {
     const contextCapture = this.contextService
       .capture(shouldCaptureSelectionImmediately, shouldCaptureSelectionImmediately)
       .then(async (previewContext) => {
+        this.updateTimingMarks(sessionId, {
+          contextPreviewStartedAt,
+          contextPreviewCompletedAt: new Date().toISOString(),
+        })
         const activeSession = this.sessions.get()
         if (
           !activeSession ||
@@ -123,9 +129,14 @@ export class DictationSessionOrchestrator {
       })
       .catch(() => {
         // Context preview is best-effort and should never block capture start.
+        this.updateTimingMarks(sessionId, {
+          contextPreviewStartedAt,
+          contextPreviewCompletedAt: new Date().toISOString(),
+        })
         return createIdleSession().context
       })
     this.contextCaptureBySessionId.set(sessionId, contextCapture)
+    this.updateTimingMarks(sessionId, { contextPreviewStartedAt })
   }
 
   markRecorderStarted(sessionId: string): void {
@@ -194,6 +205,7 @@ export class DictationSessionOrchestrator {
 
     if (currentSession.status === 'listening' && currentSession.activationMode === 'toggle') {
       const now = new Date().toISOString()
+      this.updateTimingMarks(currentSession.id, { stopRequestedAt: now })
       this.speechEndedAtBySessionId.set(currentSession.id, performance.now())
       this.sessions.set({
         ...currentSession,
@@ -218,6 +230,7 @@ export class DictationSessionOrchestrator {
     }
 
     const now = new Date().toISOString()
+    this.updateTimingMarks(currentSession.id, { stopRequestedAt: now })
     this.speechEndedAtBySessionId.set(currentSession.id, performance.now())
     this.sessions.set({
       ...currentSession,
@@ -295,6 +308,9 @@ export class DictationSessionOrchestrator {
     }
 
     try {
+      this.updateTimingMarks(currentSession.id, {
+        submissionStartedAt: new Date().toISOString(),
+      })
       const contextCapture = this.contextCaptureBySessionId.get(currentSession.id)
       let context = contextCapture ? await contextCapture : currentSession.context
 
@@ -303,7 +319,12 @@ export class DictationSessionOrchestrator {
         this.store.getSettings().sendContextAutomatically &&
         !context.selectedText
       ) {
+        const contextRefreshStartedAt = new Date().toISOString()
         const submitContext = await this.contextService.capture(true, true)
+        this.updateTimingMarks(currentSession.id, {
+          contextRefreshStartedAt,
+          contextRefreshCompletedAt: new Date().toISOString(),
+        })
         context = {
           ...context,
           selectedText: submitContext.selectedText,
@@ -430,6 +451,7 @@ export class DictationSessionOrchestrator {
       try {
         await this.history.appendCompletedSession(completedSession, response, payload, execution, {
           firstTokenAt: firstTokenAtIso,
+          marks: this.timingMarksBySessionId.get(currentSession.id),
         })
         this.notifyHistoryUpdated()
       } catch {
@@ -463,7 +485,12 @@ export class DictationSessionOrchestrator {
       this.sessions.set(erroredSession)
 
       try {
-        await this.history.appendFailedSession(erroredSession, payload, execution)
+        await this.history.appendFailedSession(
+          erroredSession,
+          payload,
+          execution,
+          this.timingMarksBySessionId.get(currentSession.id),
+        )
         this.notifyHistoryUpdated()
       } catch {
         // History persistence must not mask the primary dictation failure.
@@ -484,6 +511,7 @@ export class DictationSessionOrchestrator {
     } finally {
       this.contextCaptureBySessionId.delete(currentSession.id)
       this.speechEndedAtBySessionId.delete(currentSession.id)
+      this.timingMarksBySessionId.delete(currentSession.id)
       if (this.activeInsertionSession?.sessionId === currentSession.id) {
         this.activeInsertionSession = null
       }
@@ -492,6 +520,14 @@ export class DictationSessionOrchestrator {
         this.submittingSessionId = null
       }
     }
+  }
+
+  private updateTimingMarks(sessionId: string, patch: HistoryTimingMarks): void {
+    const current = this.timingMarksBySessionId.get(sessionId) ?? {}
+    this.timingMarksBySessionId.set(sessionId, {
+      ...current,
+      ...patch,
+    })
   }
 
   private async showNotice(

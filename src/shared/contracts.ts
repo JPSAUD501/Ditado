@@ -74,30 +74,44 @@ export const dictationSessionSchema = z.object({
 
 export type DictationSession = z.infer<typeof dictationSessionSchema>
 
-const nullableTimestampSchema = z.string().datetime().nullable().default(null)
 const nullableNumberSchema = z.number().nonnegative().nullable().default(null)
 const nullableIntSchema = z.number().int().nonnegative().nullable().default(null)
+const nullableOffsetSchema = z.number().int().nonnegative().nullable().default(null)
 
 export const historySessionTimingSchema = z.object({
-  sessionStartedAt: nullableTimestampSchema,
-  recordingStartedAt: nullableTimestampSchema,
-  recordingEndedAt: nullableTimestampSchema,
-  audioPreparationStartedAt: nullableTimestampSchema,
-  audioPreparationEndedAt: nullableTimestampSchema,
-  processingStartedAt: nullableTimestampSchema,
-  llmRequestStartedAt: nullableTimestampSchema,
-  llmResponseHeadersAt: nullableTimestampSchema,
-  firstTokenAt: nullableTimestampSchema,
-  llmCompletedAt: nullableTimestampSchema,
-  insertionStartedAt: nullableTimestampSchema,
-  insertionCompletedAt: nullableTimestampSchema,
-  sessionFinishedAt: nullableTimestampSchema,
+  sessionStartedMs: nullableOffsetSchema,
+  contextPreviewStartedMs: nullableOffsetSchema,
+  contextPreviewCompletedMs: nullableOffsetSchema,
+  contextRefreshStartedMs: nullableOffsetSchema,
+  contextRefreshCompletedMs: nullableOffsetSchema,
+  submissionStartedMs: nullableOffsetSchema,
+  stopRequestedMs: nullableOffsetSchema,
+  microphoneRequestStartedMs: nullableOffsetSchema,
+  microphoneRequestCompletedMs: nullableOffsetSchema,
+  recordingStartedMs: nullableOffsetSchema,
+  recordingEndedMs: nullableOffsetSchema,
+  recorderStopStartedMs: nullableOffsetSchema,
+  mediaRecorderStopCompletedMs: nullableOffsetSchema,
+  audioPreparationStartedMs: nullableOffsetSchema,
+  audioPreparationEndedMs: nullableOffsetSchema,
+  processingStartedMs: nullableOffsetSchema,
+  llmRequestStartedMs: nullableOffsetSchema,
+  llmResponseHeadersMs: nullableOffsetSchema,
+  firstTokenMs: nullableOffsetSchema,
+  llmCompletedMs: nullableOffsetSchema,
+  insertionStartedMs: nullableOffsetSchema,
+  insertionCompletedMs: nullableOffsetSchema,
+  sessionFinishedMs: nullableOffsetSchema,
 })
 
 export type HistorySessionTiming = z.infer<typeof historySessionTimingSchema>
 
 export const historySessionDurationsSchema = z.object({
+  contextPreviewMs: nullableNumberSchema,
+  contextRefreshMs: nullableNumberSchema,
+  microphoneRequestMs: nullableNumberSchema,
   recordingMs: nullableNumberSchema,
+  recorderStopMs: nullableNumberSchema,
   audioPreparationMs: nullableNumberSchema,
   networkHandshakeMs: nullableNumberSchema,
   modelUntilFirstTokenMs: nullableNumberSchema,
@@ -205,11 +219,11 @@ const normalizedHistoryEntrySchema = historyEntryBaseSchema.extend({
 
 const legacyHistoryEntrySchema = historyEntryBaseSchema
 
-const safeDiffMs = (start: string | null, end: string | null): number | null => {
+const safeDiffMs = (start: number | null, end: number | null): number | null => {
   if (!start || !end) {
     return null
   }
-  const diff = new Date(end).getTime() - new Date(start).getTime()
+  const diff = end - start
   if (!Number.isFinite(diff)) {
     return null
   }
@@ -218,23 +232,37 @@ const safeDiffMs = (start: string | null, end: string | null): number | null => 
 
 const deriveNormalizedHistoryEntry = (entry: z.infer<typeof historyEntryBaseSchema>) => {
   const timing: HistorySessionTiming = {
-    sessionStartedAt: null,
-    recordingStartedAt: null,
-    recordingEndedAt: null,
-    audioPreparationStartedAt: null,
-    audioPreparationEndedAt: null,
-    processingStartedAt: null,
-    llmRequestStartedAt: null,
-    llmResponseHeadersAt: null,
-    firstTokenAt: null,
-    llmCompletedAt: null,
-    insertionStartedAt: null,
-    insertionCompletedAt: null,
-    sessionFinishedAt: entry.createdAt,
+    sessionStartedMs: 0,
+    contextPreviewStartedMs: null,
+    contextPreviewCompletedMs: null,
+    contextRefreshStartedMs: null,
+    contextRefreshCompletedMs: null,
+    submissionStartedMs: null,
+    stopRequestedMs: null,
+    microphoneRequestStartedMs: null,
+    microphoneRequestCompletedMs: null,
+    recordingStartedMs: null,
+    recordingEndedMs: null,
+    recorderStopStartedMs: null,
+    mediaRecorderStopCompletedMs: null,
+    audioPreparationStartedMs: null,
+    audioPreparationEndedMs: null,
+    processingStartedMs: null,
+    llmRequestStartedMs: null,
+    llmResponseHeadersMs: null,
+    firstTokenMs: null,
+    llmCompletedMs: null,
+    insertionStartedMs: null,
+    insertionCompletedMs: null,
+    sessionFinishedMs: null,
   }
 
   const durations: HistorySessionDurations = {
+    contextPreviewMs: null,
+    contextRefreshMs: null,
+    microphoneRequestMs: null,
     recordingMs: entry.audioDurationMs > 0 ? entry.audioDurationMs : null,
+    recorderStopMs: null,
     audioPreparationMs: entry.audioProcessingMs > 0 ? entry.audioProcessingMs : null,
     networkHandshakeMs: entry.audioSendMs > 0 ? entry.audioSendMs : null,
     modelUntilFirstTokenMs: entry.timeToFirstTokenMs > 0 ? entry.timeToFirstTokenMs : null,
@@ -492,8 +520,12 @@ export const dictationAudioPayloadSchema = z.object({
   speechDetected: z.boolean(),
   peakAmplitude: z.number().nonnegative(),
   rmsAmplitude: z.number().nonnegative(),
+  microphoneRequestStartedAt: z.string().nullable().default(null),
+  microphoneRequestCompletedAt: z.string().nullable().default(null),
   recordingStartedAt: z.string().nullable().default(null),
   recordingEndedAt: z.string().nullable().default(null),
+  recorderStopStartedAt: z.string().nullable().default(null),
+  mediaRecorderStopCompletedAt: z.string().nullable().default(null),
   audioPreparationStartedAt: z.string().nullable().default(null),
   audioPreparationEndedAt: z.string().nullable().default(null),
   stopReason: z.enum(['user-stop', 'max-duration', 'cancelled', 'unknown']).default('unknown'),
@@ -507,20 +539,28 @@ export const historyAudioRequestSchema = z.string().min(1)
 export const sessionIdInputSchema = z.string().min(1)
 
 export const deriveHistoryDurations = (timing: HistorySessionTiming): HistorySessionDurations => {
-  const recordingMs = safeDiffMs(timing.recordingStartedAt, timing.recordingEndedAt)
-  const audioPreparationMs = safeDiffMs(timing.audioPreparationStartedAt, timing.audioPreparationEndedAt)
-  const networkHandshakeMs = safeDiffMs(timing.llmRequestStartedAt, timing.llmResponseHeadersAt)
-  const modelUntilFirstTokenMs = safeDiffMs(timing.llmResponseHeadersAt, timing.firstTokenAt)
-  const llmTotalMs = safeDiffMs(timing.llmRequestStartedAt, timing.llmCompletedAt)
-  const insertionMs = safeDiffMs(timing.insertionStartedAt, timing.insertionCompletedAt)
-  const totalSessionMs = safeDiffMs(timing.sessionStartedAt, timing.sessionFinishedAt)
+  const contextPreviewMs = safeDiffMs(timing.contextPreviewStartedMs, timing.contextPreviewCompletedMs)
+  const contextRefreshMs = safeDiffMs(timing.contextRefreshStartedMs, timing.contextRefreshCompletedMs)
+  const microphoneRequestMs = safeDiffMs(timing.microphoneRequestStartedMs, timing.microphoneRequestCompletedMs)
+  const recordingMs = safeDiffMs(timing.recordingStartedMs, timing.recordingEndedMs)
+  const recorderStopMs = safeDiffMs(timing.recorderStopStartedMs, timing.mediaRecorderStopCompletedMs)
+  const audioPreparationMs = safeDiffMs(timing.audioPreparationStartedMs, timing.audioPreparationEndedMs)
+  const networkHandshakeMs = safeDiffMs(timing.llmRequestStartedMs, timing.llmResponseHeadersMs)
+  const modelUntilFirstTokenMs = safeDiffMs(timing.llmResponseHeadersMs, timing.firstTokenMs)
+  const llmTotalMs = safeDiffMs(timing.llmRequestStartedMs, timing.llmCompletedMs)
+  const insertionMs = safeDiffMs(timing.insertionStartedMs, timing.insertionCompletedMs)
+  const totalSessionMs = safeDiffMs(timing.sessionStartedMs, timing.sessionFinishedMs)
   const modelStreamingMs =
     llmTotalMs !== null && networkHandshakeMs !== null && modelUntilFirstTokenMs !== null
       ? Math.max(0, llmTotalMs - networkHandshakeMs - modelUntilFirstTokenMs)
-      : safeDiffMs(timing.firstTokenAt, timing.llmCompletedAt)
+      : safeDiffMs(timing.firstTokenMs, timing.llmCompletedMs)
 
   return {
+    contextPreviewMs,
+    contextRefreshMs,
+    microphoneRequestMs,
     recordingMs,
+    recorderStopMs,
     audioPreparationMs,
     networkHandshakeMs,
     modelUntilFirstTokenMs,
