@@ -269,10 +269,10 @@ const runWhenOverlayReady = (callback: () => void): void => {
 }
 
 const showDashboard = (tab: DashboardTab = 'overview'): void => {
-  if (!windows.dashboard) {
+  if (!windows.dashboard || windows.dashboard.isDestroyed()) {
     windows.dashboard = createDashboardWindow(tab, currentDashboardTheme)
   } else {
-    void windows.dashboard.loadURL(createWindowUrl('dashboard', tab))
+    windows.dashboard.webContents.send(ipcChannels.dashboard.openTab, tab)
   }
 
   windows.dashboard.show()

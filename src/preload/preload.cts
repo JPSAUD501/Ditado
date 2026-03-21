@@ -45,6 +45,8 @@ contextBridge.exposeInMainWorld('ditado', {
     subscribe(ipcChannels.overlay.state, listener),
   subscribeDashboardState: (listener: (state: DashboardViewModel) => void) =>
     subscribe(ipcChannels.dashboard.state, listener),
+  subscribeDashboardTabRequests: (listener: (tab: DashboardTab) => void) =>
+    subscribe(ipcChannels.dashboard.openTab, listener),
   startPushToTalk: () => ipcRenderer.invoke(ipcChannels.dictation.startPushToTalk),
   stopPushToTalk: (payload: DictationAudioPayload) => ipcRenderer.invoke(ipcChannels.dictation.stopPushToTalk, payload),
   toggleDictation: (payload?: DictationAudioPayload) => ipcRenderer.invoke(ipcChannels.dictation.toggle, payload),
@@ -57,7 +59,7 @@ contextBridge.exposeInMainWorld('ditado', {
     ipcRenderer.invoke(ipcChannels.startup.recorderWarmupFinished, status),
   updateSettings: (patch: Partial<Settings>) => ipcRenderer.invoke(ipcChannels.settings.update, patch),
   setApiKey: (apiKey: string) => ipcRenderer.invoke(ipcChannels.settings.setApiKey, apiKey),
-setHotkeyCaptureActive: (active: boolean) => ipcRenderer.invoke(ipcChannels.hotkeys.setCaptureMode, active),
+  setHotkeyCaptureActive: (active: boolean) => ipcRenderer.invoke(ipcChannels.hotkeys.setCaptureMode, active),
   getShortcutStatus: (): Promise<{ captureActive: boolean; uiohookRunning: boolean }> => ipcRenderer.invoke(ipcChannels.hotkeys.getStatus),
   listMicrophones: async (): Promise<DeviceInfo[]> => {
     if (!navigator.mediaDevices?.enumerateDevices) {

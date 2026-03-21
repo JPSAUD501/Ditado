@@ -148,6 +148,14 @@ export const DashboardWindow = ({ initialTab }: { initialTab: DashboardTab }) =>
     latestStateSettings.current = settings
   }, [settings])
 
+  useEffect(() => {
+    const unsubscribe = window.ditado.subscribeDashboardTabRequests((tab) => {
+      setActiveTab(tab)
+    })
+
+    return unsubscribe
+  }, [])
+
   const applySettingsMutation = async (
     applyOptimisticUpdate: (base: Settings) => Settings,
     commit: () => Promise<Settings>,

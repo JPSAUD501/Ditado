@@ -6,6 +6,7 @@ export const ipcChannels = {
   dashboard: {
     state: 'dashboard:state',
     getState: 'dashboard:getState',
+    openTab: 'dashboard:openTab',
   },
   startup: {
     recorderReady: 'startup:recorderReady',

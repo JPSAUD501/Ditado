@@ -74,6 +74,7 @@ const installDesktopApi = (
       listener(currentState)
       return () => dashboardListeners.delete(listener)
     }),
+    subscribeDashboardTabRequests: vi.fn(() => () => undefined),
     startPushToTalk: vi.fn(async () => undefined),
     stopPushToTalk: vi.fn(async () => undefined),
     toggleDictation: vi.fn(async () => undefined),
@@ -91,16 +92,16 @@ const installDesktopApi = (
     openDashboardTab: vi.fn(async () => undefined),
     clearHistory: vi.fn(async () => undefined),
     deleteHistoryEntry: vi.fn(async () => undefined),
-  getHistoryAudio: vi.fn(async () => null),
-  getTelemetryTail: vi.fn(async () => []),
-  checkForUpdates: vi.fn(async () => undefined),
-  downloadUpdate: vi.fn(async () => undefined),
-  installUpdate: vi.fn(async () => undefined),
-  openExternalUrl: vi.fn(async () => undefined),
-  getShortcutStatus: vi.fn(async () => ({ captureActive: false, uiohookRunning: true })),
-  sendAudioLevel: vi.fn(),
-  subscribeAudioLevel: vi.fn(() => () => undefined),
-}
+    getHistoryAudio: vi.fn(async () => null),
+    getTelemetryTail: vi.fn(async () => []),
+    checkForUpdates: vi.fn(async () => undefined),
+    downloadUpdate: vi.fn(async () => undefined),
+    installUpdate: vi.fn(async () => undefined),
+    openExternalUrl: vi.fn(async () => undefined),
+    getShortcutStatus: vi.fn(async () => ({ captureActive: false, uiohookRunning: true })),
+    sendAudioLevel: vi.fn(),
+    subscribeAudioLevel: vi.fn(() => () => undefined),
+  }
 
   return {
     updateSettings,

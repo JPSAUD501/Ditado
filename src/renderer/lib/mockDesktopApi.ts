@@ -76,6 +76,7 @@ export const ensureMockDesktopApi = (): void => {
       listener(dashboardState)
       return () => dashboardListeners.delete(listener)
     },
+    subscribeDashboardTabRequests: () => () => undefined,
     startPushToTalk: noopDictation,
     stopPushToTalk: noopDictation,
     toggleDictation: noopDictation,

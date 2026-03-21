@@ -18,6 +18,7 @@ interface DitadoDesktopApi {
   getDashboardState: () => Promise<DashboardViewModel>
   subscribeOverlayState: (listener: (state: OverlayViewModel) => void) => () => void
   subscribeDashboardState: (listener: (state: DashboardViewModel) => void) => () => void
+  subscribeDashboardTabRequests: (listener: (tab: DashboardTab) => void) => () => void
   startPushToTalk: () => Promise<void>
   stopPushToTalk: (payload: DictationAudioPayload) => Promise<void>
   toggleDictation: (payload?: DictationAudioPayload) => Promise<void>
@@ -28,7 +29,7 @@ interface DitadoDesktopApi {
   notifyRecorderWarmupFinished: (status: RecorderWarmupStatus) => Promise<void>
   updateSettings: (patch: Partial<Settings>) => Promise<Settings>
   setApiKey: (apiKey: string) => Promise<Settings>
-setHotkeyCaptureActive: (active: boolean) => Promise<void>
+  setHotkeyCaptureActive: (active: boolean) => Promise<void>
   getShortcutStatus: () => Promise<{ captureActive: boolean; uiohookRunning: boolean }>
   listMicrophones: () => Promise<DeviceInfo[]>
   requestMicrophoneAccess: () => Promise<PermissionState>

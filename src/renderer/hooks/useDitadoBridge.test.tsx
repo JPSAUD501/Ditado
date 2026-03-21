@@ -86,6 +86,7 @@ beforeEach(() => {
     getDashboardState: vi.fn(),
     subscribeOverlayState: vi.fn(() => () => undefined),
     subscribeDashboardState: vi.fn(() => () => undefined),
+    subscribeDashboardTabRequests: vi.fn(() => () => undefined),
     startPushToTalk: vi.fn(async () => undefined),
     stopPushToTalk: vi.fn(async () => undefined),
     toggleDictation: vi.fn(async () => undefined),
