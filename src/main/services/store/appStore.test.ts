@@ -129,7 +129,7 @@ describe('AppStore', () => {
     expect(store.getSettings().pendingUpgradeOnboardingVersion).toBeNull()
   })
 
-  it('only marks upgrade onboarding for versions in the explicit gate', async () => {
+  it('marks upgrade onboarding when crossing the shortcut migration version', async () => {
     const settingsFile = join(userDataDir, 'data', 'settings.json')
     await mkdir(join(userDataDir, 'data'), { recursive: true })
     await writeFile(
@@ -151,6 +151,54 @@ describe('AppStore', () => {
     expect(store.getSettings().pendingUpgradeOnboardingVersion).toBe('0.1.48')
     expect(store.getSettings().pushToTalkHotkey).toBe('Ctrl+Meta')
     expect(store.getSettings().toggleHotkey).toBe('')
+  })
+
+  it('keeps applying the shortcut migration on future versions until the user has crossed it', async () => {
+    const settingsFile = join(userDataDir, 'data', 'settings.json')
+    await mkdir(join(userDataDir, 'data'), { recursive: true })
+    await writeFile(
+      settingsFile,
+      JSON.stringify({
+        ...defaultSettings,
+        lastSeenAppVersion: '0.1.40',
+        pushToTalkHotkey: 'Ctrl+F',
+        toggleHotkey: 'Ctrl+G',
+      }),
+      'utf8',
+    )
+
+    const AppStore = await loadStore({}, '0.1.50')
+    const store = new AppStore()
+    await store.initialize()
+
+    expect(store.getSettings().pendingStartupUpdatedNoticeVersion).toBe('0.1.50')
+    expect(store.getSettings().pendingUpgradeOnboardingVersion).toBe('0.1.50')
+    expect(store.getSettings().pushToTalkHotkey).toBe('Ctrl+Meta')
+    expect(store.getSettings().toggleHotkey).toBe('')
+  })
+
+  it('does not rerun the shortcut migration after the user has already crossed it', async () => {
+    const settingsFile = join(userDataDir, 'data', 'settings.json')
+    await mkdir(join(userDataDir, 'data'), { recursive: true })
+    await writeFile(
+      settingsFile,
+      JSON.stringify({
+        ...defaultSettings,
+        lastSeenAppVersion: '0.1.48',
+        pushToTalkHotkey: 'Ctrl+F',
+        toggleHotkey: 'Ctrl+G',
+      }),
+      'utf8',
+    )
+
+    const AppStore = await loadStore({}, '0.1.50')
+    const store = new AppStore()
+    await store.initialize()
+
+    expect(store.getSettings().pendingStartupUpdatedNoticeVersion).toBe('0.1.50')
+    expect(store.getSettings().pendingUpgradeOnboardingVersion).toBeNull()
+    expect(store.getSettings().pushToTalkHotkey).toBe('Ctrl+F')
+    expect(store.getSettings().toggleHotkey).toBe('Ctrl+G')
   })
 
   it('defaults launch on login to enabled when older settings files omit the field', async () => {

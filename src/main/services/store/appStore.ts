@@ -126,13 +126,17 @@ export class AppStore {
     const isUpgrade =
       persistedSettings.lastSeenAppVersion != null
       && persistedSettings.lastSeenAppVersion !== app.getVersion()
+    const shouldRunUpgradeOnboarding = requiresUpgradeOnboarding(
+      app.getVersion(),
+      persistedSettings.lastSeenAppVersion,
+    )
     const pendingStartupUpdatedNoticeVersion = isUpgrade
       ? app.getVersion()
       : persistedSettings.pendingStartupUpdatedNoticeVersion ?? null
     const pendingUpgradeOnboardingVersion = isUpgrade
-      ? (requiresUpgradeOnboarding(app.getVersion()) ? app.getVersion() : null)
+      ? (shouldRunUpgradeOnboarding ? app.getVersion() : null)
       : persistedSettings.pendingUpgradeOnboardingVersion ?? null
-    const shouldResetHotkeysForUpgrade = isUpgrade && requiresUpgradeOnboarding(app.getVersion())
+    const shouldResetHotkeysForUpgrade = isUpgrade && shouldRunUpgradeOnboarding
 
     this.settings = settingsSchema.parse({
       ...defaultSettings,
