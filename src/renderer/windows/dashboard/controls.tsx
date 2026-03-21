@@ -552,17 +552,15 @@ export const HistoryRow = ({
       </div>
 
       {/* Expanded details */}
-      <AnimatePresence initial={false}>
-        {expanded && (
+      {expanded && (
+        <div className="hentry-expanded-shell">
           <motion.div
             key="details"
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.25, ease: easeOutExpo }}
-            style={{ overflow: 'hidden' }}
+            className="hentry-expanded"
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.18, ease: easeOutExpo }}
           >
-            <div className="hentry-expanded">
               {/* Error message */}
               {entry.errorMessage && (
                 <div className="hentry-error">
@@ -660,10 +658,9 @@ export const HistoryRow = ({
                 </div>
               )}
 
-            </div>
           </motion.div>
-        )}
-      </AnimatePresence>
+        </div>
+      )}
 
       {/* Confirm delete */}
       <AnimatePresence>

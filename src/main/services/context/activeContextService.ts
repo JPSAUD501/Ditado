@@ -118,7 +118,7 @@ export class ActiveContextService {
       const selectionSnapshot = await this.clipboardService.readCurrent()
       const selection = selectionSnapshot.text
 
-      if (!selection || selection === sentinel) {
+      if (!selection || selection === sentinel || !selection.trim()) {
         return ''
       }
 

@@ -1412,10 +1412,13 @@ button:disabled {
   opacity: 0.75;
 }
 
-.hentry-expanded {
-  padding: 0.85rem 0.85rem 0.85rem 0.85rem;
+.hentry-expanded-shell {
   border-top: 1px solid var(--border);
   background: var(--bg-0);
+}
+
+.hentry-expanded {
+  padding: 0.85rem 0.85rem 0.85rem 0.85rem;
   display: grid;
   gap: 0.85rem;
 }

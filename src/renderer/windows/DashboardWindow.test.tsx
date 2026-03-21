@@ -344,4 +344,72 @@ describe('DashboardWindow', () => {
     expect(await screen.findByText('most recent output')).toBeInTheDocument()
     expect(screen.queryByText(/no entries yet/i)).toBeNull()
   })
+
+  it('expands a history entry without changing the existing detail content', async () => {
+    const { publishState } = installDesktopApi()
+    render(<DashboardWindow initialTab="history" />)
+    expect(await screen.findByText(/no entries yet/i)).toBeInTheDocument()
+
+    const createdAt = new Date().toISOString()
+    const selectedText = 'selected context for expansion'
+    const historyAudio = createDeferred<{ mimeType: string; base64: string } | null>()
+    const getHistoryAudio = vi.fn(() => historyAudio.promise)
+    window.ditado.getHistoryAudio = getHistoryAudio
+
+    const entry = historyEntrySchema.parse({
+      id: 'entry-expand',
+      createdAt,
+      outcome: 'completed',
+      appName: 'VS Code',
+      windowTitle: 'prompt.ts',
+      activationMode: 'toggle',
+      modelId: 'google/gemini-3-flash-preview',
+      outputText: 'expanded output',
+      errorMessage: null,
+      audioFilePath: 'history-audio/entry-expand.wav',
+      audioDurationMs: 1400,
+      audioMimeType: 'audio/wav',
+      audioBytes: 2048,
+      submittedContext: {
+        appName: 'VS Code',
+        windowTitle: 'prompt.ts',
+        selectedText,
+        permissionsGranted: true,
+        confidence: 'high',
+        capturedAt: createdAt,
+      },
+      usedContext: true,
+      latencyMs: 120,
+      audioProcessingMs: 28,
+      audioSendMs: 64,
+      insertionStrategy: 'insert-at-cursor',
+      requestedMode: 'all-at-once',
+      effectiveMode: 'all-at-once',
+      insertionMethod: 'clipboard-all-at-once',
+      fallbackUsed: false,
+      timeToFirstTokenMs: 0,
+      timeToCompleteMs: 0,
+    })
+
+    await act(async () => {
+      publishState({
+        ...createState(),
+        history: [entry],
+      })
+      await Promise.resolve()
+    })
+
+    await userEvent.click(await screen.findByRole('button', { name: /expanded output/i }))
+
+    expect(await screen.findByText(selectedText)).toBeInTheDocument()
+    expect(await screen.findByText(/loading audio/i)).toBeInTheDocument()
+    await waitFor(() => {
+      expect(getHistoryAudio).toHaveBeenCalledWith('entry-expand')
+    })
+
+    await act(async () => {
+      historyAudio.resolve(null)
+      await historyAudio.promise
+    })
+  })
 })

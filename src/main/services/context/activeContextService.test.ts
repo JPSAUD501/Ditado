@@ -44,4 +44,23 @@ describe('ActiveContextService', () => {
     expect(clipboard.writeNormal).toHaveBeenCalled()
     expect(clipboard.restore).toHaveBeenCalledWith({ text: 'previous clipboard' })
   })
+
+  it('treats whitespace-only selection as empty', async () => {
+    const clipboard = {
+      readCurrent: vi
+        .fn()
+        .mockResolvedValueOnce({ text: 'previous clipboard' })
+        .mockResolvedValueOnce({ text: '   ' }),
+      writeNormal: vi.fn(async () => undefined),
+      restore: vi.fn(async () => undefined),
+    }
+
+    const { ActiveContextService } = await import('./activeContextService.js')
+    const service = new ActiveContextService(clipboard as never)
+    const context = await service.capture(true, true)
+
+    expect(context.selectedText).toBe('')
+    expect(context.confidence).toBe('partial')
+    expect(clipboard.restore).toHaveBeenCalledWith({ text: 'previous clipboard' })
+  })
 })
