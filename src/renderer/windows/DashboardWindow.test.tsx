@@ -125,7 +125,7 @@ describe('DashboardWindow', () => {
 
     render(<DashboardWindow initialTab="onboarding" />)
 
-    expect(await screen.findByText(/welcome to ditado/i)).toBeInTheDocument()
+    expect(await screen.findByText(/meet ditado/i)).toBeInTheDocument()
     expect(updateSettings).not.toHaveBeenCalled()
   })
 
@@ -140,6 +140,49 @@ describe('DashboardWindow', () => {
 
     expect(await screen.findByRole('textbox', { name: /model id/i })).toBeInTheDocument()
     expect(screen.queryByText(/connect api/i)).toBeNull()
+  })
+
+  it('reopens onboarding when the current version requires upgrade onboarding', async () => {
+    installDesktopApi({
+      ...defaultSettings,
+      onboardingCompleted: true,
+      apiKeyPresent: true,
+      pendingUpgradeOnboardingVersion: '0.0.0-test',
+    })
+
+    render(<DashboardWindow initialTab="overview" />)
+
+    expect(await screen.findByText(/meet ditado/i)).toBeInTheDocument()
+    expect(screen.getByText(/default shortcut changed in this version/i)).toBeInTheDocument()
+  })
+
+  it('shows the microphone step before the API key step in onboarding', async () => {
+    installDesktopApi({
+      ...defaultSettings,
+      onboardingCompleted: false,
+      apiKeyPresent: true,
+    })
+
+    const { container } = render(<DashboardWindow initialTab="onboarding" />)
+
+    expect(await screen.findByText(/meet ditado/i)).toBeInTheDocument()
+
+    const clickContinue = async () => {
+      const button = container.querySelector('.wizard-actions .button-primary')
+      expect(button).not.toBeNull()
+      await userEvent.click(button as HTMLButtonElement)
+    }
+
+    await clickContinue()
+    await clickContinue()
+    await clickContinue()
+
+    expect(await screen.findByText(/test your microphone/i)).toBeInTheDocument()
+    expect(screen.queryByText(/connect your api/i)).toBeNull()
+
+    await clickContinue()
+
+    expect(await screen.findByText(/connect your api/i)).toBeInTheDocument()
   })
 
   it('renders the sidebar tabs in overview, history, settings order', async () => {
@@ -244,7 +287,7 @@ describe('DashboardWindow', () => {
     const { updateSettings, setHotkeyCaptureActive } = installDesktopApi()
     render(<DashboardWindow initialTab="settings" />)
 
-    const hotkeyButton = await screen.findByRole('button', { name: /toggle hotkey/i })
+    const hotkeyButton = await screen.findByRole('button', { name: /push-to-talk/i })
     await userEvent.click(hotkeyButton)
 
     fireEvent.keyDown(hotkeyButton, {
@@ -254,11 +297,11 @@ describe('DashboardWindow', () => {
     })
 
     await waitFor(() => {
-      expect(updateSettings).toHaveBeenCalledWith({ toggleHotkey: 'Ctrl+Alt' })
+      expect(updateSettings).toHaveBeenCalledWith({ pushToTalkHotkey: 'Ctrl+Alt' })
     })
     expect(setHotkeyCaptureActive).toHaveBeenNthCalledWith(1, true)
     expect(setHotkeyCaptureActive).toHaveBeenLastCalledWith(false)
-    expect(screen.getByRole('button', { name: /toggle hotkey/i })).toHaveTextContent('Ctrl+Alt')
+    expect(screen.getByRole('button', { name: /push-to-talk/i })).toHaveTextContent('Ctrl+Alt')
   })
 
   it('saves the API key and reflects the persisted state in the settings UI', async () => {

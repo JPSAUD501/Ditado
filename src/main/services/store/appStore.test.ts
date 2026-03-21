@@ -2,8 +2,10 @@ import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { defaultSettings } from '../../../shared/defaults.js'
 
 let userDataDir = ''
+let mockedAppVersion = '0.1.44'
 
 const loadStore = async (
   safeStorageOverrides: Partial<{
@@ -11,11 +13,14 @@ const loadStore = async (
     encryptString: (value: string) => Buffer
     decryptString: (value: Buffer) => string
   }> = {},
+  appVersion = mockedAppVersion,
 ) => {
   vi.resetModules()
+  mockedAppVersion = appVersion
   vi.doMock('electron', () => ({
     app: {
       getPath: () => userDataDir,
+      getVersion: () => mockedAppVersion,
     },
     safeStorage: {
       isEncryptionAvailable: () => true,
@@ -31,6 +36,7 @@ const loadStore = async (
 
 beforeEach(async () => {
   userDataDir = await mkdtemp(join(tmpdir(), 'ditado-store-'))
+  mockedAppVersion = '0.1.44'
 })
 
 describe('AppStore', () => {
@@ -43,8 +49,8 @@ describe('AppStore', () => {
     const store = new AppStore()
     await store.initialize()
 
-    expect(store.getSettings().pushToTalkHotkey).toBe('Ctrl+Alt')
-    expect(store.getSettings().toggleHotkey).toBe('Shift+Alt')
+    expect(store.getSettings().pushToTalkHotkey).toBe('Ctrl+Meta')
+    expect(store.getSettings().toggleHotkey).toBe('')
     expect(store.getSettings().launchOnLogin).toBe(true)
     expect(store.getSettings().sendContextAutomatically).toBe(true)
     expect(store.getSettings().autoUpdateEnabled).toBe(true)
@@ -90,6 +96,61 @@ describe('AppStore', () => {
 
     const persisted = JSON.parse(await readFile(settingsFile, 'utf8'))
     expect(persisted.autoUpdateEnabled).toBe(true)
+  })
+
+  it('does not create startup update or onboarding notices on first install', async () => {
+    const AppStore = await loadStore({}, '0.1.44')
+    const store = new AppStore()
+    await store.initialize()
+
+    expect(store.getSettings().lastSeenAppVersion).toBe('0.1.44')
+    expect(store.getSettings().pendingStartupUpdatedNoticeVersion).toBeNull()
+    expect(store.getSettings().pendingUpgradeOnboardingVersion).toBeNull()
+  })
+
+  it('marks any upgrade for the startup updated notice', async () => {
+    const settingsFile = join(userDataDir, 'data', 'settings.json')
+    await mkdir(join(userDataDir, 'data'), { recursive: true })
+    await writeFile(
+      settingsFile,
+      JSON.stringify({
+        ...defaultSettings,
+        lastSeenAppVersion: '0.1.43',
+      }),
+      'utf8',
+    )
+
+    const AppStore = await loadStore({}, '0.1.45')
+    const store = new AppStore()
+    await store.initialize()
+
+    expect(store.getSettings().lastSeenAppVersion).toBe('0.1.45')
+    expect(store.getSettings().pendingStartupUpdatedNoticeVersion).toBe('0.1.45')
+    expect(store.getSettings().pendingUpgradeOnboardingVersion).toBeNull()
+  })
+
+  it('only marks upgrade onboarding for versions in the explicit gate', async () => {
+    const settingsFile = join(userDataDir, 'data', 'settings.json')
+    await mkdir(join(userDataDir, 'data'), { recursive: true })
+    await writeFile(
+      settingsFile,
+      JSON.stringify({
+        ...defaultSettings,
+        lastSeenAppVersion: '0.1.43',
+        pushToTalkHotkey: 'Ctrl+F',
+        toggleHotkey: 'Ctrl+G',
+      }),
+      'utf8',
+    )
+
+    const AppStore = await loadStore({}, '0.1.44')
+    const store = new AppStore()
+    await store.initialize()
+
+    expect(store.getSettings().pendingStartupUpdatedNoticeVersion).toBe('0.1.44')
+    expect(store.getSettings().pendingUpgradeOnboardingVersion).toBe('0.1.44')
+    expect(store.getSettings().pushToTalkHotkey).toBe('Ctrl+Meta')
+    expect(store.getSettings().toggleHotkey).toBe('')
   })
 
   it('defaults launch on login to enabled when older settings files omit the field', async () => {

@@ -2,7 +2,10 @@ import type { DictationSession } from '@shared/contracts'
 import type { UiSoundName } from '@shared/uiSounds'
 
 const isShortPressNotice = (session: DictationSession | null): boolean =>
-  session?.status === 'notice' && session.noticeMessage?.startsWith('notices.holdToDictate::') === true
+  session?.status === 'notice' && (
+    session.noticeMessage?.startsWith('notices.holdToDictate::') === true ||
+    session.noticeMessage === 'notices.doubleTapToToggle'
+  )
 
 const isNewShortPressNotice = (previous: DictationSession | null, next: DictationSession): boolean =>
   isShortPressNotice(next)
@@ -14,7 +17,14 @@ const isNewShortPressNotice = (previous: DictationSession | null, next: Dictatio
 
 const isStartTransition = (previous: DictationSession | null, next: DictationSession): boolean =>
   next.captureIntent === 'start'
-  && ['arming', 'listening'].includes(next.status)
+  && (
+    // Push-to-talk: fire as soon as capture starts arming. The shortcut layer
+    // now delays startCapture long enough to distinguish a real hold from a
+    // double tap, so arming is the first reliable "start" signal again.
+    (next.activationMode === 'push-to-talk' && ['arming', 'listening'].includes(next.status))
+    // Toggle: fire on arming (the user intentionally started toggle mode)
+    || (next.activationMode === 'toggle' && ['arming', 'listening'].includes(next.status))
+  )
   && (previous?.id !== next.id || previous.captureIntent !== 'start')
 
 const isStopTransition = (previous: DictationSession | null, next: DictationSession): boolean =>
@@ -36,6 +46,10 @@ export const getUiSoundForSessionTransition = (
   }
 
   if (isStartTransition(previous, next)) {
+    // Suppress pttStart on the second tap of a double-tap gesture (previous was the short-press hint)
+    if (next.activationMode === 'push-to-talk' && isShortPressNotice(previous)) {
+      return null
+    }
     return next.activationMode === 'push-to-talk' ? 'pttStart' : 'tttStart'
   }
 

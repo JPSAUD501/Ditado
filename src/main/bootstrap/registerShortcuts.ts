@@ -180,6 +180,8 @@ const toAccelerator = (hotkey: string): string | null => {
 }
 
 const SHORT_PUSH_TO_TALK_MS = 500
+const DOUBLE_TAP_WINDOW_MS = 600
+const PUSH_TO_TALK_START_DELAY_MS = 180
 
 export const registerShortcuts = (
   store: AppStore,
@@ -193,9 +195,34 @@ export const registerShortcuts = (
   let registeredPushAccelerator: string | null = null
   let pushActive = false
   let pushStartedAt = 0
+  let pushCaptureStarted = false
   let toggleActive = false
   let lastToggleAt = 0
+  let lastShortPressAt = 0
+  let pendingPushStartTimeout: ReturnType<typeof setTimeout> | null = null
+  let pendingShortPressHintTimeout: ReturnType<typeof setTimeout> | null = null
   const pressedKeys = new Set<number>()
+
+  const clearPendingPushStart = (): void => {
+    if (pendingPushStartTimeout != null) {
+      clearTimeout(pendingPushStartTimeout)
+      pendingPushStartTimeout = null
+    }
+  }
+
+  const clearPendingShortPressHint = (): void => {
+    if (pendingShortPressHintTimeout != null) {
+      clearTimeout(pendingShortPressHintTimeout)
+      pendingShortPressHintTimeout = null
+    }
+  }
+
+  const resetPushState = (): void => {
+    pushActive = false
+    pushStartedAt = 0
+    pushCaptureStarted = false
+    clearPendingPushStart()
+  }
 
   const triggerToggle = (): void => {
     const now = Date.now()
@@ -218,9 +245,8 @@ export const registerShortcuts = (
 
     if (event.keycode === UiohookKey.Escape) {
       pressedKeys.clear()
-      pushActive = false
-      pushStartedAt = 0
-      toggleActive = false
+      resetPushState()
+      clearPendingShortPressHint()
       void orchestrator.cancel()
       return
     }
@@ -234,13 +260,35 @@ export const registerShortcuts = (
     if (shouldStartPushFromHook && !pushActive && pushMatches) {
       pushActive = true
       pushStartedAt = Date.now()
-      void orchestrator.startCapture('push-to-talk')
+      // If toggle is currently active, a keydown means the user wants to stop it —
+      // don't start a new PTT capture (handled in keyup).
+      // If we're in the double-tap window, also defer capture to avoid the pttStart
+      // sound + cancel overhead when the double-tap is confirmed on keyup.
+      const currentSession = orchestrator.getSession()
+      const toggleIsActive = currentSession?.activationMode === 'toggle'
+        && ['arming', 'listening'].includes(currentSession.status)
+      const inDoubleTapWindow = lastShortPressAt > 0
+        && (Date.now() - lastShortPressAt < DOUBLE_TAP_WINDOW_MS)
+      if (!toggleIsActive && !inDoubleTapWindow) {
+        clearPendingShortPressHint()
+        pendingPushStartTimeout = setTimeout(() => {
+          pendingPushStartTimeout = null
+          if (!pushActive || isCaptureSuspended()) {
+            return
+          }
+          pushCaptureStarted = true
+          void orchestrator.startCapture('push-to-talk')
+        }, PUSH_TO_TALK_START_DELAY_MS)
+      } else {
+        pushCaptureStarted = false
+      }
     }
 
     if (shouldToggleFromHook && !toggleActive && toggleMatches) {
       toggleActive = true
       triggerToggle()
     }
+
   }
 
   const keyupHandler = (event: UiohookKeyboardEvent): void => {
@@ -250,8 +298,8 @@ export const registerShortcuts = (
 
     if (isCaptureSuspended()) {
       pressedKeys.clear()
-      pushActive = false
-      toggleActive = false
+      resetPushState()
+      clearPendingShortPressHint()
       return
     }
 
@@ -264,11 +312,61 @@ export const registerShortcuts = (
       pushActive = false
       const heldForMs = Date.now() - pushStartedAt
       pushStartedAt = 0
+      const didStartCapture = pushCaptureStarted
+      pushCaptureStarted = false
+      clearPendingPushStart()
+
       if (heldForMs < SHORT_PUSH_TO_TALK_MS) {
-        void orchestrator.showShortPressHint()
+        const now = Date.now()
+
+        // If we didn't start a capture, check if we were stopping an active toggle session
+        if (!didStartCapture) {
+          const currentSession = orchestrator.getSession()
+          const toggleWasActive = currentSession?.activationMode === 'toggle'
+            && ['arming', 'listening', 'processing'].includes(currentSession.status)
+          if (toggleWasActive) {
+            // Single tap while toggle active → stop it
+            orchestrator.requestStop('toggle')
+            return
+          }
+        }
+
+        if (now - lastShortPressAt < DOUBLE_TAP_WINDOW_MS) {
+          // Double-tap detected → activate hands-free toggle mode
+          // No capture was started for this tap, so directly trigger toggle
+          lastShortPressAt = 0
+          clearPendingShortPressHint()
+          if (didStartCapture) {
+            // Rare: capture was started (window expired between keydown and keyup)
+            void (async () => { await orchestrator.cancel(); triggerToggle() })()
+          } else {
+            triggerToggle()
+          }
+        } else {
+          // First short tap — record time and only surface the hint if a
+          // second tap never arrives inside the double-tap window.
+          lastShortPressAt = now
+          clearPendingShortPressHint()
+          pendingShortPressHintTimeout = setTimeout(() => {
+            pendingShortPressHintTimeout = null
+            if (lastShortPressAt !== now) {
+              return
+            }
+            lastShortPressAt = 0
+            void orchestrator.showShortPressHint()
+          }, DOUBLE_TAP_WINDOW_MS)
+        }
         return
       }
-      orchestrator.requestStop('push-to-talk')
+      // Long press
+      lastShortPressAt = 0
+      clearPendingShortPressHint()
+      if (didStartCapture) {
+        orchestrator.requestStop('push-to-talk')
+      } else {
+        // Was in double-tap window or stopping toggle at keydown, but held long — start+stop now
+        void orchestrator.startCapture('push-to-talk').then(() => orchestrator.requestStop('push-to-talk'))
+      }
     }
 
     if (
@@ -277,6 +375,7 @@ export const registerShortcuts = (
     ) {
       toggleActive = false
     }
+
   }
 
   const syncPushRegistration = (): void => {
@@ -301,19 +400,19 @@ export const registerShortcuts = (
         session?.status === 'listening' && session.activationMode === 'push-to-talk'
 
       if (pushActive || hasActivePushSession) {
-        pushActive = false
-        pushStartedAt = 0
+        resetPushState()
         orchestrator.requestStop('push-to-talk')
         return
       }
 
       pushActive = true
       pushStartedAt = Date.now()
+      pushCaptureStarted = true
+      clearPendingPushStart()
       await orchestrator.startCapture('push-to-talk')
       const nextSession = orchestrator.getSession()
       if (!nextSession || nextSession.status !== 'listening' || nextSession.activationMode !== 'push-to-talk') {
-        pushActive = false
-        pushStartedAt = 0
+        resetPushState()
       }
     })
 
@@ -380,9 +479,10 @@ export const registerShortcuts = (
     parsedPushHotkey = parseHotkey(store.getSettings().pushToTalkHotkey)
     parsedToggleHotkey = parseHotkey(store.getSettings().toggleHotkey)
     pressedKeys.clear()
-    pushActive = false
-    pushStartedAt = 0
+    lastShortPressAt = 0
+    resetPushState()
     toggleActive = false
+    clearPendingShortPressHint()
     syncPushRegistration()
     syncToggleRegistration()
   }

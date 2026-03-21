@@ -280,7 +280,7 @@ export class DictationSessionOrchestrator {
       startedAt: new Date().toISOString(),
       finishedAt: new Date().toISOString(),
       targetApp: 'Ditado',
-      noticeMessage: `notices.holdToDictate::${this.store.getSettings().toggleHotkey}`,
+      noticeMessage: 'notices.doubleTapToToggle',
     })
   }
 

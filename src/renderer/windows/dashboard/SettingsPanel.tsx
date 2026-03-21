@@ -6,7 +6,7 @@ import {
 } from 'lucide-react'
 
 import type { Settings } from '@shared/contracts'
-import { defaultPushToTalkHotkey, defaultToggleHotkey } from '@shared/defaults'
+import { defaultPushToTalkHotkey } from '@shared/defaults'
 import { HotkeyField, MicrophoneSelect, ToggleRow } from './controls'
 
 const requestBrowserMicrophonePermission = async (): Promise<void> => {
@@ -144,15 +144,7 @@ export const SettingsPanel = ({
         {/* Hotkeys */}
         <div className="surface-panel p-4">
           <Section title={t('settings.hotkeys')} icon={MousePointerClick}>
-            <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr' }}>
-              <Field label={t('settings.toggleLabel')} hint={t('settings.toggleHint')}>
-                <HotkeyField
-                  label={t('settings.toggleLabel')}
-                  value={settings.toggleHotkey}
-                  fallbackValue={defaultToggleHotkey}
-                  onCommit={(v) => updateSettings({ toggleHotkey: v })}
-                />
-              </Field>
+            <div className="grid gap-3">
               <Field label={t('settings.pushToTalkLabel')} hint={t('settings.pushToTalkHint')}>
                 <HotkeyField
                   label={t('settings.pushToTalkLabel')}

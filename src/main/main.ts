@@ -57,6 +57,7 @@ const OVERLAY_WIDTH = 420
 const OVERLAY_HEIGHT = 54
 const OVERLAY_EXIT_DURATION_MS = 140
 const STARTUP_UPDATING_NOTICE_DURATION_MS = 900
+const STARTUP_UPDATED_NOTICE_DURATION_MS = 1_400
 const STABLE_USER_DATA_DIR_NAME = 'Ditado'
 const DASHBOARD_TITLEBAR_HEIGHT = 36
 
@@ -316,6 +317,7 @@ void app.whenReady().then(async () => {
   const store = new AppStore()
   await store.initialize()
   currentDashboardTheme = store.getSettings().theme
+  const shouldShowStartupUpdatedNotice = store.getSettings().pendingStartupUpdatedNoticeVersion === app.getVersion()
 
   const permissions = new PermissionService()
   const telemetry = new TelemetryService(
@@ -338,23 +340,28 @@ void app.whenReady().then(async () => {
     sequenceStarted: boolean
     ready: boolean
     noticeShown: boolean
+    updatedNoticeShown: boolean
     recorderRendererReady: boolean
     automationSettled: boolean
     contextSettled: boolean
     audioWarmupStatus: RecorderWarmupStatus | null
+    readyNoticeBlockedUntil: number
   } = {
     required: false,
     sequenceStarted: false,
     ready: false,
     noticeShown: false,
+    updatedNoticeShown: false,
     recorderRendererReady: false,
     automationSettled: false,
     contextSettled: false,
     audioWarmupStatus: null,
+    readyNoticeBlockedUntil: 0,
   }
   const startupUpdateState = {
     complete: false,
   }
+  let readyNoticeRetryTimer: NodeJS.Timeout | null = null
 
   const canStartDictation = (): boolean => (
     canUseDictation(store.getSettings()) && (!startupWarmupState.required || startupWarmupState.ready)
@@ -433,6 +440,18 @@ void app.whenReady().then(async () => {
 
     startupWarmupState.ready = true
 
+    const remainingReadyNoticeBlockMs = startupWarmupState.readyNoticeBlockedUntil - Date.now()
+    if (remainingReadyNoticeBlockMs > 0) {
+      if (readyNoticeRetryTimer) {
+        clearTimeout(readyNoticeRetryTimer)
+      }
+      readyNoticeRetryTimer = setTimeout(() => {
+        readyNoticeRetryTimer = null
+        maybeFinalizeStartupWarmup()
+      }, remainingReadyNoticeBlockMs + 10)
+      return
+    }
+
     if (!startupWarmupState.noticeShown) {
       startupWarmupState.noticeShown = true
       showStartupNotice('notices.ready')
@@ -472,12 +491,20 @@ void app.whenReady().then(async () => {
     }
 
     startupUpdateState.complete = true
+    if (shouldShowStartupUpdatedNotice && !startupWarmupState.updatedNoticeShown) {
+      startupWarmupState.updatedNoticeShown = true
+      startupWarmupState.readyNoticeBlockedUntil = Date.now() + STARTUP_UPDATED_NOTICE_DURATION_MS
+      showStartupNotice('notices.updated', STARTUP_UPDATED_NOTICE_DURATION_MS)
+      void store.updateSettings({
+        pendingStartupUpdatedNoticeVersion: null,
+      }).catch(() => undefined)
+    }
     maybeFinalizeStartupWarmup()
   }
 
   const runStartupUpdateGate = async (): Promise<void> => {
     if (!isAppReady(store.getSettings())) {
-      startupUpdateState.complete = true
+      completeStartupUpdateFlow()
       return
     }
 
@@ -649,7 +676,7 @@ void app.whenReady().then(async () => {
     beginStartupWarmup()
     void runStartupUpdateGate()
   } else {
-    startupUpdateState.complete = true
+    completeStartupUpdateFlow()
     showDashboard(getPreferredDashboardTab(settings))
   }
 })

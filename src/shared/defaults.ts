@@ -7,10 +7,8 @@ import type {
   UpdateState,
 } from './contracts.js'
 
-const isMac = typeof process !== 'undefined' && process.platform === 'darwin'
-
-export const defaultPushToTalkHotkey = isMac ? 'Meta+Alt' : 'Ctrl+Alt'
-export const defaultToggleHotkey = isMac ? 'Shift+Meta' : 'Shift+Alt'
+export const defaultPushToTalkHotkey = 'Ctrl+Meta'
+export const defaultToggleHotkey = ''
 
 export const defaultSettings: Settings = {
   launchOnLogin: true,
@@ -29,6 +27,9 @@ export const defaultSettings: Settings = {
   onboardingCompleted: false,
   theme: 'system',
   language: 'system',
+  lastSeenAppVersion: null,
+  pendingStartupUpdatedNoticeVersion: null,
+  pendingUpgradeOnboardingVersion: null,
 }
 
 export const emptyContextSnapshot: ContextSnapshot = {

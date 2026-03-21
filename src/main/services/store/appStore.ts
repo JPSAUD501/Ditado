@@ -2,7 +2,11 @@ import { app, safeStorage } from 'electron'
 import { copyFile, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 
-import { defaultSettings } from '../../../shared/defaults.js'
+import {
+  defaultPushToTalkHotkey,
+  defaultSettings,
+  defaultToggleHotkey,
+} from '../../../shared/defaults.js'
 import {
   historyEntrySchema,
   settingsSchema,
@@ -13,6 +17,7 @@ import {
   type TelemetryRecord,
 } from '../../../shared/contracts.js'
 import { normalizeHotkey } from '../../../shared/hotkeys.js'
+import { requiresUpgradeOnboarding } from '../../../shared/versioning.js'
 
 const TELEMETRY_LIMIT = 10_000
 
@@ -117,18 +122,36 @@ export class AppStore {
 
     const settingsCandidate = await readJsonFile(this.settingsFile)
     const persistedSettings = parsePersistedSettings(settingsCandidate) ?? {}
+    const isFirstRun = persistedSettings.lastSeenAppVersion == null
+    const isUpgrade =
+      persistedSettings.lastSeenAppVersion != null
+      && persistedSettings.lastSeenAppVersion !== app.getVersion()
+    const pendingStartupUpdatedNoticeVersion = isUpgrade
+      ? app.getVersion()
+      : persistedSettings.pendingStartupUpdatedNoticeVersion ?? null
+    const pendingUpgradeOnboardingVersion = isUpgrade
+      ? (requiresUpgradeOnboarding(app.getVersion()) ? app.getVersion() : null)
+      : persistedSettings.pendingUpgradeOnboardingVersion ?? null
+    const shouldResetHotkeysForUpgrade = isUpgrade && requiresUpgradeOnboarding(app.getVersion())
 
     this.settings = settingsSchema.parse({
       ...defaultSettings,
       ...persistedSettings,
       autoUpdateEnabled: true,
       pushToTalkHotkey:
-        normalizeHotkey(persistedSettings.pushToTalkHotkey ?? defaultSettings.pushToTalkHotkey)
-        ?? defaultSettings.pushToTalkHotkey,
+        shouldResetHotkeysForUpgrade
+          ? defaultPushToTalkHotkey
+          : normalizeHotkey(persistedSettings.pushToTalkHotkey ?? defaultSettings.pushToTalkHotkey)
+            ?? defaultSettings.pushToTalkHotkey,
       toggleHotkey:
-        normalizeHotkey(persistedSettings.toggleHotkey ?? defaultSettings.toggleHotkey)
-        ?? defaultSettings.toggleHotkey,
+        shouldResetHotkeysForUpgrade
+          ? defaultToggleHotkey
+          : normalizeHotkey(persistedSettings.toggleHotkey ?? defaultSettings.toggleHotkey)
+            ?? defaultSettings.toggleHotkey,
       apiKeyPresent: await this.hasStoredApiKey(),
+      lastSeenAppVersion: app.getVersion(),
+      pendingStartupUpdatedNoticeVersion: isFirstRun ? null : pendingStartupUpdatedNoticeVersion,
+      pendingUpgradeOnboardingVersion: isFirstRun ? null : pendingUpgradeOnboardingVersion,
     })
 
     const historyCandidate = await readJsonFile(this.historyFile)

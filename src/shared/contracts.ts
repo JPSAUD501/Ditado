@@ -380,6 +380,9 @@ export const settingsSchema = z.object({
   onboardingCompleted: z.boolean().default(false),
   theme: z.enum(['dark', 'light', 'system']).default('system'),
   language: z.enum(['en', 'pt-BR', 'es', 'system']).default('system'),
+  lastSeenAppVersion: z.string().nullable().default(null),
+  pendingStartupUpdatedNoticeVersion: z.string().nullable().default(null),
+  pendingUpgradeOnboardingVersion: z.string().nullable().default(null),
 })
 
 export type Settings = z.infer<typeof settingsSchema>
@@ -400,6 +403,9 @@ export const settingsPatchSchema = z.object({
   onboardingCompleted: z.boolean().optional(),
   theme: z.enum(['dark', 'light', 'system']).optional(),
   language: z.enum(['en', 'pt-BR', 'es', 'system']).optional(),
+  lastSeenAppVersion: z.string().nullable().optional(),
+  pendingStartupUpdatedNoticeVersion: z.string().nullable().optional(),
+  pendingUpgradeOnboardingVersion: z.string().nullable().optional(),
 })
   .strict()
 

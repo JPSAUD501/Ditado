@@ -122,6 +122,27 @@ describe('uiSoundEvents', () => {
       ...shortPressNotice,
     })).toBeNull()
   })
+
+  it('suppresses the push-to-talk start sound when a short-press notice turns into toggle mode', () => {
+    const shortPressNotice = {
+      ...createIdleSession(),
+      id: 'session-notice',
+      activationMode: 'push-to-talk' as const,
+      status: 'notice' as const,
+      captureIntent: 'none' as const,
+      noticeMessage: 'notices.doubleTapToToggle',
+    }
+
+    expect(getUiSoundForSessionTransition(shortPressNotice, {
+      ...createIdleSession(),
+      id: 'session-toggle',
+      activationMode: 'push-to-talk',
+      status: 'arming',
+      captureIntent: 'start',
+      startedAt: new Date().toISOString(),
+      targetApp: 'VS Code',
+    })).toBeNull()
+  })
 })
 
 describe('uiSoundPlayer', () => {

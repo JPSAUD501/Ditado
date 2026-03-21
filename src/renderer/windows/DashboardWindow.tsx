@@ -130,6 +130,7 @@ export const DashboardWindow = ({ initialTab }: { initialTab: DashboardTab }) =>
   const [draftSettings, setDraftSettings] = useState<Settings | null>(null)
   const [microphoneRefreshKey, setMicrophoneRefreshKey] = useState(0)
   const [forceOnboarding, setForceOnboarding] = useState(false)
+  const [dismissedOnboarding, setDismissedOnboarding] = useState(false)
   const latestStateSettings = useRef(state.settings)
   const latestSettingsMutationId = useRef(0)
   useDictationRecorder(state.session, state.settings.preferredMicrophoneId, true)
@@ -139,6 +140,9 @@ export const DashboardWindow = ({ initialTab }: { initialTab: DashboardTab }) =>
       ? draftSettings
       : state.settings
   const requestedOnboarding = initialTab === 'onboarding' && !settings.onboardingCompleted
+  const requiresUpgradeOnboarding = settings.pendingUpgradeOnboardingVersion === state.appVersion
+  const shouldShowOnboarding =
+    !dismissedOnboarding && (forceOnboarding || requestedOnboarding || !settings.onboardingCompleted || requiresUpgradeOnboarding)
   useThemeAndLanguage(settings)
   const sessionStatus = state.session?.status ?? 'idle'
 
@@ -200,14 +204,18 @@ export const DashboardWindow = ({ initialTab }: { initialTab: DashboardTab }) =>
   }
 
   const finishOnboarding = async (): Promise<void> => {
-    await updateSettings({ onboardingCompleted: true })
+    setDismissedOnboarding(true)
     setForceOnboarding(false)
     setActiveTab('overview')
+    void updateSettings({
+      onboardingCompleted: true,
+      pendingUpgradeOnboardingVersion: null,
+    }).catch(() => undefined)
   }
 
   /* ── Auto-complete onboarding for existing users who already have an API key ── */
   /* ── Onboarding wizard overlay ── */
-  if (forceOnboarding || requestedOnboarding || !settings.onboardingCompleted) {
+  if (shouldShowOnboarding) {
     return (
       <OnboardingWizard
         settings={settings}
@@ -219,6 +227,7 @@ export const DashboardWindow = ({ initialTab }: { initialTab: DashboardTab }) =>
         microphoneRefreshKey={microphoneRefreshKey}
         refreshMicrophones={refreshMicrophones}
         finishOnboarding={finishOnboarding}
+        isUpgradeOnboarding={requiresUpgradeOnboarding}
       />
     )
   }
@@ -304,7 +313,10 @@ export const DashboardWindow = ({ initialTab }: { initialTab: DashboardTab }) =>
                   updateSettings={updateSettings}
                   microphoneRefreshKey={microphoneRefreshKey}
                   refreshMicrophones={refreshMicrophones}
-                  onRestartOnboarding={() => setForceOnboarding(true)}
+                  onRestartOnboarding={() => {
+                    setDismissedOnboarding(false)
+                    setForceOnboarding(true)
+                  }}
                   reducedMotion={reducedMotion}
                   sectionMotion={sectionMotion}
                 />
