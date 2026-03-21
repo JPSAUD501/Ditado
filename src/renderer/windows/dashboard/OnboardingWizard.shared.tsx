@@ -5,17 +5,6 @@ import { Check } from 'lucide-react'
 
 import type { Settings } from '@shared/contracts'
 
-export const TOTAL_STEPS = 10
-export const easeOutExpo = [0.16, 1, 0.3, 1] as const
-
-export const demoStatusColor: Partial<Record<string, string>> = {
-  listening: 'var(--status-listen)',
-  processing: 'var(--status-process)',
-  streaming: 'var(--status-write)',
-  completed: 'var(--status-ok)',
-  error: 'var(--status-error)',
-}
-
 export const StatusDot = ({ color, pulse }: { color: string; pulse: boolean }) => (
   <motion.div
     style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: color }}

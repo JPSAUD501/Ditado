@@ -6,7 +6,7 @@ import { ArrowRight, Check, CheckCircle, KeyRound, Mic } from 'lucide-react'
 
 import type { DictationSession, Settings } from '@shared/contracts'
 import { formatHotkeyForDisplay, normalizeHotkey } from '@shared/hotkeys'
-import { easeOutExpo } from './OnboardingWizard.shared'
+import { easeOutExpo } from './OnboardingWizard.constants'
 
 type PressedKeysState = {
   ctrl: boolean
@@ -208,8 +208,8 @@ export const MockupChatApp = ({
 
 const SelectTransformMockup = ({ session }: { session: DictationSession | null }) => {
   const { t } = useTranslation()
-  const entrySessionIdRef = useRef<string | null | undefined>(session?.id)
-  const isNewSession = session?.id !== entrySessionIdRef.current
+  const [entrySessionId] = useState<string | null | undefined>(session?.id)
+  const isNewSession = session?.id !== entrySessionId
   const isListening = isNewSession && session?.activationMode === 'push-to-talk' && (session.status === 'listening' || session.status === 'arming')
   const isProcessing = isNewSession && session?.activationMode === 'push-to-talk' && session.status === 'processing'
   const transformSucceeded = isNewSession && session?.activationMode === 'push-to-talk' && session.status === 'completed' && !!session.context.selectedText

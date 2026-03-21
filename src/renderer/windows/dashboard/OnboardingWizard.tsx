@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import {
@@ -11,11 +11,13 @@ import { formatHotkeyForDisplay } from '@shared/hotkeys'
 import { HotkeyField, MicrophoneSelect } from './controls'
 import { OnboardingWizardRightPane } from './OnboardingWizardRightPane'
 import {
-  StatusDot,
-  ThemeCard,
   TOTAL_STEPS,
   demoStatusColor,
   easeOutExpo,
+} from './OnboardingWizard.constants'
+import {
+  StatusDot,
+  ThemeCard,
 } from './OnboardingWizard.shared'
 
 type WizardProps = {
@@ -462,8 +464,8 @@ const StepSelectTransform = ({
   const { t } = useTranslation()
   const status = session?.status ?? 'idle'
   // Only react to sessions that started after this step was shown
-  const entrySessionIdRef = useRef<string | null | undefined>(session?.id)
-  const isNewSession = session?.id !== entrySessionIdRef.current
+  const [entrySessionId] = useState<string | null | undefined>(session?.id)
+  const isNewSession = session?.id !== entrySessionId
 
   useEffect(() => {
     if (!isNewSession) return
@@ -651,8 +653,21 @@ export const OnboardingWizard = ({
 
   const isMacOS = navigator.userAgent.includes('Mac')
 
-  const goNext = () => { setDirection(1); setStep((s) => Math.min(s + 1, TOTAL_STEPS - 1)) }
-  const goPrev = () => { setDirection(-1); setStep((s) => Math.max(s - 1, 0)) }
+  const goNext = () => {
+    if (step === 7) {
+      setNoSelectionBlocked(false)
+    }
+    setDirection(1)
+    setStep(Math.min(step + 1, TOTAL_STEPS - 1))
+  }
+
+  const goPrev = () => {
+    if (step === 7) {
+      setNoSelectionBlocked(false)
+    }
+    setDirection(-1)
+    setStep(Math.max(step - 1, 0))
+  }
 
   const handleSaveApiKey = async () => {
     setApiKeyError(null)
@@ -664,20 +679,6 @@ export const OnboardingWizard = ({
       setApiKeyError(err instanceof Error ? err.message : 'Failed to save API key.')
     }
   }
-
-  // Auto-mark shortcut tested when session activates (shortcut test is now step 5)
-  useEffect(() => {
-    if (step === 5 && session != null && session.status !== 'idle' && !shortcutTested) {
-      setShortcutTested(true)
-    }
-  }, [step, session, shortcutTested])
-
-  // Reset no-selection blocked state when leaving step 7 (SelectTransform)
-  useEffect(() => {
-    if (step !== 7) {
-      setNoSelectionBlocked(false)
-    }
-  }, [step])
 
   const canProceed = () => {
     if (finishing) return false
