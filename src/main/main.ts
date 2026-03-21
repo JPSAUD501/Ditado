@@ -101,8 +101,11 @@ const resolveDashboardTheme = (theme: Settings['theme']): 'dark' | 'light' => {
   return theme
 }
 
+const shouldOpenUpgradeOnboarding = (settings: Settings): boolean =>
+  settings.pendingUpgradeOnboardingVersion === app.getVersion()
+
 const getPreferredDashboardTab = (settings: Settings): DashboardTab => {
-  if (!settings.onboardingCompleted) {
+  if (!settings.onboardingCompleted || shouldOpenUpgradeOnboarding(settings)) {
     return 'onboarding'
   }
 
@@ -276,6 +279,9 @@ const showDashboard = (tab: DashboardTab = 'overview'): void => {
     windows.dashboard.webContents.send(ipcChannels.dashboard.openTab, tab)
   }
 
+  if (windows.dashboard.isMinimized()) {
+    windows.dashboard.restore()
+  }
   windows.dashboard.show()
   windows.dashboard.focus()
 }
@@ -672,11 +678,16 @@ void app.whenReady().then(async () => {
   await broadcastState(store, orchestrator, permissions, telemetry, updates)
 
   const settings = store.getSettings()
-  if (isAppReady(settings)) {
+  if (isAppReady(settings) && !shouldOpenUpgradeOnboarding(settings)) {
     beginStartupWarmup()
     void runStartupUpdateGate()
   } else {
-    completeStartupUpdateFlow()
+    if (isAppReady(settings)) {
+      beginStartupWarmup()
+      void runStartupUpdateGate()
+    } else {
+      completeStartupUpdateFlow()
+    }
     showDashboard(getPreferredDashboardTab(settings))
   }
 })
