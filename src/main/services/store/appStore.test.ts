@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { defaultSettings } from '../../../shared/defaults.js'
 
 let userDataDir = ''
-let mockedAppVersion = '0.1.44'
+let mockedAppVersion = '0.1.48'
 
 const loadStore = async (
   safeStorageOverrides: Partial<{
@@ -36,7 +36,7 @@ const loadStore = async (
 
 beforeEach(async () => {
   userDataDir = await mkdtemp(join(tmpdir(), 'ditado-store-'))
-  mockedAppVersion = '0.1.44'
+  mockedAppVersion = '0.1.48'
 })
 
 describe('AppStore', () => {
@@ -99,11 +99,11 @@ describe('AppStore', () => {
   })
 
   it('does not create startup update or onboarding notices on first install', async () => {
-    const AppStore = await loadStore({}, '0.1.44')
+    const AppStore = await loadStore({}, '0.1.48')
     const store = new AppStore()
     await store.initialize()
 
-    expect(store.getSettings().lastSeenAppVersion).toBe('0.1.44')
+    expect(store.getSettings().lastSeenAppVersion).toBe('0.1.48')
     expect(store.getSettings().pendingStartupUpdatedNoticeVersion).toBeNull()
     expect(store.getSettings().pendingUpgradeOnboardingVersion).toBeNull()
   })
@@ -143,12 +143,12 @@ describe('AppStore', () => {
       'utf8',
     )
 
-    const AppStore = await loadStore({}, '0.1.44')
+    const AppStore = await loadStore({}, '0.1.48')
     const store = new AppStore()
     await store.initialize()
 
-    expect(store.getSettings().pendingStartupUpdatedNoticeVersion).toBe('0.1.44')
-    expect(store.getSettings().pendingUpgradeOnboardingVersion).toBe('0.1.44')
+    expect(store.getSettings().pendingStartupUpdatedNoticeVersion).toBe('0.1.48')
+    expect(store.getSettings().pendingUpgradeOnboardingVersion).toBe('0.1.48')
     expect(store.getSettings().pushToTalkHotkey).toBe('Ctrl+Meta')
     expect(store.getSettings().toggleHotkey).toBe('')
   })
