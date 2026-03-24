@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AutomationEnvironment } from '../automation/automationService.js'
 
-const runShortcut = vi.fn(async () => true)
+const runShortcutOrThrow = vi.fn(async () => undefined)
 
 vi.mock('../context/activeContextService.js', () => ({
-  runShortcut,
+  runShortcutOrThrow,
 }))
 
 const createClipboard = () => ({
@@ -37,7 +37,7 @@ const createAutomation = () => ({
 
 describe('InsertionEngine', () => {
   beforeEach(() => {
-    runShortcut.mockClear()
+    runShortcutOrThrow.mockClear()
   })
 
   afterEach(() => {
@@ -88,7 +88,7 @@ describe('InsertionEngine', () => {
 
     expect(automation.warmup).toHaveBeenCalledTimes(1)
     expect(automation.typeGrapheme.mock.calls).toEqual([['A'], ['\u{1F44D}\u{1F3FD}'], ['B']])
-    expect(runShortcut).not.toHaveBeenCalled()
+    expect(runShortcutOrThrow).not.toHaveBeenCalled()
     expect(clipboard.writeNormal).toHaveBeenCalledWith(text)
     expect(execution).toMatchObject({
       requestedMode: 'letter-by-letter',
@@ -180,7 +180,7 @@ describe('InsertionEngine', () => {
     expect(automation.typeGrapheme).not.toHaveBeenCalled()
     expect(clipboard.writeNormal).toHaveBeenNthCalledWith(1, 'hello')
     expect(clipboard.writeNormal).toHaveBeenNthCalledWith(2, 'hello')
-    expect(runShortcut).toHaveBeenCalledTimes(1)
+    expect(runShortcutOrThrow).toHaveBeenCalledTimes(1)
     expect(execution).toMatchObject({
       requestedMode: 'letter-by-letter',
       effectiveMode: 'all-at-once',
@@ -209,7 +209,7 @@ describe('InsertionEngine', () => {
     const execution = await executionPromise
 
     expect(automation.typeGrapheme).toHaveBeenCalledTimes(1)
-    expect(runShortcut).toHaveBeenCalledTimes(1)
+    expect(runShortcutOrThrow).toHaveBeenCalledTimes(1)
     expect(clipboard.writeNormal).toHaveBeenNthCalledWith(1, 'AB')
     expect(clipboard.writeNormal).toHaveBeenNthCalledWith(2, 'AB')
     expect(execution).toMatchObject({
@@ -250,6 +250,35 @@ describe('InsertionEngine', () => {
     expect(execution.effectiveMode).toBe('letter-by-letter')
   })
 
+  it('reports clipboard capability when automation is unavailable', async () => {
+    const clipboard = createClipboard()
+    const automation = createAutomation()
+    automation.getEnvironment.mockReturnValue(
+      createEnvironment({
+        platform: 'linux',
+        sessionType: 'wayland',
+        supportsLetterByLetter: false,
+        reason: 'wayland_unsupported',
+      }),
+    )
+
+    const { InsertionEngine } = await import('./insertionEngine.js')
+    const engine = new InsertionEngine(clipboard as never, automation as never)
+
+    expect(engine.createPlan({
+      appName: 'Firefox',
+      windowTitle: 'Example',
+      selectedText: '',
+      permissionsGranted: true,
+      confidence: 'partial',
+      capturedAt: new Date().toISOString(),
+    })).toEqual({
+      strategy: 'insert-at-cursor',
+      targetApp: 'Firefox',
+      capability: 'clipboard',
+    })
+  })
+
   it('uses clipboard plus paste for all-at-once mode', async () => {
     const clipboard = createClipboard()
     const automation = createAutomation()
@@ -265,7 +294,7 @@ describe('InsertionEngine', () => {
     expect(automation.typeGrapheme).not.toHaveBeenCalled()
     expect(clipboard.writeNormal).toHaveBeenNthCalledWith(1, 'hello world')
     expect(clipboard.writeNormal).toHaveBeenNthCalledWith(2, 'hello world')
-    expect(runShortcut).toHaveBeenCalledTimes(1)
+    expect(runShortcutOrThrow).toHaveBeenCalledTimes(1)
     expect(execution).toMatchObject({
       requestedMode: 'all-at-once',
       effectiveMode: 'all-at-once',
@@ -285,6 +314,6 @@ describe('InsertionEngine', () => {
     await session.recoverToClipboard('failed insertion text')
 
     expect(clipboard.writeNormal).toHaveBeenCalledWith('failed insertion text')
-    expect(runShortcut).not.toHaveBeenCalled()
+    expect(runShortcutOrThrow).not.toHaveBeenCalled()
   })
 })
