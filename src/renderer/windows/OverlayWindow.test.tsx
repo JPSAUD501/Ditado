@@ -95,6 +95,7 @@ const installOverlayApi = (session: DictationSession | null): void => {
     setApiKey: vi.fn(async () => defaultSettings),
     setHotkeyCaptureActive: vi.fn(async () => undefined),
     getShortcutStatus: vi.fn(async () => ({ captureActive: false, uiohookRunning: true })),
+    subscribeHotkeyCapture: vi.fn(() => () => undefined),
     listMicrophones: vi.fn(async () => []),
     requestMicrophoneAccess: vi.fn(async () => defaultPermissionState),
     getPermissions: vi.fn(async () => defaultPermissionState),

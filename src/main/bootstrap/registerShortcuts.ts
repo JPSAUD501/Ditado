@@ -1,7 +1,7 @@
 import { globalShortcut } from 'electron'
 import { UiohookKey, uIOhook, type UiohookKeyboardEvent } from 'uiohook-napi'
 
-import { normalizeHotkey } from '../../shared/hotkeys.js'
+import { normalizeHotkey, type HotkeyCapturePayload } from '../../shared/hotkeys.js'
 import type { DictationSessionOrchestrator } from '../services/session/dictationSessionOrchestrator.js'
 import type { AppStore } from '../services/store/appStore.js'
 
@@ -53,6 +53,48 @@ const HOTKEY_MAP: Record<string, number> = {
   F11: UiohookKey.F11,
   F12: UiohookKey.F12,
 }
+
+const HOTKEY_TOKEN_BY_KEYCODE = new Map<number, string>([
+  [UiohookKey.Space, 'Space'],
+  [UiohookKey.A, 'A'],
+  [UiohookKey.B, 'B'],
+  [UiohookKey.C, 'C'],
+  [UiohookKey.D, 'D'],
+  [UiohookKey.E, 'E'],
+  [UiohookKey.F, 'F'],
+  [UiohookKey.G, 'G'],
+  [UiohookKey.H, 'H'],
+  [UiohookKey.I, 'I'],
+  [UiohookKey.J, 'J'],
+  [UiohookKey.K, 'K'],
+  [UiohookKey.L, 'L'],
+  [UiohookKey.M, 'M'],
+  [UiohookKey.N, 'N'],
+  [UiohookKey.O, 'O'],
+  [UiohookKey.P, 'P'],
+  [UiohookKey.Q, 'Q'],
+  [UiohookKey.R, 'R'],
+  [UiohookKey.S, 'S'],
+  [UiohookKey.T, 'T'],
+  [UiohookKey.U, 'U'],
+  [UiohookKey.V, 'V'],
+  [UiohookKey.W, 'W'],
+  [UiohookKey.X, 'X'],
+  [UiohookKey.Y, 'Y'],
+  [UiohookKey.Z, 'Z'],
+  [UiohookKey.F1, 'F1'],
+  [UiohookKey.F2, 'F2'],
+  [UiohookKey.F3, 'F3'],
+  [UiohookKey.F4, 'F4'],
+  [UiohookKey.F5, 'F5'],
+  [UiohookKey.F6, 'F6'],
+  [UiohookKey.F7, 'F7'],
+  [UiohookKey.F8, 'F8'],
+  [UiohookKey.F9, 'F9'],
+  [UiohookKey.F10, 'F10'],
+  [UiohookKey.F11, 'F11'],
+  [UiohookKey.F12, 'F12'],
+])
 
 const normalizeModifier = (token: string): ParsedHotkey['modifiers'][number] | null => {
   const normalized = token.toUpperCase()
@@ -110,6 +152,9 @@ const MODIFIER_KEYCODES: Record<ParsedHotkey['modifiers'][number], number[]> = {
 
 const hasModifier = (pressedKeys: Set<number>, modifier: ParsedHotkey['modifiers'][number]): boolean =>
   MODIFIER_KEYCODES[modifier].some((keycode) => pressedKeys.has(keycode))
+
+const isModifierKeycode = (keycode: number): boolean =>
+  Object.values(MODIFIER_KEYCODES).some((keycodes) => keycodes.includes(keycode))
 
 const includesHotkeyKey = (hotkey: ParsedHotkey | null, keycode: number): boolean => {
   if (!hotkey) {
@@ -188,6 +233,8 @@ export const registerShortcuts = (
   orchestrator: DictationSessionOrchestrator,
   isCaptureSuspended: () => boolean,
   onHookStatus?: (running: boolean) => void,
+  isHotkeyCaptureActive: () => boolean = () => false,
+  onHotkeyCapture?: (payload: HotkeyCapturePayload) => void,
 ): (() => void) => {
   let parsedPushHotkey = parseHotkey(store.getSettings().pushToTalkHotkey)
   let parsedToggleHotkey = parseHotkey(store.getSettings().toggleHotkey)
@@ -202,6 +249,8 @@ export const registerShortcuts = (
   let pendingPushStartTimeout: ReturnType<typeof setTimeout> | null = null
   let pendingShortPressHintTimeout: ReturnType<typeof setTimeout> | null = null
   const pressedKeys = new Set<number>()
+  let capturePendingHotkey: string | null = null
+  let captureHasUnsupportedKey = false
 
   const clearPendingPushStart = (): void => {
     if (pendingPushStartTimeout != null) {
@@ -215,6 +264,86 @@ export const registerShortcuts = (
       clearTimeout(pendingShortPressHintTimeout)
       pendingShortPressHintTimeout = null
     }
+  }
+
+  const emitHotkeyCapture = (payload: HotkeyCapturePayload): void => {
+    onHotkeyCapture?.(payload)
+  }
+
+  const resetHotkeyCaptureState = (phase: 'cancel' | null = null): void => {
+    pressedKeys.clear()
+    capturePendingHotkey = null
+    captureHasUnsupportedKey = false
+    if (phase) {
+      emitHotkeyCapture({ phase, hotkey: null })
+    }
+  }
+
+  const buildCapturedHotkey = (activeKeys: Set<number>): string | null => {
+    const tokens = [
+      hasModifier(activeKeys, 'ctrl') ? 'Ctrl' : null,
+      hasModifier(activeKeys, 'shift') ? 'Shift' : null,
+      hasModifier(activeKeys, 'alt') ? 'Alt' : null,
+      hasModifier(activeKeys, 'meta') ? 'Meta' : null,
+    ].filter((token): token is string => Boolean(token))
+
+    const mainKey = [...activeKeys]
+      .find((keycode) => !isModifierKeycode(keycode) && HOTKEY_TOKEN_BY_KEYCODE.has(keycode))
+
+    if (mainKey) {
+      tokens.push(HOTKEY_TOKEN_BY_KEYCODE.get(mainKey) ?? '')
+    }
+
+    return normalizeHotkey(tokens.join('+'))
+  }
+
+  const handleCaptureKeydown = (event: UiohookKeyboardEvent): void => {
+    if (event.keycode === UiohookKey.Escape) {
+      resetHotkeyCaptureState('cancel')
+      return
+    }
+
+    pressedKeys.add(event.keycode)
+
+    if (!isModifierKeycode(event.keycode) && !HOTKEY_TOKEN_BY_KEYCODE.has(event.keycode)) {
+      captureHasUnsupportedKey = true
+      capturePendingHotkey = null
+      emitHotkeyCapture({ phase: 'preview', hotkey: null })
+      return
+    }
+
+    if (captureHasUnsupportedKey) {
+      return
+    }
+
+    const nextHotkey = buildCapturedHotkey(pressedKeys)
+    if (!nextHotkey) {
+      return
+    }
+
+    capturePendingHotkey = nextHotkey
+    emitHotkeyCapture({ phase: 'preview', hotkey: nextHotkey })
+  }
+
+  const handleCaptureKeyup = (event: UiohookKeyboardEvent): void => {
+    if (event.keycode === UiohookKey.Escape) {
+      resetHotkeyCaptureState('cancel')
+      return
+    }
+
+    pressedKeys.delete(event.keycode)
+
+    if (pressedKeys.size > 0) {
+      return
+    }
+
+    if (capturePendingHotkey && !captureHasUnsupportedKey) {
+      emitHotkeyCapture({ phase: 'commit', hotkey: capturePendingHotkey })
+    } else {
+      emitHotkeyCapture({ phase: 'cancel', hotkey: null })
+    }
+
+    resetHotkeyCaptureState()
   }
 
   const resetPushState = (): void => {
@@ -237,6 +366,11 @@ export const registerShortcuts = (
   const keydownHandler = (event: UiohookKeyboardEvent): void => {
     if (process.env.DITADO_DEBUG_SHORTCUTS === '1') {
       console.log('[ditado][shortcut][keydown]', JSON.stringify(event))
+    }
+
+    if (isHotkeyCaptureActive()) {
+      handleCaptureKeydown(event)
+      return
     }
 
     if (isCaptureSuspended()) {
@@ -296,8 +430,13 @@ export const registerShortcuts = (
       console.log('[ditado][shortcut][keyup]', JSON.stringify(event))
     }
 
+    if (isHotkeyCaptureActive()) {
+      handleCaptureKeyup(event)
+      return
+    }
+
     if (isCaptureSuspended()) {
-      pressedKeys.clear()
+      resetHotkeyCaptureState()
       resetPushState()
       clearPendingShortPressHint()
       return
@@ -478,7 +617,7 @@ export const registerShortcuts = (
   return () => {
     parsedPushHotkey = parseHotkey(store.getSettings().pushToTalkHotkey)
     parsedToggleHotkey = parseHotkey(store.getSettings().toggleHotkey)
-    pressedKeys.clear()
+    resetHotkeyCaptureState()
     lastShortPressAt = 0
     resetPushState()
     toggleActive = false

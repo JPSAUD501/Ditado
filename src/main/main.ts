@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 import { defaultPermissionState } from '../shared/defaults.js'
+import type { HotkeyCapturePayload } from '../shared/hotkeys.js'
 import { translate } from '../shared/i18n.js'
 import { ipcChannels } from '../shared/ipc.js'
 import { canUseDictation, isAppReady } from '../shared/readiness.js'
@@ -209,6 +210,10 @@ const createDashboardWindow = (tab: DashboardTab = 'overview', theme: Settings['
   return window
 }
 
+const broadcastHotkeyCapture = (payload: HotkeyCapturePayload): void => {
+  windows.dashboard?.webContents.send(ipcChannels.hotkeys.captureUpdate, payload)
+}
+
 const showOverlay = (): void => {
   const overlay = windows.overlay
   if (!overlay) {
@@ -372,6 +377,19 @@ void app.whenReady().then(async () => {
   const canStartDictation = (): boolean => (
     canUseDictation(store.getSettings()) && (!startupWarmupState.required || startupWarmupState.ready)
   )
+  let refreshShortcuts: (() => void) | null = null
+
+  const setHotkeyCaptureMode = (active: boolean): void => {
+    if (hotkeyCaptureActive === active) {
+      return
+    }
+
+    hotkeyCaptureActive = active
+    if (!active) {
+      broadcastHotkeyCapture({ phase: 'cancel', hotkey: null })
+      refreshShortcuts?.()
+    }
+  }
 
   syncLoginItemSettings(app, store.getSettings().launchOnLogin)
 
@@ -380,8 +398,8 @@ void app.whenReady().then(async () => {
     getPreferredDashboardTab(store.getSettings()),
     currentDashboardTheme,
   )
-  windows.dashboard.on('blur', () => { hotkeyCaptureActive = false })
-  windows.dashboard.on('hide', () => { hotkeyCaptureActive = false })
+  windows.dashboard.on('blur', () => { setHotkeyCaptureMode(false) })
+  windows.dashboard.on('hide', () => { setHotkeyCaptureMode(false) })
 
   nativeTheme.on('updated', () => {
     if (currentDashboardTheme === 'system') {
@@ -533,11 +551,13 @@ void app.whenReady().then(async () => {
     maybeFinalizeStartupWarmup()
   }
 
-  const refreshShortcuts = registerShortcuts(
+  refreshShortcuts = registerShortcuts(
     store,
     orchestrator,
-    () => hotkeyCaptureActive || !canStartDictation(),
+    () => !canStartDictation(),
     (running) => { uiohookRunning = running },
+    () => hotkeyCaptureActive,
+    broadcastHotkeyCapture,
   )
 
   const { refresh: refreshTray } = registerTray(
@@ -589,7 +609,7 @@ void app.whenReady().then(async () => {
       }
     },
     setHotkeyCaptureActive: (active) => {
-      hotkeyCaptureActive = active
+      setHotkeyCaptureMode(active)
     },
     getShortcutStatus: () => ({ captureActive: hotkeyCaptureActive, uiohookRunning }),
     canStartDictation,
@@ -598,7 +618,7 @@ void app.whenReady().then(async () => {
       syncLoginItemSettings(app, store.getSettings().launchOnLogin)
       applyDashboardChrome(windows.dashboard, currentDashboardTheme)
       updates.syncFromSettings()
-      refreshShortcuts()
+      refreshShortcuts?.()
       refreshTray()
       await broadcastState(store, orchestrator, permissions, telemetry, updates)
       beginStartupWarmup()

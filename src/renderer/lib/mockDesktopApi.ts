@@ -95,6 +95,7 @@ export const ensureMockDesktopApi = (): void => {
     },
     setHotkeyCaptureActive: async () => undefined,
     getShortcutStatus: async () => ({ captureActive: false, uiohookRunning: true }),
+    subscribeHotkeyCapture: () => () => undefined,
     listMicrophones: noopDevices,
     requestMicrophoneAccess: noopPermission,
     getPermissions: noopPermission,

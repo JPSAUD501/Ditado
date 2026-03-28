@@ -2,6 +2,11 @@ const modifierOrder = ['Ctrl', 'Shift', 'Alt', 'Meta'] as const
 
 type ModifierLabel = (typeof modifierOrder)[number]
 
+export type HotkeyCapturePayload = {
+  phase: 'preview' | 'commit' | 'cancel'
+  hotkey: string | null
+}
+
 type KeyboardLikeEvent = {
   key: string
   ctrlKey: boolean

@@ -12,6 +12,7 @@ import type {
   Settings,
   TelemetryRecord,
 } from '@shared/contracts'
+import type { HotkeyCapturePayload } from '@shared/hotkeys'
 
 interface DitadoDesktopApi {
   getOverlayState: () => Promise<OverlayViewModel>
@@ -31,6 +32,7 @@ interface DitadoDesktopApi {
   setApiKey: (apiKey: string) => Promise<Settings>
   setHotkeyCaptureActive: (active: boolean) => Promise<void>
   getShortcutStatus: () => Promise<{ captureActive: boolean; uiohookRunning: boolean }>
+  subscribeHotkeyCapture: (listener: (payload: HotkeyCapturePayload) => void) => () => void
   listMicrophones: () => Promise<DeviceInfo[]>
   requestMicrophoneAccess: () => Promise<PermissionState>
   getPermissions: () => Promise<PermissionState>

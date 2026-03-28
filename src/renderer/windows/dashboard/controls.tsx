@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { Check, ChevronDown, Copy, Pause, Play, Trash2 } from 'lucide-react'
 
 import type { HistoryEntry } from '@shared/contracts'
-import { formatHotkeyForDisplay, hotkeyFromKeyboardEvent, isSupportedHotkey, normalizeHotkey } from '@shared/hotkeys'
+import { formatHotkeyForDisplay, type HotkeyCapturePayload } from '@shared/hotkeys'
 import { formatAudioDuration, formatDate } from './formatters'
 
 const easeOutExpo = [0.16, 1, 0.3, 1] as const
@@ -40,14 +40,66 @@ export const HotkeyField = ({
   const { t } = useTranslation()
   const [draft, setDraft] = useState(value)
   const [isCapturing, setIsCapturing] = useState(false)
+  const ignoreNextCancelRef = useRef(false)
   const visibleValue = isCapturing ? draft : value
+
+  useEffect(() => {
+    if (!isCapturing) {
+      setDraft(value)
+    }
+  }, [isCapturing, value])
 
   useEffect(() => {
     return () => { void window.ditado.setHotkeyCaptureActive(false) }
   }, [])
 
-  const stopCapture = (): void => { setIsCapturing(false); void window.ditado.setHotkeyCaptureActive(false) }
-  const startCapture = (): void => { setIsCapturing(true); void window.ditado.setHotkeyCaptureActive(true) }
+  useEffect(() => {
+    const unsubscribe = window.ditado.subscribeHotkeyCapture((payload: HotkeyCapturePayload) => {
+      if (!isCapturing) {
+        return
+      }
+
+      if (payload.phase === 'preview') {
+        if (payload.hotkey) {
+          setDraft(payload.hotkey)
+        }
+        return
+      }
+
+      if (payload.phase === 'commit' && payload.hotkey) {
+        setDraft(payload.hotkey)
+        setIsCapturing(false)
+        ignoreNextCancelRef.current = true
+        void window.ditado.setHotkeyCaptureActive(false)
+        void onCommit(payload.hotkey)
+        return
+      }
+
+      if (ignoreNextCancelRef.current) {
+        ignoreNextCancelRef.current = false
+        return
+      }
+
+      setDraft(value)
+      setIsCapturing(false)
+      ignoreNextCancelRef.current = true
+      void window.ditado.setHotkeyCaptureActive(false)
+    })
+
+    return unsubscribe
+  }, [isCapturing, onCommit, value])
+
+  const stopCapture = (): void => {
+    ignoreNextCancelRef.current = true
+    setIsCapturing(false)
+    void window.ditado.setHotkeyCaptureActive(false)
+  }
+
+  const startCapture = (): void => {
+    ignoreNextCancelRef.current = false
+    setIsCapturing(true)
+    void window.ditado.setHotkeyCaptureActive(true)
+  }
 
   return (
     <div className="grid gap-1">
@@ -61,14 +113,7 @@ export const HotkeyField = ({
         onKeyDown={(event) => {
           event.preventDefault()
           event.stopPropagation()
-          if (event.key === 'Escape') { setDraft(value); stopCapture(); return }
-          const next = hotkeyFromKeyboardEvent(event)
-          if (!next || !isSupportedHotkey(next)) return
-          const normalized = normalizeHotkey(next)
-          if (!normalized) return
-          setDraft(normalized)
-          stopCapture()
-          void onCommit(normalized)
+          if (event.key === 'Escape') { setDraft(value); stopCapture() }
         }}
       >
         <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: visibleValue ? 'var(--text-1)' : 'var(--text-3)' }}>

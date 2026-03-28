@@ -12,6 +12,7 @@ import type {
   Settings,
   TelemetryRecord,
 } from '../shared/contracts.js'
+import type { HotkeyCapturePayload } from '../shared/hotkeys.js'
 import { ipcChannels } from '../shared/ipc.js'
 
 const subscribe = <T,>(channel: string, listener: (payload: T) => void): (() => void) => {
@@ -61,6 +62,8 @@ contextBridge.exposeInMainWorld('ditado', {
   setApiKey: (apiKey: string) => ipcRenderer.invoke(ipcChannels.settings.setApiKey, apiKey),
   setHotkeyCaptureActive: (active: boolean) => ipcRenderer.invoke(ipcChannels.hotkeys.setCaptureMode, active),
   getShortcutStatus: (): Promise<{ captureActive: boolean; uiohookRunning: boolean }> => ipcRenderer.invoke(ipcChannels.hotkeys.getStatus),
+  subscribeHotkeyCapture: (listener: (payload: HotkeyCapturePayload) => void) =>
+    subscribe(ipcChannels.hotkeys.captureUpdate, listener),
   listMicrophones: async (): Promise<DeviceInfo[]> => {
     if (!navigator.mediaDevices?.enumerateDevices) {
       return []

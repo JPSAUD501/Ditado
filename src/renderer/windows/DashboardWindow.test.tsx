@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { DashboardWindow } from './DashboardWindow'
 import { defaultPermissionState, defaultSettings } from '@shared/defaults'
 import { historyEntrySchema, type DashboardViewModel, type Settings } from '@shared/contracts'
+import type { HotkeyCapturePayload } from '@shared/hotkeys'
 
 const onboardedSettings: Settings = { ...defaultSettings, onboardingCompleted: true }
 
@@ -40,6 +41,7 @@ const installDesktopApi = (
 ) => {
   let currentState = createState(initialSettings)
   const dashboardListeners = new Set<(state: DashboardViewModel) => void>()
+  const hotkeyCaptureListeners = new Set<(payload: HotkeyCapturePayload) => void>()
   const notify = (): void => {
     for (const listener of dashboardListeners) {
       listener(currentState)
@@ -87,6 +89,10 @@ const installDesktopApi = (
     setApiKey,
     setHotkeyCaptureActive,
     listMicrophones,
+    subscribeHotkeyCapture: vi.fn((listener: (payload: HotkeyCapturePayload) => void) => {
+      hotkeyCaptureListeners.add(listener)
+      return () => hotkeyCaptureListeners.delete(listener)
+    }),
     requestMicrophoneAccess: vi.fn(async () => defaultPermissionState),
     getPermissions: vi.fn(async () => defaultPermissionState),
     openDashboardTab: vi.fn(async () => undefined),
@@ -108,6 +114,11 @@ const installDesktopApi = (
     setApiKey,
     setHotkeyCaptureActive,
     listMicrophones,
+    publishHotkeyCapture: (payload: HotkeyCapturePayload) => {
+      for (const listener of hotkeyCaptureListeners) {
+        listener(payload)
+      }
+    },
     publishState: (nextState: DashboardViewModel) => {
       currentState = nextState
       notify()
@@ -283,25 +294,30 @@ describe('DashboardWindow', () => {
     expect(launchOnLoginToggle).toHaveAttribute('aria-pressed', 'true')
   })
 
-  it('captures a modifier-only hotkey, exits capture mode, and persists the normalized combo', async () => {
-    const { updateSettings, setHotkeyCaptureActive } = installDesktopApi()
+  it('commits the captured combo only after the main-process hook finalizes it', async () => {
+    const { updateSettings, setHotkeyCaptureActive, publishHotkeyCapture } = installDesktopApi()
     render(<DashboardWindow initialTab="settings" />)
 
     const hotkeyButton = await screen.findByRole('button', { name: /push-to-talk/i })
     await userEvent.click(hotkeyButton)
 
-    fireEvent.keyDown(hotkeyButton, {
-      key: 'Alt',
-      ctrlKey: true,
-      altKey: true,
+    act(() => {
+      publishHotkeyCapture({ phase: 'preview', hotkey: 'Ctrl' })
+    })
+
+    expect(updateSettings).not.toHaveBeenCalled()
+
+    act(() => {
+      publishHotkeyCapture({ phase: 'preview', hotkey: 'Ctrl+Meta' })
+      publishHotkeyCapture({ phase: 'commit', hotkey: 'Ctrl+Meta' })
     })
 
     await waitFor(() => {
-      expect(updateSettings).toHaveBeenCalledWith({ pushToTalkHotkey: 'Ctrl+Alt' })
+      expect(updateSettings).toHaveBeenCalledWith({ pushToTalkHotkey: 'Ctrl+Meta' })
     })
     expect(setHotkeyCaptureActive).toHaveBeenNthCalledWith(1, true)
     expect(setHotkeyCaptureActive).toHaveBeenLastCalledWith(false)
-    expect(screen.getByRole('button', { name: /push-to-talk/i })).toHaveTextContent('Ctrl+Alt')
+    expect(screen.getByRole('button', { name: /push-to-talk/i })).toHaveTextContent('Ctrl+Meta')
   })
 
   it('saves the API key and reflects the persisted state in the settings UI', async () => {

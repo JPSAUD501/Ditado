@@ -120,6 +120,46 @@ describe('registerShortcuts', () => {
     vi.useRealTimers()
   })
 
+  it('captures Ctrl+Meta without committing the initial Ctrl preview', async () => {
+    const { registerShortcuts } = await import('./registerShortcuts.js')
+    const onHotkeyCapture = vi.fn()
+    const orchestrator = {
+      startCapture: vi.fn(async () => undefined),
+      toggleCapture: vi.fn(async () => undefined),
+      requestStop: vi.fn(),
+      showShortPressHint: vi.fn(async () => undefined),
+      getSession: vi.fn(() => null),
+    }
+    const store = {
+      getSettings: () => ({
+        pushToTalkHotkey: 'Ctrl+Meta',
+        toggleHotkey: '',
+      }),
+    }
+
+    registerShortcuts(
+      store as never,
+      orchestrator as never,
+      () => false,
+      undefined,
+      () => true,
+      onHotkeyCapture,
+    )
+
+    emit('keydown', { keycode: 29, ctrlKey: true, altKey: false, shiftKey: false, metaKey: false })
+    expect(onHotkeyCapture).toHaveBeenLastCalledWith({ phase: 'preview', hotkey: 'Ctrl' })
+    expect(orchestrator.startCapture).not.toHaveBeenCalled()
+
+    emit('keydown', { keycode: 3675, ctrlKey: true, altKey: false, shiftKey: false, metaKey: true })
+    expect(onHotkeyCapture).toHaveBeenLastCalledWith({ phase: 'preview', hotkey: 'Ctrl+Meta' })
+
+    emit('keyup', { keycode: 3675, ctrlKey: true, altKey: false, shiftKey: false, metaKey: false })
+    expect(onHotkeyCapture).not.toHaveBeenCalledWith({ phase: 'commit', hotkey: 'Ctrl' })
+
+    emit('keyup', { keycode: 29, ctrlKey: false, altKey: false, shiftKey: false, metaKey: false })
+    expect(onHotkeyCapture).toHaveBeenLastCalledWith({ phase: 'commit', hotkey: 'Ctrl+Meta' })
+  })
+
   it('shows a short-press hint instead of submitting when push-to-talk is tapped', async () => {
     vi.useFakeTimers()
     const { registerShortcuts } = await import('./registerShortcuts.js')
