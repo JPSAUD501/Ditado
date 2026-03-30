@@ -320,6 +320,34 @@ describe('DashboardWindow', () => {
     expect(screen.getByRole('button', { name: /push-to-talk/i })).toHaveTextContent('Ctrl+Meta')
   })
 
+  it('does not persist Meta alone on Windows and shows capture feedback', async () => {
+    const originalUserAgent = window.navigator.userAgent
+    Object.defineProperty(window.navigator, 'userAgent', {
+      value: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+      configurable: true,
+    })
+
+    const { updateSettings, publishHotkeyCapture } = installDesktopApi()
+    render(<DashboardWindow initialTab="settings" />)
+
+    const hotkeyButton = await screen.findByRole('button', { name: /push-to-talk/i })
+    await userEvent.click(hotkeyButton)
+
+    act(() => {
+      publishHotkeyCapture({ phase: 'preview', hotkey: 'Meta' })
+      publishHotkeyCapture({ phase: 'cancel', hotkey: null })
+    })
+
+    expect(updateSettings).not.toHaveBeenCalled()
+    expect(screen.getByText('The Windows key alone is not supported as a shortcut on Windows.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /push-to-talk/i })).toHaveTextContent('Ctrl+Meta')
+
+    Object.defineProperty(window.navigator, 'userAgent', {
+      value: originalUserAgent,
+      configurable: true,
+    })
+  })
+
   it('saves the API key and reflects the persisted state in the settings UI', async () => {
     const { setApiKey } = installDesktopApi()
     render(<DashboardWindow initialTab="settings" />)

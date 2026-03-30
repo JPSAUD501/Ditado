@@ -11,6 +11,7 @@ type ParsedHotkey = {
 }
 
 type ModifierState = Pick<UiohookKeyboardEvent, 'altKey' | 'ctrlKey' | 'metaKey' | 'shiftKey'>
+type ModifierName = ParsedHotkey['modifiers'][number]
 
 const HOTKEY_MAP: Record<string, number> = {
   SPACE: UiohookKey.Space,
@@ -137,6 +138,10 @@ const parseHotkey = (hotkey: string): ParsedHotkey | null => {
     return null
   }
 
+  if (process.platform === 'win32' && !hasExplicitMainKey && modifiers.length === 1 && modifiers[0] === 'meta') {
+    return null
+  }
+
   return {
     mainKey: hasExplicitMainKey && mainToken ? HOTKEY_MAP[mainToken] : null,
     modifiers,
@@ -150,11 +155,44 @@ const MODIFIER_KEYCODES: Record<ParsedHotkey['modifiers'][number], number[]> = {
   shift: [UiohookKey.Shift, UiohookKey.ShiftRight],
 }
 
-const hasModifier = (pressedKeys: Set<number>, modifier: ParsedHotkey['modifiers'][number]): boolean =>
-  MODIFIER_KEYCODES[modifier].some((keycode) => pressedKeys.has(keycode))
-
 const isModifierKeycode = (keycode: number): boolean =>
   Object.values(MODIFIER_KEYCODES).some((keycodes) => keycodes.includes(keycode))
+
+const getModifierFromKeycode = (keycode: number): ModifierName | null => {
+  if (MODIFIER_KEYCODES.alt.includes(keycode)) {
+    return 'alt'
+  }
+  if (MODIFIER_KEYCODES.ctrl.includes(keycode)) {
+    return 'ctrl'
+  }
+  if (MODIFIER_KEYCODES.meta.includes(keycode)) {
+    return 'meta'
+  }
+  if (MODIFIER_KEYCODES.shift.includes(keycode)) {
+    return 'shift'
+  }
+  return null
+}
+
+const createModifierState = (): ModifierState => ({
+  altKey: false,
+  ctrlKey: false,
+  metaKey: false,
+  shiftKey: false,
+})
+
+const hasModifier = (modifierState: ModifierState, modifier: ModifierName): boolean => {
+  if (modifier === 'alt') {
+    return modifierState.altKey
+  }
+  if (modifier === 'ctrl') {
+    return modifierState.ctrlKey
+  }
+  if (modifier === 'meta') {
+    return modifierState.metaKey
+  }
+  return modifierState.shiftKey
+}
 
 const includesHotkeyKey = (hotkey: ParsedHotkey | null, keycode: number): boolean => {
   if (!hotkey) {
@@ -168,36 +206,20 @@ const includesHotkeyKey = (hotkey: ParsedHotkey | null, keycode: number): boolea
   return hotkey.modifiers.some((modifier) => MODIFIER_KEYCODES[modifier].includes(keycode))
 }
 
-const hasModifierFromEvent = (
-  event: ModifierState,
-  modifier: ParsedHotkey['modifiers'][number],
-): boolean => {
-  if (modifier === 'alt') {
-    return event.altKey
-  }
-  if (modifier === 'ctrl') {
-    return event.ctrlKey
-  }
-  if (modifier === 'meta') {
-    return event.metaKey
-  }
-  return event.shiftKey
-}
-
 const matchesHotkeyFromEvent = (
-  event: UiohookKeyboardEvent,
-  pressedKeys: Set<number>,
+  modifierState: ModifierState,
+  activeMainKeys: Set<number>,
   hotkey: ParsedHotkey | null,
 ): boolean => {
   if (!hotkey) {
     return false
   }
 
-  if (hotkey.mainKey && !(pressedKeys.has(hotkey.mainKey) || event.keycode === hotkey.mainKey)) {
+  if (hotkey.mainKey && !activeMainKeys.has(hotkey.mainKey)) {
     return false
   }
 
-  return hotkey.modifiers.every((modifier) => hasModifierFromEvent(event, modifier) || hasModifier(pressedKeys, modifier))
+  return hotkey.modifiers.every((modifier) => hasModifier(modifierState, modifier))
 }
 
 const toAccelerator = (hotkey: string): string | null => {
@@ -227,6 +249,8 @@ const toAccelerator = (hotkey: string): string | null => {
 const SHORT_PUSH_TO_TALK_MS = 500
 const DOUBLE_TAP_WINDOW_MS = 600
 const PUSH_TO_TALK_START_DELAY_MS = 180
+const META_STALE_RECOVERY_MS = 350
+const META_ALONE_UNSUPPORTED_ON_WINDOWS = process.platform === 'win32'
 
 export const registerShortcuts = (
   store: AppStore,
@@ -248,9 +272,11 @@ export const registerShortcuts = (
   let lastShortPressAt = 0
   let pendingPushStartTimeout: ReturnType<typeof setTimeout> | null = null
   let pendingShortPressHintTimeout: ReturnType<typeof setTimeout> | null = null
-  const pressedKeys = new Set<number>()
+  const activeMainKeys = new Set<number>()
+  let modifierState = createModifierState()
   let capturePendingHotkey: string | null = null
   let captureHasUnsupportedKey = false
+  let metaRecoveryTimeout: ReturnType<typeof setTimeout> | null = null
 
   const clearPendingPushStart = (): void => {
     if (pendingPushStartTimeout != null) {
@@ -266,12 +292,25 @@ export const registerShortcuts = (
     }
   }
 
+  const clearMetaRecoveryTimeout = (): void => {
+    if (metaRecoveryTimeout != null) {
+      clearTimeout(metaRecoveryTimeout)
+      metaRecoveryTimeout = null
+    }
+  }
+
   const emitHotkeyCapture = (payload: HotkeyCapturePayload): void => {
     onHotkeyCapture?.(payload)
   }
 
+  const resetKeyState = (): void => {
+    activeMainKeys.clear()
+    modifierState = createModifierState()
+    clearMetaRecoveryTimeout()
+  }
+
   const resetHotkeyCaptureState = (phase: 'cancel' | null = null): void => {
-    pressedKeys.clear()
+    resetKeyState()
     capturePendingHotkey = null
     captureHasUnsupportedKey = false
     if (phase) {
@@ -279,12 +318,12 @@ export const registerShortcuts = (
     }
   }
 
-  const buildCapturedHotkey = (activeKeys: Set<number>): string | null => {
+  const buildCapturedHotkey = (activeModifiers: ModifierState, activeKeys: Set<number>): string | null => {
     const tokens = [
-      hasModifier(activeKeys, 'ctrl') ? 'Ctrl' : null,
-      hasModifier(activeKeys, 'shift') ? 'Shift' : null,
-      hasModifier(activeKeys, 'alt') ? 'Alt' : null,
-      hasModifier(activeKeys, 'meta') ? 'Meta' : null,
+      hasModifier(activeModifiers, 'ctrl') ? 'Ctrl' : null,
+      hasModifier(activeModifiers, 'shift') ? 'Shift' : null,
+      hasModifier(activeModifiers, 'alt') ? 'Alt' : null,
+      hasModifier(activeModifiers, 'meta') ? 'Meta' : null,
     ].filter((token): token is string => Boolean(token))
 
     const mainKey = [...activeKeys]
@@ -297,13 +336,77 @@ export const registerShortcuts = (
     return normalizeHotkey(tokens.join('+'))
   }
 
+  const syncKeyStateFromEvent = (event: UiohookKeyboardEvent, phase: 'keydown' | 'keyup'): void => {
+    modifierState = {
+      altKey: event.altKey,
+      ctrlKey: event.ctrlKey,
+      metaKey: event.metaKey,
+      shiftKey: event.shiftKey,
+    }
+
+    const modifier = getModifierFromKeycode(event.keycode)
+    if (modifier === 'alt') {
+      modifierState.altKey = phase === 'keydown'
+    } else if (modifier === 'ctrl') {
+      modifierState.ctrlKey = phase === 'keydown'
+    } else if (modifier === 'meta') {
+      modifierState.metaKey = phase === 'keydown'
+    } else if (modifier === 'shift') {
+      modifierState.shiftKey = phase === 'keydown'
+    } else if (phase === 'keydown') {
+      activeMainKeys.add(event.keycode)
+    } else {
+      activeMainKeys.delete(event.keycode)
+    }
+  }
+
+  const hasOnlyMetaPressed = (): boolean =>
+    modifierState.metaKey
+    && !modifierState.ctrlKey
+    && !modifierState.altKey
+    && !modifierState.shiftKey
+    && activeMainKeys.size === 0
+
+  const syncMetaRecovery = (): void => {
+    if (!META_ALONE_UNSUPPORTED_ON_WINDOWS) {
+      return
+    }
+
+    if (!hasOnlyMetaPressed()) {
+      clearMetaRecoveryTimeout()
+      return
+    }
+
+    if (metaRecoveryTimeout != null) {
+      return
+    }
+
+    metaRecoveryTimeout = setTimeout(() => {
+      metaRecoveryTimeout = null
+      if (!hasOnlyMetaPressed()) {
+        return
+      }
+
+      if (isHotkeyCaptureActive()) {
+        resetHotkeyCaptureState('cancel')
+        return
+      }
+
+      resetKeyState()
+      pushActive = false
+      toggleActive = false
+      clearPendingPushStart()
+    }, META_STALE_RECOVERY_MS)
+  }
+
   const handleCaptureKeydown = (event: UiohookKeyboardEvent): void => {
     if (event.keycode === UiohookKey.Escape) {
       resetHotkeyCaptureState('cancel')
       return
     }
 
-    pressedKeys.add(event.keycode)
+    syncKeyStateFromEvent(event, 'keydown')
+    syncMetaRecovery()
 
     if (!isModifierKeycode(event.keycode) && !HOTKEY_TOKEN_BY_KEYCODE.has(event.keycode)) {
       captureHasUnsupportedKey = true
@@ -316,8 +419,14 @@ export const registerShortcuts = (
       return
     }
 
-    const nextHotkey = buildCapturedHotkey(pressedKeys)
+    const nextHotkey = buildCapturedHotkey(modifierState, activeMainKeys)
     if (!nextHotkey) {
+      return
+    }
+
+    if (META_ALONE_UNSUPPORTED_ON_WINDOWS && nextHotkey === 'Meta') {
+      capturePendingHotkey = null
+      emitHotkeyCapture({ phase: 'preview', hotkey: nextHotkey })
       return
     }
 
@@ -331,13 +440,24 @@ export const registerShortcuts = (
       return
     }
 
-    pressedKeys.delete(event.keycode)
+    syncKeyStateFromEvent(event, 'keyup')
+    syncMetaRecovery()
 
-    if (pressedKeys.size > 0) {
+    if (
+      activeMainKeys.size > 0
+      || modifierState.altKey
+      || modifierState.ctrlKey
+      || modifierState.metaKey
+      || modifierState.shiftKey
+    ) {
       return
     }
 
-    if (capturePendingHotkey && !captureHasUnsupportedKey) {
+    if (
+      capturePendingHotkey
+      && !captureHasUnsupportedKey
+      && !(META_ALONE_UNSUPPORTED_ON_WINDOWS && capturePendingHotkey === 'Meta')
+    ) {
       emitHotkeyCapture({ phase: 'commit', hotkey: capturePendingHotkey })
     } else {
       emitHotkeyCapture({ phase: 'cancel', hotkey: null })
@@ -378,16 +498,17 @@ export const registerShortcuts = (
     }
 
     if (event.keycode === UiohookKey.Escape) {
-      pressedKeys.clear()
+      resetKeyState()
       resetPushState()
       clearPendingShortPressHint()
       void orchestrator.cancel()
       return
     }
 
-    pressedKeys.add(event.keycode)
-    const pushMatches = matchesHotkeyFromEvent(event, pressedKeys, parsedPushHotkey)
-    const toggleMatches = matchesHotkeyFromEvent(event, pressedKeys, parsedToggleHotkey)
+    syncKeyStateFromEvent(event, 'keydown')
+    syncMetaRecovery()
+    const pushMatches = matchesHotkeyFromEvent(modifierState, activeMainKeys, parsedPushHotkey)
+    const toggleMatches = matchesHotkeyFromEvent(modifierState, activeMainKeys, parsedToggleHotkey)
     const shouldStartPushFromHook = !parsedPushHotkey?.mainKey || !registeredPushAccelerator
     const shouldToggleFromHook = !parsedToggleHotkey?.mainKey || !registeredToggleAccelerator
 
@@ -442,11 +563,12 @@ export const registerShortcuts = (
       return
     }
 
-    pressedKeys.delete(event.keycode)
+    syncKeyStateFromEvent(event, 'keyup')
+    syncMetaRecovery()
 
     if (
       pushActive &&
-      (includesHotkeyKey(parsedPushHotkey, event.keycode) || !matchesHotkeyFromEvent(event, pressedKeys, parsedPushHotkey))
+      (includesHotkeyKey(parsedPushHotkey, event.keycode) || !matchesHotkeyFromEvent(modifierState, activeMainKeys, parsedPushHotkey))
     ) {
       pushActive = false
       const heldForMs = Date.now() - pushStartedAt
@@ -510,7 +632,7 @@ export const registerShortcuts = (
 
     if (
       toggleActive &&
-      (includesHotkeyKey(parsedToggleHotkey, event.keycode) || !matchesHotkeyFromEvent(event, pressedKeys, parsedToggleHotkey))
+      (includesHotkeyKey(parsedToggleHotkey, event.keycode) || !matchesHotkeyFromEvent(modifierState, activeMainKeys, parsedToggleHotkey))
     ) {
       toggleActive = false
     }

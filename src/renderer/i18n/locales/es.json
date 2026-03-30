@@ -192,6 +192,7 @@
     "captureMode": "Modo de captura",
     "captureLocked": "bloqueado (atajos suspendidos)",
     "captureUnlocked": "desbloqueado",
+    "metaAloneUnsupported": "La tecla Windows sola no se admite como atajo en Windows.",
     "hookFailedMessage": "El hook de teclado falló. Verifica que ningún antivirus o software de seguridad lo esté bloqueando, o intenta ejecutar la app como administrador.",
     "behavior": "Comportamiento",
     "updatesAndTelemetry": "Actualizaciones y Telemetría",

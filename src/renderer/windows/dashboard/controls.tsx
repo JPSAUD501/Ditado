@@ -9,6 +9,15 @@ import { formatAudioDuration, formatDate } from './formatters'
 
 const easeOutExpo = [0.16, 1, 0.3, 1] as const
 const _appStartTime = Date.now()
+const isWindowsPlatform = (): boolean => {
+  if (typeof navigator !== 'undefined') {
+    return navigator.userAgent.includes('Windows')
+  }
+  if (typeof process !== 'undefined') {
+    return process.platform === 'win32'
+  }
+  return false
+}
 
 const computeRelativeTime = (createdAt: string): string => {
   const now = _appStartTime
@@ -40,14 +49,10 @@ export const HotkeyField = ({
   const { t } = useTranslation()
   const [draft, setDraft] = useState(value)
   const [isCapturing, setIsCapturing] = useState(false)
+  const [captureError, setCaptureError] = useState<string | null>(null)
   const ignoreNextCancelRef = useRef(false)
+  const invalidMetaCaptureRef = useRef(false)
   const visibleValue = isCapturing ? draft : value
-
-  useEffect(() => {
-    if (!isCapturing) {
-      setDraft(value)
-    }
-  }, [isCapturing, value])
 
   useEffect(() => {
     return () => { void window.ditado.setHotkeyCaptureActive(false) }
@@ -62,6 +67,13 @@ export const HotkeyField = ({
       if (payload.phase === 'preview') {
         if (payload.hotkey) {
           setDraft(payload.hotkey)
+          if (isWindowsPlatform() && payload.hotkey === 'Meta') {
+            invalidMetaCaptureRef.current = true
+            setCaptureError(t('settings.metaAloneUnsupported'))
+          } else {
+            invalidMetaCaptureRef.current = false
+            setCaptureError(null)
+          }
         }
         return
       }
@@ -69,6 +81,8 @@ export const HotkeyField = ({
       if (payload.phase === 'commit' && payload.hotkey) {
         setDraft(payload.hotkey)
         setIsCapturing(false)
+        setCaptureError(null)
+        invalidMetaCaptureRef.current = false
         ignoreNextCancelRef.current = true
         void window.ditado.setHotkeyCaptureActive(false)
         void onCommit(payload.hotkey)
@@ -82,22 +96,28 @@ export const HotkeyField = ({
 
       setDraft(value)
       setIsCapturing(false)
+      setCaptureError(invalidMetaCaptureRef.current ? t('settings.metaAloneUnsupported') : null)
+      invalidMetaCaptureRef.current = false
       ignoreNextCancelRef.current = true
       void window.ditado.setHotkeyCaptureActive(false)
     })
 
     return unsubscribe
-  }, [isCapturing, onCommit, value])
+  }, [isCapturing, onCommit, t, value])
 
   const stopCapture = (): void => {
     ignoreNextCancelRef.current = true
     setIsCapturing(false)
+    invalidMetaCaptureRef.current = false
     void window.ditado.setHotkeyCaptureActive(false)
   }
 
   const startCapture = (): void => {
     ignoreNextCancelRef.current = false
     setIsCapturing(true)
+    setDraft(value)
+    setCaptureError(null)
+    invalidMetaCaptureRef.current = false
     void window.ditado.setHotkeyCaptureActive(true)
   }
 
@@ -131,6 +151,11 @@ export const HotkeyField = ({
       >
         {t('common.resetTo', { value: formatHotkeyForDisplay(fallbackValue) })}
       </button>
+      {captureError ? (
+        <span className="text-xs" style={{ color: 'var(--status-error)' }}>
+          {captureError}
+        </span>
+      ) : null}
     </div>
   )
 }

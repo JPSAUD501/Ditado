@@ -47,6 +47,7 @@ const emit = (
 }
 
 beforeEach(() => {
+  vi.useRealTimers()
   listeners.keydown.clear()
   listeners.keyup.clear()
   registerShortcut.mockReset()
@@ -158,6 +159,108 @@ describe('registerShortcuts', () => {
 
     emit('keyup', { keycode: 29, ctrlKey: false, altKey: false, shiftKey: false, metaKey: false })
     expect(onHotkeyCapture).toHaveBeenLastCalledWith({ phase: 'commit', hotkey: 'Ctrl+Meta' })
+  })
+
+  it('cancels Meta-only capture on Windows when the keyup is swallowed', async () => {
+    vi.useFakeTimers()
+    const { registerShortcuts } = await import('./registerShortcuts.js')
+    const onHotkeyCapture = vi.fn()
+    const orchestrator = {
+      startCapture: vi.fn(async () => undefined),
+      toggleCapture: vi.fn(async () => undefined),
+      requestStop: vi.fn(),
+      showShortPressHint: vi.fn(async () => undefined),
+      getSession: vi.fn(() => null),
+    }
+    const store = {
+      getSettings: () => ({
+        pushToTalkHotkey: 'Ctrl+Meta',
+        toggleHotkey: '',
+      }),
+    }
+
+    registerShortcuts(
+      store as never,
+      orchestrator as never,
+      () => false,
+      undefined,
+      () => true,
+      onHotkeyCapture,
+    )
+
+    emit('keydown', { keycode: 3675, ctrlKey: false, altKey: false, shiftKey: false, metaKey: true })
+    expect(onHotkeyCapture).toHaveBeenLastCalledWith({ phase: 'preview', hotkey: 'Meta' })
+
+    vi.advanceTimersByTime(350)
+
+    expect(onHotkeyCapture).toHaveBeenLastCalledWith({ phase: 'cancel', hotkey: null })
+    expect(onHotkeyCapture).not.toHaveBeenCalledWith({ phase: 'commit', hotkey: 'Meta' })
+    vi.useRealTimers()
+  })
+
+  it('does not treat stale Meta as still pressed for Ctrl+Meta push-to-talk', async () => {
+    vi.useFakeTimers()
+    const { registerShortcuts } = await import('./registerShortcuts.js')
+    const orchestrator = {
+      startCapture: vi.fn(async () => undefined),
+      toggleCapture: vi.fn(async () => undefined),
+      requestStop: vi.fn(),
+      showShortPressHint: vi.fn(async () => undefined),
+      getSession: vi.fn(() => null),
+    }
+    const store = {
+      getSettings: () => ({
+        pushToTalkHotkey: 'Ctrl+Meta',
+        toggleHotkey: '',
+      }),
+    }
+
+    registerShortcuts(store as never, orchestrator as never, () => false)
+
+    emit('keydown', { keycode: 3675, ctrlKey: false, altKey: false, shiftKey: false, metaKey: true })
+    vi.advanceTimersByTime(350)
+    emit('keydown', { keycode: 29, ctrlKey: true, altKey: false, shiftKey: false, metaKey: false })
+    vi.advanceTimersByTime(500)
+
+    expect(orchestrator.startCapture).not.toHaveBeenCalled()
+    vi.useRealTimers()
+  })
+
+  it('starts and stops push-to-talk when Ctrl+Meta is held and released', async () => {
+    vi.useFakeTimers()
+    const { registerShortcuts } = await import('./registerShortcuts.js')
+    const orchestrator = {
+      startCapture: vi.fn(async () => undefined),
+      toggleCapture: vi.fn(async () => undefined),
+      requestStop: vi.fn(),
+      showShortPressHint: vi.fn(async () => undefined),
+      getSession: vi
+        .fn()
+        .mockReturnValueOnce(null)
+        .mockReturnValue({
+          status: 'listening',
+          activationMode: 'push-to-talk',
+        }),
+    }
+    const store = {
+      getSettings: () => ({
+        pushToTalkHotkey: 'Ctrl+Meta',
+        toggleHotkey: '',
+      }),
+    }
+
+    registerShortcuts(store as never, orchestrator as never, () => false)
+
+    emit('keydown', { keycode: 29, ctrlKey: true, altKey: false, shiftKey: false, metaKey: false })
+    emit('keydown', { keycode: 3675, ctrlKey: true, altKey: false, shiftKey: false, metaKey: true })
+    vi.advanceTimersByTime(650)
+
+    expect(orchestrator.startCapture).toHaveBeenCalledWith('push-to-talk')
+
+    emit('keyup', { keycode: 3675, ctrlKey: true, altKey: false, shiftKey: false, metaKey: false })
+
+    expect(orchestrator.requestStop).toHaveBeenCalledWith('push-to-talk')
+    vi.useRealTimers()
   })
 
   it('shows a short-press hint instead of submitting when push-to-talk is tapped', async () => {

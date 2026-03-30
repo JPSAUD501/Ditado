@@ -192,6 +192,7 @@
     "captureMode": "Capture mode",
     "captureLocked": "locked (shortcuts suspended)",
     "captureUnlocked": "unlocked",
+    "metaAloneUnsupported": "The Windows key alone is not supported as a shortcut on Windows.",
     "hookFailedMessage": "The keyboard hook failed. Check that no antivirus or security software is blocking it, or try running the app as administrator.",
     "behavior": "Behavior",
     "updatesAndTelemetry": "Updates & Telemetry",
