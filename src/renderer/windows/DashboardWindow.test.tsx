@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { DashboardWindow } from './DashboardWindow'
 import { defaultPermissionState, defaultSettings } from '@shared/defaults'
@@ -8,6 +8,7 @@ import { historyEntrySchema, type DashboardViewModel, type Settings } from '@sha
 import type { HotkeyCapturePayload } from '@shared/hotkeys'
 
 const onboardedSettings: Settings = { ...defaultSettings, onboardingCompleted: true }
+const defaultUserAgent = window.navigator.userAgent
 
 const createState = (settings: Settings = onboardedSettings): DashboardViewModel => ({
   session: null,
@@ -127,6 +128,13 @@ const installDesktopApi = (
 }
 
 describe('DashboardWindow', () => {
+  afterEach(() => {
+    Object.defineProperty(window.navigator, 'userAgent', {
+      value: defaultUserAgent,
+      configurable: true,
+    })
+  })
+
   it('opens the onboarding wizard when launch requests onboarding and setup is still incomplete', async () => {
     const { updateSettings } = installDesktopApi({
       ...defaultSettings,
@@ -321,7 +329,6 @@ describe('DashboardWindow', () => {
   })
 
   it('does not persist Meta alone on Windows and shows capture feedback', async () => {
-    const originalUserAgent = window.navigator.userAgent
     Object.defineProperty(window.navigator, 'userAgent', {
       value: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
       configurable: true,
@@ -341,11 +348,6 @@ describe('DashboardWindow', () => {
     expect(updateSettings).not.toHaveBeenCalled()
     expect(screen.getByText('The Windows key alone is not supported as a shortcut on Windows.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /push-to-talk/i })).toHaveTextContent('Ctrl+Meta')
-
-    Object.defineProperty(window.navigator, 'userAgent', {
-      value: originalUserAgent,
-      configurable: true,
-    })
   })
 
   it('saves the API key and reflects the persisted state in the settings UI', async () => {
