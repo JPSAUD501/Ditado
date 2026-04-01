@@ -46,6 +46,22 @@ const emit = (
   }
 }
 
+const withPlatform = async (platform: NodeJS.Platform, run: () => Promise<void>): Promise<void> => {
+  const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+  Object.defineProperty(process, 'platform', {
+    configurable: true,
+    value: platform,
+  })
+
+  try {
+    await run()
+  } finally {
+    if (originalPlatform) {
+      Object.defineProperty(process, 'platform', originalPlatform)
+    }
+  }
+}
+
 beforeEach(() => {
   vi.useRealTimers()
   listeners.keydown.clear()
@@ -162,40 +178,42 @@ describe('registerShortcuts', () => {
   })
 
   it('cancels Meta-only capture on Windows when the keyup is swallowed', async () => {
-    vi.useFakeTimers()
-    const { registerShortcuts } = await import('./registerShortcuts.js')
-    const onHotkeyCapture = vi.fn()
-    const orchestrator = {
-      startCapture: vi.fn(async () => undefined),
-      toggleCapture: vi.fn(async () => undefined),
-      requestStop: vi.fn(),
-      showShortPressHint: vi.fn(async () => undefined),
-      getSession: vi.fn(() => null),
-    }
-    const store = {
-      getSettings: () => ({
-        pushToTalkHotkey: 'Ctrl+Meta',
-        toggleHotkey: '',
-      }),
-    }
+    await withPlatform('win32', async () => {
+      vi.useFakeTimers()
+      const { registerShortcuts } = await import('./registerShortcuts.js')
+      const onHotkeyCapture = vi.fn()
+      const orchestrator = {
+        startCapture: vi.fn(async () => undefined),
+        toggleCapture: vi.fn(async () => undefined),
+        requestStop: vi.fn(),
+        showShortPressHint: vi.fn(async () => undefined),
+        getSession: vi.fn(() => null),
+      }
+      const store = {
+        getSettings: () => ({
+          pushToTalkHotkey: 'Ctrl+Meta',
+          toggleHotkey: '',
+        }),
+      }
 
-    registerShortcuts(
-      store as never,
-      orchestrator as never,
-      () => false,
-      undefined,
-      () => true,
-      onHotkeyCapture,
-    )
+      registerShortcuts(
+        store as never,
+        orchestrator as never,
+        () => false,
+        undefined,
+        () => true,
+        onHotkeyCapture,
+      )
 
-    emit('keydown', { keycode: 3675, ctrlKey: false, altKey: false, shiftKey: false, metaKey: true })
-    expect(onHotkeyCapture).toHaveBeenLastCalledWith({ phase: 'preview', hotkey: 'Meta' })
+      emit('keydown', { keycode: 3675, ctrlKey: false, altKey: false, shiftKey: false, metaKey: true })
+      expect(onHotkeyCapture).toHaveBeenLastCalledWith({ phase: 'preview', hotkey: 'Meta' })
 
-    vi.advanceTimersByTime(350)
+      vi.advanceTimersByTime(350)
 
-    expect(onHotkeyCapture).toHaveBeenLastCalledWith({ phase: 'cancel', hotkey: null })
-    expect(onHotkeyCapture).not.toHaveBeenCalledWith({ phase: 'commit', hotkey: 'Meta' })
-    vi.useRealTimers()
+      expect(onHotkeyCapture).toHaveBeenLastCalledWith({ phase: 'cancel', hotkey: null })
+      expect(onHotkeyCapture).not.toHaveBeenCalledWith({ phase: 'commit', hotkey: 'Meta' })
+      vi.useRealTimers()
+    })
   })
 
   it('does not treat stale Meta as still pressed for Ctrl+Meta push-to-talk', async () => {
