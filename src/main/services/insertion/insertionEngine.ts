@@ -4,7 +4,7 @@ import type {
   InsertionPlan,
   InsertionStreamingMode,
 } from '../../../shared/contracts.js'
-import { runShortcut } from '../context/activeContextService.js'
+import { runShortcutOrThrow } from '../context/activeContextService.js'
 import type { ClipboardService } from '../clipboard/clipboardService.js'
 import type { AutomationService } from '../automation/automationService.js'
 import { AutomationServiceError } from '../automation/automationService.js'
@@ -247,10 +247,7 @@ class ProgressiveInsertionSession {
 
     this.markInsertionStarted()
     await this.clipboardService.writeNormal(remainingText)
-    const pasted = await runShortcut('paste')
-    if (!pasted) {
-      throw new Error('Clipboard paste shortcut unavailable')
-    }
+    await runShortcutOrThrow('paste')
     this.completedAt = new Date().toISOString()
   }
 
@@ -670,10 +667,21 @@ export class InsertionEngine {
   }
 
   createPlan(context: ContextSnapshot): InsertionPlan {
+    let capability: InsertionPlan['capability'] = 'automation'
+
+    try {
+      const environment = this.automationService.getEnvironment()
+      if (!environment.supportsLetterByLetter) {
+        capability = 'clipboard'
+      }
+    } catch {
+      capability = 'clipboard'
+    }
+
     return {
       strategy: context.selectedText ? 'replace-selection' : 'insert-at-cursor',
       targetApp: context.appName,
-      capability: 'automation',
+      capability,
     }
   }
 

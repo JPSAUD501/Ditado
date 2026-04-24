@@ -12,15 +12,31 @@ const outputPath = join(outputDir, 'ditado_native_automation.node')
 const fallbackPath = join(outputDir, 'ditado_native_automation.cjs')
 const LOCK_ERROR_CODES = new Set(['EACCES', 'EBUSY', 'EPERM'])
 
-const libraryExtension =
-  process.platform === 'win32' ? 'dll' : process.platform === 'darwin' ? 'dylib' : 'so'
+const getLibraryExtension = (platform = process.platform) =>
+  platform === 'win32' ? 'dll' : platform === 'darwin' ? 'dylib' : 'so'
 
-const artifactPath = join(targetDir, 'release', `ditado_native_automation.${libraryExtension}`)
+export const getNativeArtifactFileNames = (platform = process.platform) => {
+  const extension = getLibraryExtension(platform)
+  if (platform === 'win32') {
+    return [`ditado_native_automation.${extension}`]
+  }
+
+  return [
+    `libditado_native_automation.${extension}`,
+    `ditado_native_automation.${extension}`,
+  ]
+}
+
+export const resolveExistingArtifactPath = ({
+  candidatePaths,
+  fileExists = existsSync,
+}) => candidatePaths.find((candidatePath) => fileExists(candidatePath)) ?? null
+
 const wslArtifactPath = join(
   targetDirWsl,
   'x86_64-pc-windows-msvc',
   'release',
-  'ditado_native_automation.dll',
+  getNativeArtifactFileNames('win32')[0],
 )
 
 const toWslPath = (windowsPath) => {
@@ -149,11 +165,9 @@ const tryNativeBuild = () => {
     return null
   }
 
-  if (!existsSync(artifactPath)) {
-    return null
-  }
-
-  return artifactPath
+  return resolveExistingArtifactPath({
+    candidatePaths: getNativeArtifactFileNames().map((fileName) => join(targetDir, 'release', fileName)),
+  })
 }
 
 const fallbackSource = `'use strict'
