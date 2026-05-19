@@ -25,7 +25,6 @@
     "dev:preload": "tsc -p tsconfig.preload.json --watch --preserveWatchOutput",
     "dev:renderer": "vite",
     "dev:electron": "wait-on tcp:5173 dist-electron/main/main/main.js dist-electron/preload/preload/preload.cjs dist-electron/native/ditado_native_automation.cjs && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .",
-    "dev:debug-shortcuts": "npm run generate:ui-earcons && npm run generate:icons && npm run build:native-automation && npm run build:telemetry-config && concurrently -k -n MAIN,PRELOAD,RENDERER,ELECTRON -c blue,magenta,green,yellow \"npm:dev:main\" \"npm:dev:preload\" \"npm:dev:renderer\" \"npm:dev:electron:debug-shortcuts\"",
     "dev:electron:debug-shortcuts": "wait-on tcp:5173 dist-electron/main/main/main.js dist-electron/preload/preload/preload.cjs dist-electron/native/ditado_native_automation.cjs && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 DITADO_DEBUG_SHORTCUTS=1 electron .",
     "typecheck": "tsc -b && tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.preload.json --noEmit",
     "build:main": "tsc -p tsconfig.main.json",
