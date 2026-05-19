@@ -1,4 +1,4 @@
-import { app, BrowserWindow, nativeTheme, screen, session } from 'electron'
+import { app, BrowserWindow, nativeTheme, powerMonitor, screen, session } from 'electron'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
@@ -18,7 +18,7 @@ import type {
 import { createWindowIcon } from './bootstrap/appIcon.js'
 import { registerIpc } from './bootstrap/registerIpc.js'
 import { configureMediaPermissions } from './bootstrap/configureMediaPermissions.js'
-import { registerShortcuts } from './bootstrap/registerShortcuts.js'
+import { registerShortcuts, type ShortcutController } from './bootstrap/registerShortcuts.js'
 import { registerTray } from './bootstrap/registerTray.js'
 import { shutdownServices } from './bootstrap/shutdown.js'
 import { AutomationService } from './services/automation/automationService.js'
@@ -377,7 +377,7 @@ void app.whenReady().then(async () => {
   const canStartDictation = (): boolean => (
     canUseDictation(store.getSettings()) && (!startupWarmupState.required || startupWarmupState.ready)
   )
-  let refreshShortcuts: (() => void) | null = null
+  let shortcuts: ShortcutController | null = null
 
   const setHotkeyCaptureMode = (active: boolean): void => {
     if (hotkeyCaptureActive === active) {
@@ -387,7 +387,7 @@ void app.whenReady().then(async () => {
     hotkeyCaptureActive = active
     if (!active) {
       broadcastHotkeyCapture({ phase: 'cancel', hotkey: null })
-      refreshShortcuts?.()
+      shortcuts?.refresh()
     }
   }
 
@@ -551,7 +551,7 @@ void app.whenReady().then(async () => {
     maybeFinalizeStartupWarmup()
   }
 
-  refreshShortcuts = registerShortcuts(
+  shortcuts = registerShortcuts(
     store,
     orchestrator,
     () => !canStartDictation(),
@@ -559,6 +559,15 @@ void app.whenReady().then(async () => {
     () => hotkeyCaptureActive,
     broadcastHotkeyCapture,
   )
+
+  const resetShortcutRuntimeState = (): void => {
+    shortcuts?.resetRuntimeState({ suppressUntilRelease: true })
+  }
+
+  powerMonitor.on('lock-screen', resetShortcutRuntimeState)
+  powerMonitor.on('unlock-screen', resetShortcutRuntimeState)
+  powerMonitor.on('suspend', resetShortcutRuntimeState)
+  powerMonitor.on('resume', resetShortcutRuntimeState)
 
   const { refresh: refreshTray } = registerTray(
     {
@@ -618,7 +627,7 @@ void app.whenReady().then(async () => {
       syncLoginItemSettings(app, store.getSettings().launchOnLogin)
       applyDashboardChrome(windows.dashboard, currentDashboardTheme)
       updates.syncFromSettings()
-      refreshShortcuts?.()
+      shortcuts?.refresh()
       refreshTray()
       await broadcastState(store, orchestrator, permissions, telemetry, updates)
       beginStartupWarmup()

@@ -24,6 +24,7 @@ vi.mock('uiohook-napi', () => ({
     CtrlRight: 3613,
     D: 32,
     F: 33,
+    L: 38,
     Meta: 3675,
     MetaRight: 3676,
     Shift: 42,
@@ -244,6 +245,131 @@ describe('registerShortcuts', () => {
     vi.useRealTimers()
   })
 
+  it('clears stale Meta through the runtime reset before the next Ctrl press', async () => {
+    await withPlatform('win32', async () => {
+      vi.useFakeTimers()
+      const { registerShortcuts } = await import('./registerShortcuts.js')
+      const orchestrator = {
+        startCapture: vi.fn(async () => undefined),
+        toggleCapture: vi.fn(async () => undefined),
+        requestStop: vi.fn(),
+        showShortPressHint: vi.fn(async () => undefined),
+        getSession: vi.fn(() => null),
+      }
+      const store = {
+        getSettings: () => ({
+          pushToTalkHotkey: 'Ctrl+Meta',
+          toggleHotkey: '',
+        }),
+      }
+
+      const shortcuts = registerShortcuts(store as never, orchestrator as never, () => false)
+
+      emit('keydown', { keycode: 3675, ctrlKey: false, altKey: false, shiftKey: false, metaKey: true })
+      shortcuts.resetRuntimeState({ suppressUntilRelease: true })
+      emit('keydown', { keycode: 29, ctrlKey: true, altKey: false, shiftKey: false, metaKey: true })
+      vi.advanceTimersByTime(500)
+
+      expect(orchestrator.startCapture).not.toHaveBeenCalled()
+      vi.useRealTimers()
+    })
+  })
+
+  it('suppresses shortcuts after an unsafe reset until all keys are released', async () => {
+    await withPlatform('win32', async () => {
+      vi.useFakeTimers()
+      const { registerShortcuts } = await import('./registerShortcuts.js')
+      const orchestrator = {
+        startCapture: vi.fn(async () => undefined),
+        toggleCapture: vi.fn(async () => undefined),
+        requestStop: vi.fn(),
+        showShortPressHint: vi.fn(async () => undefined),
+        getSession: vi.fn(() => null),
+      }
+      const store = {
+        getSettings: () => ({
+          pushToTalkHotkey: 'Ctrl+Meta',
+          toggleHotkey: '',
+        }),
+      }
+
+      const shortcuts = registerShortcuts(store as never, orchestrator as never, () => false)
+
+      shortcuts.resetRuntimeState({ suppressUntilRelease: true })
+      emit('keydown', { keycode: 29, ctrlKey: true, altKey: false, shiftKey: false, metaKey: true })
+      vi.advanceTimersByTime(500)
+      expect(orchestrator.startCapture).not.toHaveBeenCalled()
+
+      emit('keyup', { keycode: 29, ctrlKey: false, altKey: false, shiftKey: false, metaKey: false })
+      emit('keydown', { keycode: 29, ctrlKey: true, altKey: false, shiftKey: false, metaKey: false })
+      emit('keydown', { keycode: 3675, ctrlKey: true, altKey: false, shiftKey: false, metaKey: true })
+      vi.advanceTimersByTime(650)
+
+      expect(orchestrator.startCapture).toHaveBeenCalledWith('push-to-talk')
+      vi.useRealTimers()
+    })
+  })
+
+  it('clears the Windows lock chord before Ctrl can reuse the stale Meta state', async () => {
+    await withPlatform('win32', async () => {
+      vi.useFakeTimers()
+      const { registerShortcuts } = await import('./registerShortcuts.js')
+      const orchestrator = {
+        startCapture: vi.fn(async () => undefined),
+        toggleCapture: vi.fn(async () => undefined),
+        requestStop: vi.fn(),
+        showShortPressHint: vi.fn(async () => undefined),
+        getSession: vi.fn(() => null),
+      }
+      const store = {
+        getSettings: () => ({
+          pushToTalkHotkey: 'Ctrl+Meta',
+          toggleHotkey: '',
+        }),
+      }
+
+      registerShortcuts(store as never, orchestrator as never, () => false)
+
+      emit('keydown', { keycode: 3675, ctrlKey: false, altKey: false, shiftKey: false, metaKey: true })
+      emit('keydown', { keycode: 38, ctrlKey: false, altKey: false, shiftKey: false, metaKey: true })
+      emit('keydown', { keycode: 29, ctrlKey: true, altKey: false, shiftKey: false, metaKey: true })
+      vi.advanceTimersByTime(500)
+
+      expect(orchestrator.startCapture).not.toHaveBeenCalled()
+      vi.useRealTimers()
+    })
+  })
+
+  it('does not match modifier-only shortcuts while a non-modifier key is still active', async () => {
+    await withPlatform('linux', async () => {
+      vi.useFakeTimers()
+      const { registerShortcuts } = await import('./registerShortcuts.js')
+      const orchestrator = {
+        startCapture: vi.fn(async () => undefined),
+        toggleCapture: vi.fn(async () => undefined),
+        requestStop: vi.fn(),
+        showShortPressHint: vi.fn(async () => undefined),
+        getSession: vi.fn(() => null),
+      }
+      const store = {
+        getSettings: () => ({
+          pushToTalkHotkey: 'Ctrl+Meta',
+          toggleHotkey: '',
+        }),
+      }
+
+      registerShortcuts(store as never, orchestrator as never, () => false)
+
+      emit('keydown', { keycode: 3675, ctrlKey: false, altKey: false, shiftKey: false, metaKey: true })
+      emit('keydown', { keycode: 38, ctrlKey: false, altKey: false, shiftKey: false, metaKey: true })
+      emit('keydown', { keycode: 29, ctrlKey: true, altKey: false, shiftKey: false, metaKey: true })
+      vi.advanceTimersByTime(500)
+
+      expect(orchestrator.startCapture).not.toHaveBeenCalled()
+      vi.useRealTimers()
+    })
+  })
+
   it('starts and stops push-to-talk when Ctrl+Meta is held and released', async () => {
     vi.useFakeTimers()
     const { registerShortcuts } = await import('./registerShortcuts.js')
@@ -302,16 +428,165 @@ describe('registerShortcuts', () => {
 
     emit('keydown', { keycode: 29, ctrlKey: true, altKey: false, shiftKey: false, metaKey: false })
     emit('keydown', { keycode: 56, ctrlKey: true, altKey: true, shiftKey: false, metaKey: false })
-    vi.advanceTimersByTime(200)
+    vi.advanceTimersByTime(120)
     emit('keyup', { keycode: 56, ctrlKey: true, altKey: false, shiftKey: false, metaKey: false })
+    emit('keyup', { keycode: 29, ctrlKey: false, altKey: false, shiftKey: false, metaKey: false })
 
-    expect(orchestrator.startCapture).toHaveBeenCalledTimes(1)
+    expect(orchestrator.startCapture).not.toHaveBeenCalled()
     expect(orchestrator.requestStop).not.toHaveBeenCalled()
     expect(orchestrator.showShortPressHint).not.toHaveBeenCalled()
 
     vi.advanceTimersByTime(600)
 
     expect(orchestrator.showShortPressHint).toHaveBeenCalledTimes(1)
+    vi.useRealTimers()
+  })
+
+  it('stops each started short push-to-talk tap when the double tap is too slow', async () => {
+    vi.useFakeTimers()
+    const { registerShortcuts } = await import('./registerShortcuts.js')
+    const orchestrator = {
+      startCapture: vi.fn(async () => undefined),
+      toggleCapture: vi.fn(async () => undefined),
+      requestStop: vi.fn(),
+      showShortPressHint: vi.fn(async () => undefined),
+      getSession: vi.fn(() => null),
+    }
+    const store = {
+      getSettings: () => ({
+        pushToTalkHotkey: 'Ctrl+Alt',
+        toggleHotkey: 'Shift+Alt',
+      }),
+    }
+
+    registerShortcuts(store as never, orchestrator as never, () => false)
+
+    emit('keydown', { keycode: 29, ctrlKey: true, altKey: false, shiftKey: false, metaKey: false })
+    emit('keydown', { keycode: 56, ctrlKey: true, altKey: true, shiftKey: false, metaKey: false })
+    vi.advanceTimersByTime(220)
+    emit('keyup', { keycode: 56, ctrlKey: true, altKey: false, shiftKey: false, metaKey: false })
+
+    vi.advanceTimersByTime(650)
+
+    emit('keydown', { keycode: 56, ctrlKey: true, altKey: true, shiftKey: false, metaKey: false })
+    vi.advanceTimersByTime(220)
+    emit('keyup', { keycode: 56, ctrlKey: true, altKey: false, shiftKey: false, metaKey: false })
+
+    expect(orchestrator.startCapture).toHaveBeenCalledTimes(2)
+    expect(orchestrator.requestStop).toHaveBeenCalledTimes(2)
+    expect(orchestrator.toggleCapture).not.toHaveBeenCalled()
+    vi.useRealTimers()
+  })
+
+  it('does not switch to hands-free when slow taps already started push-to-talk', async () => {
+    vi.useFakeTimers()
+    const { registerShortcuts } = await import('./registerShortcuts.js')
+    const orchestrator = {
+      startCapture: vi.fn(async () => undefined),
+      toggleCapture: vi.fn(async () => undefined),
+      requestStop: vi.fn(),
+      showShortPressHint: vi.fn(async () => undefined),
+      getSession: vi.fn(() => null),
+    }
+    const store = {
+      getSettings: () => ({
+        pushToTalkHotkey: 'Ctrl+Alt',
+        toggleHotkey: 'Shift+Alt',
+      }),
+    }
+
+    registerShortcuts(store as never, orchestrator as never, () => false)
+
+    emit('keydown', { keycode: 29, ctrlKey: true, altKey: false, shiftKey: false, metaKey: false })
+    emit('keydown', { keycode: 56, ctrlKey: true, altKey: true, shiftKey: false, metaKey: false })
+    vi.advanceTimersByTime(220)
+    emit('keyup', { keycode: 56, ctrlKey: true, altKey: false, shiftKey: false, metaKey: false })
+
+    vi.advanceTimersByTime(250)
+
+    emit('keydown', { keycode: 56, ctrlKey: true, altKey: true, shiftKey: false, metaKey: false })
+    vi.advanceTimersByTime(220)
+    emit('keyup', { keycode: 56, ctrlKey: true, altKey: false, shiftKey: false, metaKey: false })
+
+    expect(orchestrator.startCapture).toHaveBeenCalledTimes(2)
+    expect(orchestrator.requestStop).toHaveBeenCalledTimes(2)
+    expect(orchestrator.toggleCapture).not.toHaveBeenCalled()
+    vi.useRealTimers()
+  })
+
+  it('does not switch to hands-free when the second tap is held past the push start delay', async () => {
+    vi.useFakeTimers()
+    const { registerShortcuts } = await import('./registerShortcuts.js')
+    const orchestrator = {
+      startCapture: vi.fn(async () => undefined),
+      toggleCapture: vi.fn(async () => undefined),
+      requestStop: vi.fn(),
+      showShortPressHint: vi.fn(async () => undefined),
+      getSession: vi.fn(() => null),
+    }
+    const store = {
+      getSettings: () => ({
+        pushToTalkHotkey: 'Ctrl+Alt',
+        toggleHotkey: 'Shift+Alt',
+      }),
+    }
+
+    registerShortcuts(store as never, orchestrator as never, () => false)
+
+    emit('keydown', { keycode: 29, ctrlKey: true, altKey: false, shiftKey: false, metaKey: false })
+    emit('keydown', { keycode: 56, ctrlKey: true, altKey: true, shiftKey: false, metaKey: false })
+    vi.advanceTimersByTime(120)
+    emit('keyup', { keycode: 56, ctrlKey: true, altKey: false, shiftKey: false, metaKey: false })
+    emit('keyup', { keycode: 29, ctrlKey: false, altKey: false, shiftKey: false, metaKey: false })
+
+    vi.advanceTimersByTime(250)
+
+    emit('keydown', { keycode: 29, ctrlKey: true, altKey: false, shiftKey: false, metaKey: false })
+    emit('keydown', { keycode: 56, ctrlKey: true, altKey: true, shiftKey: false, metaKey: false })
+    vi.advanceTimersByTime(220)
+    emit('keyup', { keycode: 56, ctrlKey: true, altKey: false, shiftKey: false, metaKey: false })
+    await Promise.resolve()
+
+    expect(orchestrator.toggleCapture).not.toHaveBeenCalled()
+    expect(orchestrator.startCapture).toHaveBeenCalledTimes(1)
+    expect(orchestrator.requestStop).toHaveBeenCalledWith('push-to-talk')
+    vi.useRealTimers()
+  })
+
+  it('does not count repeated modifier taps as double tap while another shortcut modifier stays held', async () => {
+    vi.useFakeTimers()
+    const { registerShortcuts } = await import('./registerShortcuts.js')
+    const orchestrator = {
+      startCapture: vi.fn(async () => undefined),
+      toggleCapture: vi.fn(async () => undefined),
+      requestStop: vi.fn(),
+      showShortPressHint: vi.fn(async () => undefined),
+      getSession: vi.fn(() => null),
+    }
+    const store = {
+      getSettings: () => ({
+        pushToTalkHotkey: 'Ctrl+Alt',
+        toggleHotkey: 'Shift+Alt',
+      }),
+    }
+
+    registerShortcuts(store as never, orchestrator as never, () => false)
+
+    emit('keydown', { keycode: 29, ctrlKey: true, altKey: false, shiftKey: false, metaKey: false })
+    emit('keydown', { keycode: 56, ctrlKey: true, altKey: true, shiftKey: false, metaKey: false })
+    vi.advanceTimersByTime(120)
+    emit('keyup', { keycode: 56, ctrlKey: true, altKey: false, shiftKey: false, metaKey: false })
+
+    vi.advanceTimersByTime(250)
+
+    emit('keydown', { keycode: 56, ctrlKey: true, altKey: true, shiftKey: false, metaKey: false })
+    vi.advanceTimersByTime(120)
+    emit('keyup', { keycode: 56, ctrlKey: true, altKey: false, shiftKey: false, metaKey: false })
+
+    vi.advanceTimersByTime(600)
+
+    expect(orchestrator.toggleCapture).not.toHaveBeenCalled()
+    expect(orchestrator.startCapture).not.toHaveBeenCalled()
     vi.useRealTimers()
   })
 
@@ -336,14 +611,17 @@ describe('registerShortcuts', () => {
 
     emit('keydown', { keycode: 29, ctrlKey: true, altKey: false, shiftKey: false, metaKey: false })
     emit('keydown', { keycode: 56, ctrlKey: true, altKey: true, shiftKey: false, metaKey: false })
-    vi.advanceTimersByTime(200)
+    vi.advanceTimersByTime(120)
     emit('keyup', { keycode: 56, ctrlKey: true, altKey: false, shiftKey: false, metaKey: false })
+    emit('keyup', { keycode: 29, ctrlKey: false, altKey: false, shiftKey: false, metaKey: false })
 
     vi.advanceTimersByTime(250)
 
+    emit('keydown', { keycode: 29, ctrlKey: true, altKey: false, shiftKey: false, metaKey: false })
     emit('keydown', { keycode: 56, ctrlKey: true, altKey: true, shiftKey: false, metaKey: false })
     vi.advanceTimersByTime(120)
     emit('keyup', { keycode: 56, ctrlKey: true, altKey: false, shiftKey: false, metaKey: false })
+    emit('keyup', { keycode: 29, ctrlKey: false, altKey: false, shiftKey: false, metaKey: false })
 
     vi.advanceTimersByTime(600)
 
@@ -362,7 +640,7 @@ describe('registerShortcuts', () => {
       getSettings: () => settings,
     }
 
-    const refreshShortcuts = registerShortcuts(
+    const shortcuts = registerShortcuts(
       store as never,
       {
         startCapture: vi.fn(async () => undefined),
@@ -377,7 +655,7 @@ describe('registerShortcuts', () => {
     expect(registerShortcut).not.toHaveBeenCalled()
 
     settings.toggleHotkey = 'Ctrl+F'
-    refreshShortcuts()
+    shortcuts.refresh()
 
     expect(registerShortcut).toHaveBeenCalledWith('CommandOrControl+F', expect.any(Function))
   })
