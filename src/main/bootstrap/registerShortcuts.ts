@@ -215,6 +215,10 @@ const matchesHotkeyFromEvent = (
     return false
   }
 
+  if (!hotkey.mainKey && activeMainKeys.size > 0) {
+    return false
+  }
+
   if (hotkey.mainKey && !activeMainKeys.has(hotkey.mainKey)) {
     return false
   }
@@ -251,6 +255,12 @@ const DOUBLE_TAP_WINDOW_MS = 600
 const PUSH_TO_TALK_START_DELAY_MS = 180
 const META_STALE_RECOVERY_MS = 350
 const META_ALONE_UNSUPPORTED_ON_WINDOWS = process.platform === 'win32'
+const WINDOWS_LOCK_KEYCODE = UiohookKey.L
+
+export type ShortcutController = {
+  refresh: () => void
+  resetRuntimeState: (options?: { suppressUntilRelease?: boolean }) => void
+}
 
 export const registerShortcuts = (
   store: AppStore,
@@ -259,7 +269,7 @@ export const registerShortcuts = (
   onHookStatus?: (running: boolean) => void,
   isHotkeyCaptureActive: () => boolean = () => false,
   onHotkeyCapture?: (payload: HotkeyCapturePayload) => void,
-): (() => void) => {
+): ShortcutController => {
   let parsedPushHotkey = parseHotkey(store.getSettings().pushToTalkHotkey)
   let parsedToggleHotkey = parseHotkey(store.getSettings().toggleHotkey)
   let registeredToggleAccelerator: string | null = null
@@ -270,6 +280,7 @@ export const registerShortcuts = (
   let toggleActive = false
   let lastToggleAt = 0
   let lastShortPressAt = 0
+  let pendingShortTapAt: number | null = null
   let pendingPushStartTimeout: ReturnType<typeof setTimeout> | null = null
   let pendingShortPressHintTimeout: ReturnType<typeof setTimeout> | null = null
   const activeMainKeys = new Set<number>()
@@ -277,6 +288,31 @@ export const registerShortcuts = (
   let capturePendingHotkey: string | null = null
   let captureHasUnsupportedKey = false
   let metaRecoveryTimeout: ReturnType<typeof setTimeout> | null = null
+  let suppressShortcutMatchesUntilRelease = false
+
+  const debugShortcut = (label: string, detail: Record<string, unknown> = {}): void => {
+    if (process.env.DITADO_DEBUG_SHORTCUTS !== '1') {
+      return
+    }
+
+    console.log(
+      `[ditado][shortcut][${label}]`,
+      JSON.stringify({
+        at: new Date().toISOString(),
+        activeMainKeys: [...activeMainKeys],
+        modifierState,
+        pushActive,
+        pushCaptureStarted,
+        toggleActive,
+        lastShortPressAt,
+        pendingShortTapAt,
+        suppressShortcutMatchesUntilRelease,
+        pendingPushStart: pendingPushStartTimeout != null,
+        pendingShortPressHint: pendingShortPressHintTimeout != null,
+        ...detail,
+      }),
+    )
+  }
 
   const clearPendingPushStart = (): void => {
     if (pendingPushStartTimeout != null) {
@@ -290,6 +326,10 @@ export const registerShortcuts = (
       clearTimeout(pendingShortPressHintTimeout)
       pendingShortPressHintTimeout = null
     }
+  }
+
+  const clearPendingShortTap = (): void => {
+    pendingShortTapAt = null
   }
 
   const clearMetaRecoveryTimeout = (): void => {
@@ -337,13 +377,10 @@ export const registerShortcuts = (
   }
 
   const syncKeyStateFromEvent = (event: UiohookKeyboardEvent, phase: 'keydown' | 'keyup'): void => {
-    modifierState = {
-      altKey: event.altKey,
-      ctrlKey: event.ctrlKey,
-      metaKey: event.metaKey,
-      shiftKey: event.shiftKey,
+    const before = {
+      activeMainKeys: [...activeMainKeys],
+      modifierState: { ...modifierState },
     }
-
     const modifier = getModifierFromKeycode(event.keycode)
     if (modifier === 'alt') {
       modifierState.altKey = phase === 'keydown'
@@ -358,6 +395,7 @@ export const registerShortcuts = (
     } else {
       activeMainKeys.delete(event.keycode)
     }
+    debugShortcut('sync-key-state', { event, phase, modifier, before })
   }
 
   const hasOnlyMetaPressed = (): boolean =>
@@ -392,10 +430,7 @@ export const registerShortcuts = (
         return
       }
 
-      resetKeyState()
-      pushActive = false
-      toggleActive = false
-      clearPendingPushStart()
+      resetRuntimeState({ suppressUntilRelease: true })
     }, META_STALE_RECOVERY_MS)
   }
 
@@ -473,6 +508,31 @@ export const registerShortcuts = (
     clearPendingPushStart()
   }
 
+  const hasAnyKeyPressed = (): boolean =>
+    activeMainKeys.size > 0
+    || modifierState.altKey
+    || modifierState.ctrlKey
+    || modifierState.metaKey
+    || modifierState.shiftKey
+
+  const resetRuntimeState = (options: { suppressUntilRelease?: boolean } = {}): void => {
+    debugShortcut('reset-runtime-state', { options })
+    resetHotkeyCaptureState()
+    resetPushState()
+    toggleActive = false
+    lastShortPressAt = 0
+    clearPendingShortTap()
+    clearPendingShortPressHint()
+    suppressShortcutMatchesUntilRelease = options.suppressUntilRelease ?? false
+  }
+
+  const clearSuppressionIfReleased = (): void => {
+    if (suppressShortcutMatchesUntilRelease && !hasAnyKeyPressed()) {
+      debugShortcut('clear-suppression')
+      suppressShortcutMatchesUntilRelease = false
+    }
+  }
+
   const triggerToggle = (): void => {
     const now = Date.now()
     if (now - lastToggleAt < 180) {
@@ -481,6 +541,40 @@ export const registerShortcuts = (
 
     lastToggleAt = now
     void orchestrator.toggleCapture()
+  }
+
+  const commitPendingShortTapIfReleased = (): void => {
+    if (pendingShortTapAt == null || hasAnyKeyPressed()) {
+      return
+    }
+
+    const shortTapAt = pendingShortTapAt
+    clearPendingShortTap()
+
+    if (shortTapAt - lastShortPressAt < DOUBLE_TAP_WINDOW_MS) {
+      debugShortcut('double-tap-toggle', {
+        shortTapAt,
+        previousShortPressAt: lastShortPressAt,
+        deltaMs: shortTapAt - lastShortPressAt,
+      })
+      lastShortPressAt = 0
+      clearPendingShortPressHint()
+      triggerToggle()
+      return
+    }
+
+    lastShortPressAt = shortTapAt
+    clearPendingShortPressHint()
+    debugShortcut('short-tap-pending-hint', { shortTapAt })
+    pendingShortPressHintTimeout = setTimeout(() => {
+      pendingShortPressHintTimeout = null
+      if (lastShortPressAt !== shortTapAt) {
+        return
+      }
+      lastShortPressAt = 0
+      debugShortcut('short-press-hint')
+      void orchestrator.showShortPressHint()
+    }, DOUBLE_TAP_WINDOW_MS)
   }
 
   const keydownHandler = (event: UiohookKeyboardEvent): void => {
@@ -506,11 +600,32 @@ export const registerShortcuts = (
     }
 
     syncKeyStateFromEvent(event, 'keydown')
+
+    if (process.platform === 'win32' && event.keycode === WINDOWS_LOCK_KEYCODE && modifierState.metaKey) {
+      debugShortcut('windows-lock-chord', { event })
+      resetRuntimeState({ suppressUntilRelease: true })
+      return
+    }
+
     syncMetaRecovery()
+    if (suppressShortcutMatchesUntilRelease) {
+      debugShortcut('keydown-suppressed', { event })
+      return
+    }
+
     const pushMatches = matchesHotkeyFromEvent(modifierState, activeMainKeys, parsedPushHotkey)
     const toggleMatches = matchesHotkeyFromEvent(modifierState, activeMainKeys, parsedToggleHotkey)
     const shouldStartPushFromHook = !parsedPushHotkey?.mainKey || !registeredPushAccelerator
     const shouldToggleFromHook = !parsedToggleHotkey?.mainKey || !registeredToggleAccelerator
+    debugShortcut('keydown-match', {
+      event,
+      pushMatches,
+      toggleMatches,
+      shouldStartPushFromHook,
+      shouldToggleFromHook,
+      registeredPushAccelerator,
+      registeredToggleAccelerator,
+    })
 
     if (shouldStartPushFromHook && !pushActive && pushMatches) {
       pushActive = true
@@ -524,14 +639,24 @@ export const registerShortcuts = (
         && ['arming', 'listening'].includes(currentSession.status)
       const inDoubleTapWindow = lastShortPressAt > 0
         && (Date.now() - lastShortPressAt < DOUBLE_TAP_WINDOW_MS)
+      debugShortcut('push-keydown-match', {
+        currentSession,
+        toggleIsActive,
+        inDoubleTapWindow,
+      })
       if (!toggleIsActive && !inDoubleTapWindow) {
         clearPendingShortPressHint()
         pendingPushStartTimeout = setTimeout(() => {
           pendingPushStartTimeout = null
           if (!pushActive || isCaptureSuspended()) {
+            debugShortcut('push-start-skipped', {
+              pushActive,
+              captureSuspended: isCaptureSuspended(),
+            })
             return
           }
           pushCaptureStarted = true
+          debugShortcut('push-start-timeout-fired')
           void orchestrator.startCapture('push-to-talk')
         }, PUSH_TO_TALK_START_DELAY_MS)
       } else {
@@ -541,6 +666,7 @@ export const registerShortcuts = (
 
     if (shouldToggleFromHook && !toggleActive && toggleMatches) {
       toggleActive = true
+      debugShortcut('toggle-keydown-match', { event })
       triggerToggle()
     }
 
@@ -565,6 +691,13 @@ export const registerShortcuts = (
 
     syncKeyStateFromEvent(event, 'keyup')
     syncMetaRecovery()
+    clearSuppressionIfReleased()
+    commitPendingShortTapIfReleased()
+
+    if (suppressShortcutMatchesUntilRelease) {
+      debugShortcut('keyup-suppressed', { event })
+      return
+    }
 
     if (
       pushActive &&
@@ -576,53 +709,51 @@ export const registerShortcuts = (
       const didStartCapture = pushCaptureStarted
       pushCaptureStarted = false
       clearPendingPushStart()
+      debugShortcut('push-keyup-release', { event, heldForMs, didStartCapture })
 
       if (heldForMs < SHORT_PUSH_TO_TALK_MS) {
         const now = Date.now()
+        const isFastTap = heldForMs < PUSH_TO_TALK_START_DELAY_MS
 
-        // If we didn't start a capture, check if we were stopping an active toggle session
-        if (!didStartCapture) {
-          const currentSession = orchestrator.getSession()
-          const toggleWasActive = currentSession?.activationMode === 'toggle'
-            && ['arming', 'listening', 'processing'].includes(currentSession.status)
-          if (toggleWasActive) {
-            // Single tap while toggle active → stop it
-            orchestrator.requestStop('toggle')
-            return
-          }
-        }
-
-        if (now - lastShortPressAt < DOUBLE_TAP_WINDOW_MS) {
-          // Double-tap detected → activate hands-free toggle mode
-          // No capture was started for this tap, so directly trigger toggle
+        if (didStartCapture) {
+          debugShortcut('short-push-started-stop', { heldForMs })
           lastShortPressAt = 0
+          clearPendingShortTap()
           clearPendingShortPressHint()
-          if (didStartCapture) {
-            // Rare: capture was started (window expired between keydown and keyup)
-            void (async () => { await orchestrator.cancel(); triggerToggle() })()
-          } else {
-            triggerToggle()
-          }
-        } else {
-          // First short tap — record time and only surface the hint if a
-          // second tap never arrives inside the double-tap window.
-          lastShortPressAt = now
-          clearPendingShortPressHint()
-          pendingShortPressHintTimeout = setTimeout(() => {
-            pendingShortPressHintTimeout = null
-            if (lastShortPressAt !== now) {
-              return
-            }
-            lastShortPressAt = 0
-            void orchestrator.showShortPressHint()
-          }, DOUBLE_TAP_WINDOW_MS)
+          orchestrator.requestStop('push-to-talk')
+          return
         }
+
+        if (!isFastTap) {
+          debugShortcut('slow-short-tap-start-stop', { heldForMs })
+          lastShortPressAt = 0
+          clearPendingShortTap()
+          clearPendingShortPressHint()
+          void orchestrator.startCapture('push-to-talk').then(() => orchestrator.requestStop('push-to-talk'))
+          return
+        }
+
+        const currentSession = orchestrator.getSession()
+        const toggleWasActive = currentSession?.activationMode === 'toggle'
+          && ['arming', 'listening', 'processing'].includes(currentSession.status)
+        if (toggleWasActive) {
+          // Single tap while toggle active → stop it
+          orchestrator.requestStop('toggle')
+          return
+        }
+
+        pendingShortTapAt = now
+        debugShortcut('fast-short-tap-candidate', { heldForMs, now })
+        commitPendingShortTapIfReleased()
         return
+
       }
       // Long press
       lastShortPressAt = 0
+      clearPendingShortTap()
       clearPendingShortPressHint()
       if (didStartCapture) {
+        debugShortcut('long-push-stop', { heldForMs })
         orchestrator.requestStop('push-to-talk')
       } else {
         // Was in double-tap window or stopping toggle at keydown, but held long — start+stop now
@@ -635,6 +766,7 @@ export const registerShortcuts = (
       (includesHotkeyKey(parsedToggleHotkey, event.keycode) || !matchesHotkeyFromEvent(modifierState, activeMainKeys, parsedToggleHotkey))
     ) {
       toggleActive = false
+      debugShortcut('toggle-keyup-release', { event })
     }
 
   }
@@ -736,15 +868,16 @@ export const registerShortcuts = (
   syncPushRegistration()
   syncToggleRegistration()
 
-  return () => {
+  const refresh = (): void => {
     parsedPushHotkey = parseHotkey(store.getSettings().pushToTalkHotkey)
     parsedToggleHotkey = parseHotkey(store.getSettings().toggleHotkey)
-    resetHotkeyCaptureState()
-    lastShortPressAt = 0
-    resetPushState()
-    toggleActive = false
-    clearPendingShortPressHint()
+    resetRuntimeState()
     syncPushRegistration()
     syncToggleRegistration()
+  }
+
+  return {
+    refresh,
+    resetRuntimeState,
   }
 }
