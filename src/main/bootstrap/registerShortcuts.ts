@@ -367,6 +367,21 @@ export const registerShortcuts = (
     } else {
       activeMainKeys.delete(event.keycode)
     }
+
+    // Use event snapshots only to clear modifiers. Setting pressed state from
+    // snapshots can preserve stale Meta after secure-desktop transitions.
+    if (modifier !== 'alt' && !event.altKey) {
+      modifierState.altKey = false
+    }
+    if (modifier !== 'ctrl' && !event.ctrlKey) {
+      modifierState.ctrlKey = false
+    }
+    if (modifier !== 'meta' && !event.metaKey) {
+      modifierState.metaKey = false
+    }
+    if (modifier !== 'shift' && !event.shiftKey) {
+      modifierState.shiftKey = false
+    }
   }
 
   const hasOnlyMetaPressed = (): boolean =>
@@ -540,10 +555,6 @@ export const registerShortcuts = (
   }
 
   const keydownHandler = (event: UiohookKeyboardEvent): void => {
-    if (process.env.DITADO_DEBUG_SHORTCUTS === '1') {
-      console.log('[ditado][shortcut][keydown]', JSON.stringify(event))
-    }
-
     if (isHotkeyCaptureActive()) {
       handleCaptureKeydown(event)
       return
@@ -613,10 +624,6 @@ export const registerShortcuts = (
   }
 
   const keyupHandler = (event: UiohookKeyboardEvent): void => {
-    if (process.env.DITADO_DEBUG_SHORTCUTS === '1') {
-      console.log('[ditado][shortcut][keyup]', JSON.stringify(event))
-    }
-
     if (isHotkeyCaptureActive()) {
       handleCaptureKeyup(event)
       return
@@ -784,16 +791,6 @@ export const registerShortcuts = (
   try {
     uIOhook.start()
     onHookStatus?.(true)
-    if (process.env.DITADO_DEBUG_SHORTCUTS === '1') {
-      console.log('[ditado][shortcut] hook started')
-      console.log(
-        '[ditado][shortcut] configured',
-        JSON.stringify({
-          pushToTalkHotkey: store.getSettings().pushToTalkHotkey,
-          toggleHotkey: store.getSettings().toggleHotkey,
-        }),
-      )
-    }
   } catch (error) {
     onHookStatus?.(false)
     console.error('[ditado][shortcut] failed to start hook', error)
