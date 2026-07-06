@@ -1,5 +1,5 @@
 import type { InsertionExecutionReport } from '../insertion/insertionEngine.js'
-import type { AppStore } from '../store/appStore.js'
+import type { SyncoreAppData } from '../store/syncoreAppData.js'
 import {
   deriveHistoryDurations,
   type DictationAudioPayload,
@@ -33,7 +33,7 @@ const toOffsetMs = (sessionStartedAt: string, timestamp: string | null | undefin
 }
 
 export class HistoryService {
-  constructor(private readonly store: AppStore) {}
+  constructor(private readonly store: SyncoreAppData) {}
 
   async appendCompletedSession(
     session: DictationSession,

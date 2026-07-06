@@ -1,9 +1,9 @@
 import { act, render } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { DictationSession, OverlayViewModel } from '@shared/contracts'
-import { createIdleSession, defaultPermissionState, defaultSettings } from '@shared/defaults'
-import { useDictationRecorder, useOverlayBridge } from './useDitadoBridge'
+import type { DictationSession } from '@shared/contracts'
+import { createIdleSession } from '@shared/defaults'
+import { useDictationRecorder } from './useDitadoBridge'
 
 const recorderState = {
   recording: false,
@@ -53,11 +53,6 @@ const Harness = ({ session }: { session: DictationSession | null }) => {
   return null
 }
 
-const OverlayBridgeHarness = () => {
-  const state = useOverlayBridge()
-  return <div data-testid="overlay-status">{state.session?.status ?? 'idle'}</div>
-}
-
 const buildSession = (overrides: Partial<DictationSession>): DictationSession => ({
   ...createIdleSession(),
   id: 'session-1',
@@ -82,15 +77,13 @@ beforeEach(() => {
   recorderState.setOnAudioLevel.mockClear()
 
   window.ditado = {
-    getOverlayState: vi.fn(),
     getDashboardState: vi.fn(),
-    subscribeOverlayState: vi.fn(() => () => undefined),
-    subscribeDashboardState: vi.fn(() => () => undefined),
     subscribeDashboardTabRequests: vi.fn(() => () => undefined),
     startPushToTalk: vi.fn(async () => undefined),
     stopPushToTalk: vi.fn(async () => undefined),
     toggleDictation: vi.fn(async () => undefined),
     cancelDictation: vi.fn(async () => undefined),
+    setOnboardingDictationEnabled: vi.fn(async () => undefined),
     notifyRecorderStarted: vi.fn(async () => undefined),
     notifyRecorderFailed: vi.fn(async () => undefined),
     notifyRecorderReady: vi.fn(async () => undefined),
@@ -106,8 +99,6 @@ beforeEach(() => {
     openDashboardTab: vi.fn(),
     clearHistory: vi.fn(),
     deleteHistoryEntry: vi.fn(async () => undefined),
-    getHistoryAudio: vi.fn(),
-    getTelemetryTail: vi.fn(),
     checkForUpdates: vi.fn(),
     downloadUpdate: vi.fn(async () => undefined),
     installUpdate: vi.fn(async () => undefined),
@@ -166,59 +157,5 @@ describe('useDictationRecorder', () => {
 
     expect(recorderState.cancel).toHaveBeenCalledTimes(1)
     expect(window.ditado.stopPushToTalk).not.toHaveBeenCalled()
-  })
-})
-
-describe('useOverlayBridge', () => {
-  it('keeps the newer subscribed overlay session when the initial snapshot resolves late', async () => {
-    let resolveInitialState: ((value: OverlayViewModel) => void) | null = null
-    let subscriptionListener: ((state: OverlayViewModel) => void) | null = null
-
-    const initialStatePromise = new Promise<OverlayViewModel>((resolve) => {
-      resolveInitialState = resolve
-    })
-
-    const subscribedState: OverlayViewModel = {
-      session: {
-        ...createIdleSession(),
-        id: 'session-live',
-        activationMode: 'push-to-talk',
-        status: 'notice',
-        startedAt: new Date().toISOString(),
-        finishedAt: new Date().toISOString(),
-        targetApp: 'Ditado',
-        noticeMessage: 'Segure para ditar. Toggle: Shift+Alt',
-      },
-      settings: defaultSettings,
-      permissions: defaultPermissionState,
-    }
-
-    const staleInitialState: OverlayViewModel = {
-      session: null,
-      settings: defaultSettings,
-      permissions: defaultPermissionState,
-    }
-
-    window.ditado.getOverlayState = vi.fn(() => initialStatePromise)
-    window.ditado.subscribeOverlayState = vi.fn((listener) => {
-      subscriptionListener = listener
-      return () => undefined
-    })
-
-    const view = render(<OverlayBridgeHarness />)
-
-    await act(async () => {
-      subscriptionListener?.(subscribedState)
-      await Promise.resolve()
-    })
-
-    expect(view.getByTestId('overlay-status').textContent).toBe('notice')
-
-    await act(async () => {
-      resolveInitialState?.(staleInitialState)
-      await Promise.resolve()
-    })
-
-    expect(view.getByTestId('overlay-status').textContent).toBe('notice')
   })
 })

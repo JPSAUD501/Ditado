@@ -1,5 +1,7 @@
 import { useEffect } from 'react'
+import { SyncoreElectronProvider } from 'syncorejs/node/ipc/react'
 import type { DashboardTab } from '@shared/contracts'
+import { ElectronSyncoreProvider } from '@renderer/syncore/ElectronSyncoreProvider'
 import { DashboardWindow } from '@renderer/windows/DashboardWindow'
 import { OverlayWindow } from '@renderer/windows/OverlayWindow'
 
@@ -8,6 +10,9 @@ const windowType = searchParams.get('window') ?? 'dashboard'
 const dashboardTab = (searchParams.get('tab') ?? 'overview') as DashboardTab
 
 const isMac = navigator.userAgent.includes('Macintosh')
+const isElectronRenderer = navigator.userAgent.toLowerCase().includes('electron')
+
+const AppSyncoreProvider = isElectronRenderer ? ElectronSyncoreProvider : SyncoreElectronProvider
 
 export const App = () => {
   useEffect(() => {
@@ -25,8 +30,16 @@ export const App = () => {
   }, [])
 
   if (windowType === 'overlay') {
-    return <OverlayWindow />
+    return (
+      <AppSyncoreProvider>
+        <OverlayWindow />
+      </AppSyncoreProvider>
+    )
   }
 
-  return <DashboardWindow initialTab={dashboardTab} />
+  return (
+    <AppSyncoreProvider>
+      <DashboardWindow initialTab={dashboardTab} />
+    </AppSyncoreProvider>
+  )
 }

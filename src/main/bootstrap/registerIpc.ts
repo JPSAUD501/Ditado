@@ -4,29 +4,26 @@ import {
   apiKeyInputSchema,
   dashboardTabSchema,
   dictationAudioPayloadSchema,
-  historyAudioRequestSchema,
   recorderWarmupStatusSchema,
   sessionIdInputSchema,
   settingsPatchSchema,
 } from '../../shared/contracts.js'
 import { ipcChannels } from '../../shared/ipc.js'
-import type { DashboardTab, OverlayViewModel, RecorderWarmupStatus } from '../../shared/contracts.js'
+import type { DashboardTab, RecorderWarmupStatus } from '../../shared/contracts.js'
 import type { PermissionService } from '../services/permissions/permissionService.js'
 import type { DictationSessionOrchestrator } from '../services/session/dictationSessionOrchestrator.js'
-import type { AppStore } from '../services/store/appStore.js'
-import type { TelemetryService } from '../services/telemetry/telemetryService.js'
+import type { SyncoreAppData } from '../services/store/syncoreAppData.js'
 import type { UpdateService } from '../services/update/updateService.js'
 
 interface RegisterIpcOptions {
-  store: AppStore
+  store: SyncoreAppData
   orchestrator: DictationSessionOrchestrator
   permissions: PermissionService
-  telemetry: TelemetryService
   updates: UpdateService
-  getOverlayState: () => Promise<OverlayViewModel> | OverlayViewModel
   setHotkeyCaptureActive: (active: boolean) => void
   getShortcutStatus: () => { captureActive: boolean; uiohookRunning: boolean }
   canStartDictation: () => boolean
+  setOnboardingDictationEnabled: (enabled: boolean) => void
   onSettingsChanged: () => Promise<void>
   broadcastState: () => Promise<void>
   openDashboardTab: (tab: DashboardTab) => void
@@ -39,12 +36,11 @@ export const registerIpc = ({
   store,
   orchestrator,
   permissions,
-  telemetry,
   updates,
-  getOverlayState,
   setHotkeyCaptureActive,
   getShortcutStatus,
   canStartDictation,
+  setOnboardingDictationEnabled,
   onSettingsChanged,
   broadcastState,
   openDashboardTab,
@@ -52,13 +48,9 @@ export const registerIpc = ({
   onRecorderReady,
   onRecorderWarmupFinished,
 }: RegisterIpcOptions): void => {
-  ipcMain.handle(ipcChannels.overlay.getState, () => getOverlayState())
-
   ipcMain.handle(ipcChannels.dashboard.getState, async () => ({
-    session: orchestrator.getSession(),
     settings: store.getSettings(),
     history: store.getHistory(),
-    telemetryTail: await telemetry.tail(),
     permissions: await permissions.getState(),
     updateState: updates.getState(),
     appVersion: app.getVersion(),
@@ -86,6 +78,9 @@ export const registerIpc = ({
     return orchestrator.toggleCapture()
   })
   ipcMain.handle(ipcChannels.dictation.cancel, () => orchestrator.cancel())
+  ipcMain.handle(ipcChannels.dictation.setOnboardingEnabled, (_event, enabled: boolean) => {
+    setOnboardingDictationEnabled(Boolean(enabled))
+  })
   ipcMain.handle(ipcChannels.dictation.recorderStarted, (_event, sessionId: string) =>
     orchestrator.markRecorderStarted(sessionIdInputSchema.parse(sessionId)),
   )
@@ -139,14 +134,10 @@ export const registerIpc = ({
     await store.clearHistory()
     await broadcastState()
   })
-  ipcMain.handle(ipcChannels.history.audio, (_event, entryId: string) =>
-    store.getHistoryAudioAsset(historyAudioRequestSchema.parse(entryId)),
-  )
   ipcMain.handle(ipcChannels.history.deleteEntry, async (_event, entryId: string) => {
-    await store.deleteHistoryEntry(historyAudioRequestSchema.parse(entryId))
+    await store.deleteHistoryEntry(sessionIdInputSchema.parse(entryId))
     await broadcastState()
   })
-  ipcMain.handle(ipcChannels.telemetry.tail, () => telemetry.tail())
   ipcMain.handle(ipcChannels.dashboardNavigation.openTab, (_event, tab: DashboardTab) =>
     openDashboardTab(dashboardTabSchema.parse(tab)),
   )

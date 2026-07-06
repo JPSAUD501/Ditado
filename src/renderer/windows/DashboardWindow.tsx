@@ -2,12 +2,15 @@ import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import {  ArrowDown, Clock, Loader2, LayoutDashboard, PackageCheck, RotateCcw, Settings2 } from 'lucide-react'
+import { usePaginatedQuery, useQueryState, useSyncoreStatus } from 'syncorejs/react'
 
-import type { DashboardTab, Settings, UpdateState } from '@shared/contracts'
+import type { DashboardTab, DictationSession, HistoryEntry, Settings, UpdateState } from '@shared/contracts'
+import { defaultSettings } from '@shared/defaults'
 import { useUiSounds } from '@renderer/audio/useUiSounds'
 import { StatusPill } from '@renderer/components/StatusPill'
 import { useDashboardBridge, useDictationRecorder } from '@renderer/hooks/useDitadoBridge'
 import { useThemeAndLanguage } from '@renderer/hooks/useThemeAndLanguage'
+import { api } from '../../../syncore/_generated/api'
 import { HistoryPanel } from './dashboard/HistoryPanel'
 import { OnboardingWizard } from './dashboard/OnboardingWizard'
 import { OverviewPanel } from './dashboard/OverviewPanel'
@@ -120,8 +123,44 @@ const navTabs: Array<{ id: DashboardTab; labelKey: string; Icon: React.FC<{ size
 const easeOutExpo = [0.16, 1, 0.3, 1] as const
 const areSettingsEqual = (left: Settings, right: Settings): boolean => JSON.stringify(left) === JSON.stringify(right)
 
+const toSettings = (stored: Record<string, unknown> | null | undefined, apiKeyPresent: boolean): Settings => ({
+  ...defaultSettings,
+  ...stored,
+  apiKeyPresent,
+  autoUpdateEnabled: true,
+}) as Settings
+
+const toHistoryEntry = (stored: Record<string, unknown>): HistoryEntry => {
+  const audio = stored.audio as { filePath: string | null; durationMs: number; mimeType: string | null; bytes: number }
+  return {
+    ...stored,
+    id: String(stored.sessionId),
+    audioFilePath: audio.filePath,
+    audioDurationMs: audio.durationMs,
+    audioMimeType: audio.mimeType,
+    audioBytes: audio.bytes,
+  } as HistoryEntry
+}
+
+const toSession = (stored: unknown): DictationSession | null => (stored ?? null) as DictationSession | null
+
 export const DashboardWindow = ({ initialTab }: { initialTab: DashboardTab }) => {
-  const state = useDashboardBridge()
+  const bridgeState = useDashboardBridge()
+  const runtimeStatus = useSyncoreStatus()
+  const settingsState = useQueryState(api.settings.get)
+  const sessionState = useQueryState(api.sessions.active)
+  const historyPage = usePaginatedQuery(api.history.page, {}, { initialNumItems: 100 })
+  const history = historyPage.results.map((entry) => toHistoryEntry(entry as unknown as Record<string, unknown>))
+  const syncoreSettings = toSettings(
+    settingsState.status === 'success' ? settingsState.data as unknown as Record<string, unknown> : null,
+    bridgeState.settings.apiKeyPresent,
+  )
+  const state = {
+    ...bridgeState,
+    session: sessionState.status === 'success' ? toSession(sessionState.data) : null,
+    settings: syncoreSettings,
+    history,
+  }
   useUiSounds(state.session)
   const reducedMotion = useReducedMotion()
   const effectiveInitial = initialTab === 'onboarding' ? 'overview' : initialTab
@@ -131,10 +170,9 @@ export const DashboardWindow = ({ initialTab }: { initialTab: DashboardTab }) =>
   const [microphoneRefreshKey, setMicrophoneRefreshKey] = useState(0)
   const [forceOnboarding, setForceOnboarding] = useState(false)
   const [dismissedOnboarding, setDismissedOnboarding] = useState(false)
+  const [onboardingDictationEnabled, setOnboardingDictationEnabled] = useState(true)
   const latestStateSettings = useRef(state.settings)
   const latestSettingsMutationId = useRef(0)
-  useDictationRecorder(state.session, state.settings.preferredMicrophoneId, true)
-  const { t } = useTranslation()
   const settings =
     draftSettings && !areSettingsEqual(draftSettings, state.settings)
       ? draftSettings
@@ -143,14 +181,29 @@ export const DashboardWindow = ({ initialTab }: { initialTab: DashboardTab }) =>
   const requiresUpgradeOnboarding = settings.pendingUpgradeOnboardingVersion === state.appVersion
   const shouldShowOnboarding =
     !dismissedOnboarding && (forceOnboarding || requestedOnboarding || !settings.onboardingCompleted || requiresUpgradeOnboarding)
+  useDictationRecorder(
+    state.session,
+    state.settings.preferredMicrophoneId,
+    true,
+    !shouldShowOnboarding || onboardingDictationEnabled,
+  )
+  const { t } = useTranslation()
   useThemeAndLanguage(settings)
-  const sessionStatus = state.session?.status ?? 'idle'
+  const sessionStatus = runtimeStatus.kind === 'ready' ? (state.session?.status ?? 'idle') : 'notice'
 
   // Keep the ref in sync with the current settings (draft or state).
   // This must run after every render to ensure async operations have the latest value.
   useEffect(() => {
     latestStateSettings.current = settings
   }, [settings])
+
+  useEffect(() => {
+    const enabled = !shouldShowOnboarding || onboardingDictationEnabled
+    void window.ditado.setOnboardingDictationEnabled(enabled)
+    return () => {
+      void window.ditado.setOnboardingDictationEnabled(true)
+    }
+  }, [onboardingDictationEnabled, shouldShowOnboarding])
 
   useEffect(() => {
     const unsubscribe = window.ditado.subscribeDashboardTabRequests((tab) => {
@@ -226,6 +279,8 @@ export const DashboardWindow = ({ initialTab }: { initialTab: DashboardTab }) =>
         updateSettings={updateSettings}
         microphoneRefreshKey={microphoneRefreshKey}
         refreshMicrophones={refreshMicrophones}
+        permissions={state.permissions}
+        onDictationEnabledChange={setOnboardingDictationEnabled}
         finishOnboarding={finishOnboarding}
         isUpgradeOnboarding={requiresUpgradeOnboarding}
       />
@@ -293,6 +348,7 @@ export const DashboardWindow = ({ initialTab }: { initialTab: DashboardTab }) =>
               >
                 <OverviewPanel
                   state={{ ...state, settings, history: state.history }}
+                  session={state.session}
                   onNavigateToHistory={() => setActiveTab('history')}
                 />
               </motion.div>
@@ -313,6 +369,7 @@ export const DashboardWindow = ({ initialTab }: { initialTab: DashboardTab }) =>
                   updateSettings={updateSettings}
                   microphoneRefreshKey={microphoneRefreshKey}
                   refreshMicrophones={refreshMicrophones}
+                  permissions={state.permissions}
                   onRestartOnboarding={() => {
                     setDismissedOnboarding(false)
                     setForceOnboarding(true)

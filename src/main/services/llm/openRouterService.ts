@@ -2,13 +2,13 @@ import { OpenRouter } from '@openrouter/sdk'
 
 import { llmResponseSchema, type LlmRequest, type LlmResponse } from '../../../shared/contracts.js'
 import { buildSystemPrompt, buildUserPrompt } from '../../../shared/prompt.js'
-import type { AppStore } from '../store/appStore.js'
+import type { SyncoreAppData } from '../store/syncoreAppData.js'
 
 const OPENROUTER_TIMEOUT_MS = 60_000
 const OPENROUTER_RETRY_CODES = ['408', '429', '500', '502', '503', '504']
 
 export class OpenRouterService {
-  constructor(private readonly store: AppStore) {}
+  constructor(private readonly store: SyncoreAppData) {}
 
   async stream(
     request: LlmRequest,

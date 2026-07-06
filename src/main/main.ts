@@ -1,6 +1,7 @@
-import { app, BrowserWindow, nativeTheme, powerMonitor, screen, session } from 'electron'
+import { app, BrowserWindow, ipcMain, nativeTheme, powerMonitor, screen, session } from 'electron'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { bindElectronWindowToSyncoreRuntime } from 'syncorejs/node'
 
 import { defaultPermissionState } from '../shared/defaults.js'
 import type { HotkeyCapturePayload } from '../shared/hotkeys.js'
@@ -10,7 +11,6 @@ import { canUseDictation, isAppReady } from '../shared/readiness.js'
 import type {
   DashboardTab,
   DictationSession,
-  OverlayViewModel,
   RecorderWarmupStatus,
   Settings,
   WindowKind,
@@ -28,11 +28,9 @@ import { InsertionEngine } from './services/insertion/insertionEngine.js'
 import { OpenRouterService } from './services/llm/openRouterService.js'
 import { PermissionService } from './services/permissions/permissionService.js'
 import { DictationSessionOrchestrator } from './services/session/dictationSessionOrchestrator.js'
-import { AppStore } from './services/store/appStore.js'
+import { createAppSyncoreRuntime, migrateAppSyncoreDatabase } from '../syncore-runtime.js'
+import { SyncoreAppData } from './services/store/syncoreAppData.js'
 import { syncLoginItemSettings } from './services/system/loginItem.js'
-import { loadTelemetryBuildConfig } from './services/telemetry/telemetryBuildConfig.js'
-import { createRemoteTelemetryRuntime } from './services/telemetry/telemetryRemoteRuntime.js'
-import { TelemetryService } from './services/telemetry/telemetryService.js'
 import { runStartupUpdateFlow } from './services/update/startupUpdateFlow.js'
 import { UpdateService } from './services/update/updateService.js'
 
@@ -45,14 +43,15 @@ const windows: Windows = {
   overlay: null,
   dashboard: null,
 }
+let syncoreRuntime: ReturnType<typeof createAppSyncoreRuntime> | null = null
+const syncoreBindings = new Set<{ dispose(): Promise<void> }>()
 let isQuitting = false
 let hotkeyCaptureActive = false
 let uiohookRunning = false
 let overlayHideTimer: NodeJS.Timeout | null = null
 let overlayLoaded = false
 let onOverlayLoaded: (() => void) | null = null
-let lastOverlayState: OverlayViewModel | null = null
-let startupOverlayState: OverlayViewModel | null = null
+let dismissCurrentSession: (() => void) | null = null
 let currentDashboardTheme: Settings['theme'] = 'system'
 const OVERLAY_WIDTH = 420
 const OVERLAY_HEIGHT = 54
@@ -92,6 +91,23 @@ const createWindowUrl = (kind: WindowKind, tab?: DashboardTab): string => {
   }
 
   return `${pathToFileURL(join(app.getAppPath(), 'dist', 'index.html')).toString()}${query}`
+}
+
+const bindSyncoreWindow = (window: BrowserWindow): void => {
+  if (!syncoreRuntime) {
+    return
+  }
+
+  const binding = bindElectronWindowToSyncoreRuntime({
+    runtime: syncoreRuntime,
+    window,
+    ipcMain,
+  })
+  syncoreBindings.add(binding)
+  window.on('closed', () => {
+    syncoreBindings.delete(binding)
+    void binding.dispose()
+  })
 }
 
 const resolveDashboardTheme = (theme: Settings['theme']): 'dark' | 'light' => {
@@ -169,6 +185,7 @@ const createOverlayWindow = (): BrowserWindow => {
     }
   })
 
+  bindSyncoreWindow(window)
   void window.loadURL(createWindowUrl('overlay'))
   return window
 }
@@ -206,6 +223,7 @@ const createDashboardWindow = (tab: DashboardTab = 'overview', theme: Settings['
     }
   })
 
+  bindSyncoreWindow(window)
   void window.loadURL(createWindowUrl('dashboard', tab))
   return window
 }
@@ -254,12 +272,7 @@ const hideOverlay = (): void => {
 }
 
 const dismissOverlay = (): void => {
-  startupOverlayState = null
-  if (lastOverlayState?.session) {
-    const nextOverlayState = { ...lastOverlayState, session: null }
-    lastOverlayState = nextOverlayState
-    windows.overlay?.webContents.send(ipcChannels.overlay.state, nextOverlayState)
-  }
+  dismissCurrentSession?.()
   hideOverlay()
 }
 
@@ -292,57 +305,47 @@ const showDashboard = (tab: DashboardTab = 'overview'): void => {
 }
 
 const broadcastState = async (
-  store: AppStore,
-  orchestrator: DictationSessionOrchestrator,
+  store: SyncoreAppData,
   permissions: PermissionService,
-  telemetry: TelemetryService,
   updates: UpdateService,
 ): Promise<void> => {
-  const permissionState = await permissions.getState().catch(() => defaultPermissionState)
-  const session = startupOverlayState?.session ?? orchestrator.getSession()
-  const overlayState = {
-    session,
-    settings: store.getSettings(),
-    permissions: startupOverlayState?.permissions ?? permissionState,
-  }
-  lastOverlayState = overlayState
   const dashboardState = {
-    session,
     settings: store.getSettings(),
     history: store.getHistory(),
-    telemetryTail: await telemetry.tail(),
-    permissions: permissionState,
+    permissions: await permissions.getState().catch(() => defaultPermissionState),
     updateState: updates.getState(),
     appVersion: app.getVersion(),
   }
 
-  windows.overlay?.webContents.send(ipcChannels.overlay.state, overlayState)
-  windows.dashboard?.webContents.send(ipcChannels.dashboard.state, dashboardState)
+  void dashboardState
 }
 
 void app.whenReady().then(async () => {
   app.setPath('userData', join(app.getPath('appData'), STABLE_USER_DATA_DIR_NAME))
   configureMediaPermissions(session.defaultSession)
-  const telemetryBuildConfig = await loadTelemetryBuildConfig()
 
-  const store = new AppStore()
+  migrateAppSyncoreDatabase()
+  syncoreRuntime = createAppSyncoreRuntime()
+  await syncoreRuntime.start()
+
+  const store = new SyncoreAppData(syncoreRuntime.createClient())
   await store.initialize()
   currentDashboardTheme = store.getSettings().theme
   const shouldShowStartupUpdatedNotice = store.getSettings().pendingStartupUpdatedNoticeVersion === app.getVersion()
 
   const permissions = new PermissionService()
-  const telemetry = new TelemetryService(
-    store,
-    createRemoteTelemetryRuntime(telemetryBuildConfig, { appVersion: app.getVersion() }),
-  )
   const clipboardService = new ClipboardService()
   const automation = new AutomationService()
   const context = new ActiveContextService(clipboardService)
   const insertion = new InsertionEngine(clipboardService, automation)
   const llm = new OpenRouterService(store)
-  const orchestrator = new DictationSessionOrchestrator(store, context, insertion, llm, telemetry, permissions)
+  const orchestrator = new DictationSessionOrchestrator(store, context, insertion, llm, permissions)
+  await orchestrator.refreshSessionSnapshot()
+  dismissCurrentSession = () => {
+    void orchestrator.dismissCurrentSession().catch(() => undefined)
+  }
   const updates = new UpdateService(store, () => {
-    void broadcastState(store, orchestrator, permissions, telemetry, updates)
+    void broadcastState(store, permissions, updates)
   })
   await updates.initialize()
 
@@ -375,8 +378,11 @@ void app.whenReady().then(async () => {
   let readyNoticeRetryTimer: NodeJS.Timeout | null = null
 
   const canStartDictation = (): boolean => (
-    canUseDictation(store.getSettings()) && (!startupWarmupState.required || startupWarmupState.ready)
+    canUseDictation(store.getSettings()) &&
+    onboardingDictationEnabled &&
+    (!startupWarmupState.required || startupWarmupState.ready)
   )
+  let onboardingDictationEnabled = true
   let shortcuts: ShortcutController | null = null
 
   const setHotkeyCaptureMode = (active: boolean): void => {
@@ -425,25 +431,23 @@ void app.whenReady().then(async () => {
       errorMessage: null,
       noticeMessage: message,
     }
-    const startupNoticeState: OverlayViewModel = {
-      session: startupSession,
-      settings: store.getSettings(),
-      permissions: defaultPermissionState,
-    }
-    startupOverlayState = startupNoticeState
     runWhenOverlayReady(() => {
-      lastOverlayState = startupNoticeState
-      windows.overlay?.webContents.send(ipcChannels.overlay.state, startupNoticeState)
-      showOverlay()
-      if (overlayHideTimer) {
-        clearTimeout(overlayHideTimer)
-        overlayHideTimer = null
-      }
-      if (autoHideAfterMs > 0) {
-        overlayHideTimer = setTimeout(() => {
-          dismissOverlay()
-        }, autoHideAfterMs)
-      }
+      void store.showSessionNotice(startupSession)
+        .then((session) => {
+          orchestrator.refreshSessionSnapshot().catch(() => undefined)
+          if (!session) return
+          showOverlay()
+          if (overlayHideTimer) {
+            clearTimeout(overlayHideTimer)
+            overlayHideTimer = null
+          }
+          if (autoHideAfterMs > 0) {
+            overlayHideTimer = setTimeout(() => {
+              dismissOverlay()
+            }, autoHideAfterMs)
+          }
+        })
+        .catch(() => undefined)
     })
   }
 
@@ -607,21 +611,18 @@ void app.whenReady().then(async () => {
     store,
     orchestrator,
     permissions,
-    telemetry,
     updates,
-    getOverlayState: async () => {
-      const permissionState = await permissions.getState().catch(() => defaultPermissionState)
-      return startupOverlayState ?? {
-        session: orchestrator.getSession(),
-        settings: store.getSettings(),
-        permissions: permissionState,
-      }
-    },
     setHotkeyCaptureActive: (active) => {
       setHotkeyCaptureMode(active)
     },
     getShortcutStatus: () => ({ captureActive: hotkeyCaptureActive, uiohookRunning }),
     canStartDictation,
+    setOnboardingDictationEnabled: (enabled) => {
+      onboardingDictationEnabled = enabled
+      if (!enabled) {
+        resetShortcutRuntimeState()
+      }
+    },
     onSettingsChanged: async () => {
       currentDashboardTheme = store.getSettings().theme
       syncLoginItemSettings(app, store.getSettings().launchOnLogin)
@@ -629,11 +630,11 @@ void app.whenReady().then(async () => {
       updates.syncFromSettings()
       shortcuts?.refresh()
       refreshTray()
-      await broadcastState(store, orchestrator, permissions, telemetry, updates)
+      await broadcastState(store, permissions, updates)
       beginStartupWarmup()
     },
     broadcastState: async () => {
-      await broadcastState(store, orchestrator, permissions, telemetry, updates)
+      await broadcastState(store, permissions, updates)
     },
     openDashboardTab: (tab) => showDashboard(tab),
     getOverlayWindow: () => windows.overlay,
@@ -648,33 +649,29 @@ void app.whenReady().then(async () => {
   })
 
   orchestrator.subscribe((session) => {
-    void broadcastState(store, orchestrator, permissions, telemetry, updates)
-    if ((!session || session.status === 'idle') && !startupOverlayState?.session) {
+    void broadcastState(store, permissions, updates)
+    if (!session) {
       hideOverlay()
-      return
-    }
-
-    const activeOverlaySession = session ?? startupOverlayState?.session
-    if (!activeOverlaySession) {
       return
     }
 
     showOverlay()
 
     if (
-      activeOverlaySession.status === 'completed' ||
-      activeOverlaySession.status === 'notice' ||
-      activeOverlaySession.status === 'error' ||
-      activeOverlaySession.status === 'permission-required'
+      session.status === 'completed' ||
+      session.status === 'notice' ||
+      session.status === 'error' ||
+      session.status === 'permission-required' ||
+      session.status === 'cancelled'
     ) {
       overlayHideTimer = setTimeout(() => {
         dismissOverlay()
-      }, activeOverlaySession.status === 'notice' ? 1600 : 1200)
+      }, session.status === 'notice' ? 1600 : 1200)
     }
   })
 
   orchestrator.subscribeHistoryUpdated(() => {
-    void broadcastState(store, orchestrator, permissions, telemetry, updates)
+    void broadcastState(store, permissions, updates)
   })
 
   app.on('activate', () => {
@@ -697,14 +694,17 @@ void app.whenReady().then(async () => {
     void shutdownServices({
       store,
       insertion,
-      telemetry,
     }).finally(() => {
-      isQuitting = true
-      app.quit()
+      void Promise.all([...syncoreBindings].map((binding) => binding.dispose()))
+        .then(() => syncoreRuntime?.stop())
+        .finally(() => {
+          isQuitting = true
+          app.quit()
+        })
     })
   })
 
-  await broadcastState(store, orchestrator, permissions, telemetry, updates)
+  await broadcastState(store, permissions, updates)
 
   const settings = store.getSettings()
   if (isAppReady(settings) && !shouldOpenUpgradeOnboarding(settings)) {

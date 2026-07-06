@@ -5,25 +5,20 @@ import type {
   DashboardViewModel,
   DeviceInfo,
   DictationAudioPayload,
-  HistoryAudioAsset,
-  OverlayViewModel,
   PermissionState,
   RecorderWarmupStatus,
   Settings,
-  TelemetryRecord,
 } from '@shared/contracts'
 import type { HotkeyCapturePayload } from '@shared/hotkeys'
 
 interface DitadoDesktopApi {
-  getOverlayState: () => Promise<OverlayViewModel>
   getDashboardState: () => Promise<DashboardViewModel>
-  subscribeOverlayState: (listener: (state: OverlayViewModel) => void) => () => void
-  subscribeDashboardState: (listener: (state: DashboardViewModel) => void) => () => void
   subscribeDashboardTabRequests: (listener: (tab: DashboardTab) => void) => () => void
   startPushToTalk: () => Promise<void>
   stopPushToTalk: (payload: DictationAudioPayload) => Promise<void>
   toggleDictation: (payload?: DictationAudioPayload) => Promise<void>
   cancelDictation: () => Promise<void>
+  setOnboardingDictationEnabled: (enabled: boolean) => Promise<void>
   notifyRecorderStarted: (sessionId: string) => Promise<void>
   notifyRecorderFailed: (sessionId: string, reason: string) => Promise<void>
   notifyRecorderReady: () => Promise<void>
@@ -39,8 +34,6 @@ interface DitadoDesktopApi {
   openDashboardTab: (tab: DashboardTab) => Promise<void>
   clearHistory: () => Promise<void>
   deleteHistoryEntry: (entryId: string) => Promise<void>
-  getHistoryAudio: (entryId: string) => Promise<HistoryAudioAsset | null>
-  getTelemetryTail: () => Promise<TelemetryRecord[]>
   checkForUpdates: () => Promise<void>
   downloadUpdate: () => Promise<void>
   installUpdate: () => Promise<void>

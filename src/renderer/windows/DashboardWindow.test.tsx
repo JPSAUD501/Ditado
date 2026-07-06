@@ -1,20 +1,19 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { DashboardWindow } from './DashboardWindow'
 import { defaultPermissionState, defaultSettings } from '@shared/defaults'
 import { historyEntrySchema, type DashboardViewModel, type Settings } from '@shared/contracts'
 import type { HotkeyCapturePayload } from '@shared/hotkeys'
+import { renderWithSyncore, syncoreTestStateEvent } from '@renderer/test/syncoreTestClient'
 
 const onboardedSettings: Settings = { ...defaultSettings, onboardingCompleted: true }
 const defaultUserAgent = window.navigator.userAgent
 
 const createState = (settings: Settings = onboardedSettings): DashboardViewModel => ({
-  session: null,
   settings,
   history: [],
-  telemetryTail: [],
   permissions: defaultPermissionState,
   updateState: {
     enabled: true,
@@ -44,6 +43,8 @@ const installDesktopApi = (
   const dashboardListeners = new Set<(state: DashboardViewModel) => void>()
   const hotkeyCaptureListeners = new Set<(payload: HotkeyCapturePayload) => void>()
   const notify = (): void => {
+    ;(window as Window & { __syncoreDashboardState?: DashboardViewModel }).__syncoreDashboardState = currentState
+    window.dispatchEvent(new Event(syncoreTestStateEvent))
     for (const listener of dashboardListeners) {
       listener(currentState)
     }
@@ -65,23 +66,13 @@ const installDesktopApi = (
   const listMicrophones = vi.fn(async () => microphones)
 
   window.ditado = {
-    getOverlayState: vi.fn(async () => ({
-      session: null,
-      settings: currentState.settings,
-      permissions: defaultPermissionState,
-    })),
     getDashboardState: vi.fn(async () => currentState),
-    subscribeOverlayState: vi.fn(() => () => undefined),
-    subscribeDashboardState: vi.fn((listener: (state: DashboardViewModel) => void) => {
-      dashboardListeners.add(listener)
-      listener(currentState)
-      return () => dashboardListeners.delete(listener)
-    }),
     subscribeDashboardTabRequests: vi.fn(() => () => undefined),
     startPushToTalk: vi.fn(async () => undefined),
     stopPushToTalk: vi.fn(async () => undefined),
     toggleDictation: vi.fn(async () => undefined),
     cancelDictation: vi.fn(async () => undefined),
+    setOnboardingDictationEnabled: vi.fn(async () => undefined),
     notifyRecorderStarted: vi.fn(async () => undefined),
     notifyRecorderFailed: vi.fn(async () => undefined),
     notifyRecorderReady: vi.fn(async () => undefined),
@@ -99,8 +90,6 @@ const installDesktopApi = (
     openDashboardTab: vi.fn(async () => undefined),
     clearHistory: vi.fn(async () => undefined),
     deleteHistoryEntry: vi.fn(async () => undefined),
-    getHistoryAudio: vi.fn(async () => null),
-    getTelemetryTail: vi.fn(async () => []),
     checkForUpdates: vi.fn(async () => undefined),
     downloadUpdate: vi.fn(async () => undefined),
     installUpdate: vi.fn(async () => undefined),
@@ -109,6 +98,7 @@ const installDesktopApi = (
     sendAudioLevel: vi.fn(),
     subscribeAudioLevel: vi.fn(() => () => undefined),
   }
+  ;(window as Window & { __syncoreDashboardState?: DashboardViewModel }).__syncoreDashboardState = currentState
 
   return {
     updateSettings,
@@ -128,6 +118,17 @@ const installDesktopApi = (
 }
 
 describe('DashboardWindow', () => {
+  beforeEach(() => {
+    Object.defineProperty(URL, 'createObjectURL', {
+      value: vi.fn(() => 'blob:history-audio'),
+      configurable: true,
+    })
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      value: vi.fn(),
+      configurable: true,
+    })
+  })
+
   afterEach(() => {
     Object.defineProperty(window.navigator, 'userAgent', {
       value: defaultUserAgent,
@@ -142,7 +143,7 @@ describe('DashboardWindow', () => {
       onboardingCompleted: false,
     })
 
-    render(<DashboardWindow initialTab="onboarding" />)
+    renderWithSyncore(<DashboardWindow initialTab="onboarding" />)
 
     expect(await screen.findByText(/meet ditado/i)).toBeInTheDocument()
     expect(updateSettings).not.toHaveBeenCalled()
@@ -155,7 +156,7 @@ describe('DashboardWindow', () => {
       apiKeyPresent: false,
     })
 
-    render(<DashboardWindow initialTab="settings" />)
+    renderWithSyncore(<DashboardWindow initialTab="settings" />)
 
     expect(await screen.findByRole('textbox', { name: /model id/i })).toBeInTheDocument()
     expect(screen.queryByText(/connect api/i)).toBeNull()
@@ -169,7 +170,7 @@ describe('DashboardWindow', () => {
       pendingUpgradeOnboardingVersion: '0.0.0-test',
     })
 
-    render(<DashboardWindow initialTab="overview" />)
+    renderWithSyncore(<DashboardWindow initialTab="overview" />)
 
     expect(await screen.findByText(/meet ditado/i)).toBeInTheDocument()
     expect(screen.getByText(/default shortcut changed in this version/i)).toBeInTheDocument()
@@ -182,7 +183,7 @@ describe('DashboardWindow', () => {
       apiKeyPresent: true,
     })
 
-    const { container } = render(<DashboardWindow initialTab="onboarding" />)
+    const { container } = renderWithSyncore(<DashboardWindow initialTab="onboarding" />)
 
     expect(await screen.findByText(/meet ditado/i)).toBeInTheDocument()
 
@@ -206,7 +207,7 @@ describe('DashboardWindow', () => {
 
   it('renders the sidebar tabs in overview, history, settings order', async () => {
     installDesktopApi()
-    render(<DashboardWindow initialTab="overview" />)
+    renderWithSyncore(<DashboardWindow initialTab="overview" />)
 
     const navButtons = await screen.findAllByRole('button')
     const sidebarButtons = navButtons.filter((button) => {
@@ -223,7 +224,7 @@ describe('DashboardWindow', () => {
 
   it('updates toggles immediately and persists the change through the desktop bridge', async () => {
     const { updateSettings } = installDesktopApi()
-    render(<DashboardWindow initialTab="settings" />)
+    renderWithSyncore(<DashboardWindow initialTab="settings" />)
 
     const toggle = await screen.findByRole('button', { name: /send context automatically/i })
     expect(toggle).toHaveAttribute('aria-pressed', 'true')
@@ -238,7 +239,7 @@ describe('DashboardWindow', () => {
 
   it('switches the update channel to beta from the settings toggle', async () => {
     const { updateSettings } = installDesktopApi()
-    render(<DashboardWindow initialTab="settings" />)
+    renderWithSyncore(<DashboardWindow initialTab="settings" />)
 
     const toggle = await screen.findByRole('button', { name: /beta channel/i })
     expect(toggle).toHaveAttribute('aria-pressed', 'false')
@@ -266,7 +267,7 @@ describe('DashboardWindow', () => {
     })
     window.ditado.updateSettings = updateSettings
 
-    render(<DashboardWindow initialTab="settings" />)
+    renderWithSyncore(<DashboardWindow initialTab="settings" />)
 
     const sendContextToggle = await screen.findByRole('button', { name: /send context automatically/i })
     const launchOnLoginToggle = screen.getByRole('button', { name: /launch on login/i })
@@ -304,7 +305,7 @@ describe('DashboardWindow', () => {
 
   it('commits the captured combo only after the main-process hook finalizes it', async () => {
     const { updateSettings, setHotkeyCaptureActive, publishHotkeyCapture } = installDesktopApi()
-    render(<DashboardWindow initialTab="settings" />)
+    renderWithSyncore(<DashboardWindow initialTab="settings" />)
 
     const hotkeyButton = await screen.findByRole('button', { name: /push-to-talk/i })
     await userEvent.click(hotkeyButton)
@@ -335,7 +336,7 @@ describe('DashboardWindow', () => {
     })
 
     const { updateSettings, publishHotkeyCapture } = installDesktopApi()
-    render(<DashboardWindow initialTab="settings" />)
+    renderWithSyncore(<DashboardWindow initialTab="settings" />)
 
     const hotkeyButton = await screen.findByRole('button', { name: /push-to-talk/i })
     await userEvent.click(hotkeyButton)
@@ -352,7 +353,7 @@ describe('DashboardWindow', () => {
 
   it('saves the API key and reflects the persisted state in the settings UI', async () => {
     const { setApiKey } = installDesktopApi()
-    render(<DashboardWindow initialTab="settings" />)
+    renderWithSyncore(<DashboardWindow initialTab="settings" />)
 
     const input = await screen.findByPlaceholderText('sk-or-v1-...')
     await userEvent.type(input, 'sk-or-v1-demo')
@@ -371,7 +372,7 @@ describe('DashboardWindow', () => {
       { deviceId: 'mic-1', label: 'USB Mic', kind: 'audioinput' },
       { deviceId: 'mic-2', label: 'Headset Mic', kind: 'audioinput' },
     ])
-    render(<DashboardWindow initialTab="settings" />)
+    renderWithSyncore(<DashboardWindow initialTab="settings" />)
 
     expect(await screen.findByRole('option', { name: 'USB Mic' })).toBeInTheDocument()
     expect(screen.getByRole('option', { name: 'Headset Mic' })).toBeInTheDocument()
@@ -379,7 +380,7 @@ describe('DashboardWindow', () => {
 
   it('persists the insertion reveal mode setting', async () => {
     const { updateSettings } = installDesktopApi()
-    render(<DashboardWindow initialTab="settings" />)
+    renderWithSyncore(<DashboardWindow initialTab="settings" />)
 
     const select = await screen.findByRole('combobox', { name: /insertion reveal/i })
     fireEvent.change(select, { target: { value: 'letter-by-letter' } })
@@ -391,7 +392,7 @@ describe('DashboardWindow', () => {
 
   it('renders the newest history entry immediately when the dashboard state updates', async () => {
     const { publishState } = installDesktopApi()
-    render(<DashboardWindow initialTab="history" />)
+    renderWithSyncore(<DashboardWindow initialTab="history" />)
 
     expect(await screen.findByText(/no entries yet/i)).toBeInTheDocument()
 
@@ -437,15 +438,11 @@ describe('DashboardWindow', () => {
 
   it('expands a history entry without changing the existing detail content', async () => {
     const { publishState } = installDesktopApi()
-    render(<DashboardWindow initialTab="history" />)
+    renderWithSyncore(<DashboardWindow initialTab="history" />)
     expect(await screen.findByText(/no entries yet/i)).toBeInTheDocument()
 
     const createdAt = new Date().toISOString()
     const selectedText = 'selected context for expansion'
-    const historyAudio = createDeferred<{ mimeType: string; base64: string } | null>()
-    const getHistoryAudio = vi.fn(() => historyAudio.promise)
-    window.ditado.getHistoryAudio = getHistoryAudio
-
     const entry = historyEntrySchema.parse({
       id: 'entry-expand',
       createdAt,
@@ -456,7 +453,7 @@ describe('DashboardWindow', () => {
       modelId: 'google/gemini-3-flash-preview',
       outputText: 'expanded output',
       errorMessage: null,
-      audioFilePath: 'history-audio/entry-expand.wav',
+      audioFilePath: 'syncore-storage://entry-expand',
       audioDurationMs: 1400,
       audioMimeType: 'audio/wav',
       audioBytes: 2048,
@@ -492,14 +489,6 @@ describe('DashboardWindow', () => {
     await userEvent.click(await screen.findByRole('button', { name: /expanded output/i }))
 
     expect(await screen.findByText(selectedText)).toBeInTheDocument()
-    expect(await screen.findByText(/loading audio/i)).toBeInTheDocument()
-    await waitFor(() => {
-      expect(getHistoryAudio).toHaveBeenCalledWith('entry-expand')
-    })
-
-    await act(async () => {
-      historyAudio.resolve(null)
-      await historyAudio.promise
-    })
+    expect(await screen.findByText(/00:00/i)).toBeInTheDocument()
   })
 })

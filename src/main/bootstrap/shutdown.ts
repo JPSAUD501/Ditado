@@ -13,13 +13,11 @@ export const shutdownServices = async (
   services: {
     store: { flush: () => Promise<void> }
     insertion: { dispose: () => void | Promise<void> }
-    telemetry: { shutdown: () => Promise<void> }
   },
   timeoutMs = DEFAULT_SHUTDOWN_TIMEOUT_MS,
 ): Promise<void> => {
   await Promise.all([
     withTimeout(services.store.flush(), timeoutMs),
     withTimeout(Promise.resolve(services.insertion.dispose()), timeoutMs),
-    withTimeout(services.telemetry.shutdown(), timeoutMs),
   ])
 }

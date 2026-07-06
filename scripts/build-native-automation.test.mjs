@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   clearNativeAddonOutput,
   getNativeArtifactFileNames,
+  hasAvailableWslDistro,
   isLockError,
   resolveExistingArtifactPath,
   syncNativeAddonOutput,
@@ -33,6 +34,31 @@ describe('build-native-automation helpers', () => {
   it('recognizes file lock errors', () => {
     expect(isLockError({ code: 'EPERM' })).toBe(true)
     expect(isLockError({ code: 'ENOENT' })).toBe(false)
+  })
+
+  it('checks for a configured WSL distro without surfacing wsl errors', () => {
+    expect(
+      hasAvailableWslDistro({
+        platform: 'win32',
+        execFile: vi.fn(() => 'Ubuntu\r\n'),
+      }),
+    ).toBe(true)
+
+    expect(
+      hasAvailableWslDistro({
+        platform: 'win32',
+        execFile: vi.fn(() => {
+          throw new Error('WSL_E_DEFAULT_DISTRO_NOT_FOUND')
+        }),
+      }),
+    ).toBe(false)
+
+    expect(
+      hasAvailableWslDistro({
+        platform: 'linux',
+        execFile: vi.fn(() => 'Ubuntu\r\n'),
+      }),
+    ).toBe(false)
   })
 
   it('fails clearly when a locked addon cannot be cleared', () => {

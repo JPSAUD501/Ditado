@@ -10,6 +10,7 @@ const labels: Record<DictationStatus, string> = {
   notice: 'Tip',
   error: 'Error',
   'permission-required': 'Permission',
+  cancelled: 'Cancelled',
 }
 
 export const StatusPill = ({ status }: { status: DictationStatus }) => (

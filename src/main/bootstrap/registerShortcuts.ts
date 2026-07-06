@@ -3,7 +3,7 @@ import { UiohookKey, uIOhook, type UiohookKeyboardEvent } from 'uiohook-napi'
 
 import { normalizeHotkey, type HotkeyCapturePayload } from '../../shared/hotkeys.js'
 import type { DictationSessionOrchestrator } from '../services/session/dictationSessionOrchestrator.js'
-import type { AppStore } from '../services/store/appStore.js'
+import type { SyncoreAppData } from '../services/store/syncoreAppData.js'
 
 type ParsedHotkey = {
   mainKey: number | null
@@ -263,7 +263,7 @@ export type ShortcutController = {
 }
 
 export const registerShortcuts = (
-  store: AppStore,
+  store: SyncoreAppData,
   orchestrator: DictationSessionOrchestrator,
   isCaptureSuspended: () => boolean,
   onHookStatus?: (running: boolean) => void,
@@ -596,7 +596,7 @@ export const registerShortcuts = (
       // don't start a new PTT capture (handled in keyup).
       // If we're in the double-tap window, also defer capture to avoid the pttStart
       // sound + cancel overhead when the double-tap is confirmed on keyup.
-      const currentSession = orchestrator.getSession()
+      const currentSession = orchestrator.getSessionSnapshot()
       const toggleIsActive = currentSession?.activationMode === 'toggle'
         && ['arming', 'listening'].includes(currentSession.status)
       const inDoubleTapWindow = lastShortPressAt > 0
@@ -676,7 +676,7 @@ export const registerShortcuts = (
           return
         }
 
-        const currentSession = orchestrator.getSession()
+        const currentSession = orchestrator.getSessionSnapshot()
         const toggleWasActive = currentSession?.activationMode === 'toggle'
           && ['arming', 'listening', 'processing'].includes(currentSession.status)
         if (toggleWasActive) {
@@ -728,7 +728,7 @@ export const registerShortcuts = (
         return
       }
 
-      const session = orchestrator.getSession()
+      const session = orchestrator.getSessionSnapshot()
       const hasActivePushSession =
         session?.status === 'listening' && session.activationMode === 'push-to-talk'
 
@@ -743,7 +743,7 @@ export const registerShortcuts = (
       pushCaptureStarted = true
       clearPendingPushStart()
       await orchestrator.startCapture('push-to-talk')
-      const nextSession = orchestrator.getSession()
+      const nextSession = orchestrator.getSessionSnapshot()
       if (!nextSession || nextSession.status !== 'listening' || nextSession.activationMode !== 'push-to-talk') {
         resetPushState()
       }

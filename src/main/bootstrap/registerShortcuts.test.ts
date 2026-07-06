@@ -82,7 +82,7 @@ describe('registerShortcuts', () => {
       toggleCapture: vi.fn(async () => undefined),
       requestStop: vi.fn(),
       showShortPressHint: vi.fn(async () => undefined),
-      getSession: vi.fn(() => null),
+      getSessionSnapshot: vi.fn(() => null),
     }
     const store = {
       getSettings: () => ({
@@ -109,7 +109,7 @@ describe('registerShortcuts', () => {
       toggleCapture: vi.fn(async () => undefined),
       requestStop: vi.fn(),
       showShortPressHint: vi.fn(async () => undefined),
-      getSession: vi
+      getSessionSnapshot: vi
         .fn()
         .mockReturnValueOnce(null)
         .mockReturnValue({
@@ -146,7 +146,7 @@ describe('registerShortcuts', () => {
       toggleCapture: vi.fn(async () => undefined),
       requestStop: vi.fn(),
       showShortPressHint: vi.fn(async () => undefined),
-      getSession: vi.fn(() => null),
+      getSessionSnapshot: vi.fn(() => null),
     }
     const store = {
       getSettings: () => ({
@@ -188,7 +188,7 @@ describe('registerShortcuts', () => {
         toggleCapture: vi.fn(async () => undefined),
         requestStop: vi.fn(),
         showShortPressHint: vi.fn(async () => undefined),
-        getSession: vi.fn(() => null),
+        getSessionSnapshot: vi.fn(() => null),
       }
       const store = {
         getSettings: () => ({
@@ -225,7 +225,7 @@ describe('registerShortcuts', () => {
       toggleCapture: vi.fn(async () => undefined),
       requestStop: vi.fn(),
       showShortPressHint: vi.fn(async () => undefined),
-      getSession: vi.fn(() => null),
+      getSessionSnapshot: vi.fn(() => null),
     }
     const store = {
       getSettings: () => ({
@@ -254,7 +254,7 @@ describe('registerShortcuts', () => {
         toggleCapture: vi.fn(async () => undefined),
         requestStop: vi.fn(),
         showShortPressHint: vi.fn(async () => undefined),
-        getSession: vi.fn(() => null),
+        getSessionSnapshot: vi.fn(() => null),
       }
       const store = {
         getSettings: () => ({
@@ -284,7 +284,7 @@ describe('registerShortcuts', () => {
         toggleCapture: vi.fn(async () => undefined),
         requestStop: vi.fn(),
         showShortPressHint: vi.fn(async () => undefined),
-        getSession: vi.fn(() => null),
+        getSessionSnapshot: vi.fn(() => null),
       }
       const store = {
         getSettings: () => ({
@@ -319,7 +319,7 @@ describe('registerShortcuts', () => {
         toggleCapture: vi.fn(async () => undefined),
         requestStop: vi.fn(),
         showShortPressHint: vi.fn(async () => undefined),
-        getSession: vi.fn(() => null),
+        getSessionSnapshot: vi.fn(() => null),
       }
       const store = {
         getSettings: () => ({
@@ -349,7 +349,7 @@ describe('registerShortcuts', () => {
         toggleCapture: vi.fn(async () => undefined),
         requestStop: vi.fn(),
         showShortPressHint: vi.fn(async () => undefined),
-        getSession: vi.fn(() => null),
+        getSessionSnapshot: vi.fn(() => null),
       }
       const store = {
         getSettings: () => ({
@@ -378,7 +378,7 @@ describe('registerShortcuts', () => {
       toggleCapture: vi.fn(async () => undefined),
       requestStop: vi.fn(),
       showShortPressHint: vi.fn(async () => undefined),
-      getSession: vi
+      getSessionSnapshot: vi
         .fn()
         .mockReturnValueOnce(null)
         .mockReturnValue({
@@ -415,7 +415,7 @@ describe('registerShortcuts', () => {
       toggleCapture: vi.fn(async () => undefined),
       requestStop: vi.fn(),
       showShortPressHint: vi.fn(async () => undefined),
-      getSession: vi.fn(() => null),
+      getSessionSnapshot: vi.fn(() => null),
     }
     const store = {
       getSettings: () => ({
@@ -450,7 +450,7 @@ describe('registerShortcuts', () => {
       toggleCapture: vi.fn(async () => undefined),
       requestStop: vi.fn(),
       showShortPressHint: vi.fn(async () => undefined),
-      getSession: vi.fn(() => null),
+      getSessionSnapshot: vi.fn(() => null),
     }
     const store = {
       getSettings: () => ({
@@ -486,7 +486,7 @@ describe('registerShortcuts', () => {
       toggleCapture: vi.fn(async () => undefined),
       requestStop: vi.fn(),
       showShortPressHint: vi.fn(async () => undefined),
-      getSession: vi.fn(() => null),
+      getSessionSnapshot: vi.fn(() => null),
     }
     const store = {
       getSettings: () => ({
@@ -522,7 +522,7 @@ describe('registerShortcuts', () => {
       toggleCapture: vi.fn(async () => undefined),
       requestStop: vi.fn(),
       showShortPressHint: vi.fn(async () => undefined),
-      getSession: vi.fn(() => null),
+      getSessionSnapshot: vi.fn(() => null),
     }
     const store = {
       getSettings: () => ({
@@ -561,7 +561,7 @@ describe('registerShortcuts', () => {
       toggleCapture: vi.fn(async () => undefined),
       requestStop: vi.fn(),
       showShortPressHint: vi.fn(async () => undefined),
-      getSession: vi.fn(() => null),
+      getSessionSnapshot: vi.fn(() => null),
     }
     const store = {
       getSettings: () => ({
@@ -598,7 +598,7 @@ describe('registerShortcuts', () => {
       toggleCapture: vi.fn(async () => undefined),
       requestStop: vi.fn(),
       showShortPressHint: vi.fn(async () => undefined),
-      getSession: vi.fn(() => null),
+      getSessionSnapshot: vi.fn(() => null),
     }
     const store = {
       getSettings: () => ({
@@ -647,7 +647,7 @@ describe('registerShortcuts', () => {
         toggleCapture: vi.fn(async () => undefined),
         requestStop: vi.fn(),
         showShortPressHint: vi.fn(async () => undefined),
-        getSession: vi.fn(() => null),
+        getSessionSnapshot: vi.fn(() => null),
       } as never,
       () => false,
     )
@@ -667,7 +667,7 @@ describe('registerShortcuts', () => {
       toggleCapture: vi.fn(async () => undefined),
       requestStop: vi.fn(),
       showShortPressHint: vi.fn(async () => undefined),
-      getSession: vi.fn(() => ({
+      getSessionSnapshot: vi.fn(() => ({
         status: 'listening',
         activationMode: 'push-to-talk',
       })),
@@ -700,7 +700,7 @@ describe('registerShortcuts', () => {
       toggleCapture: vi.fn(async () => undefined),
       requestStop: vi.fn(),
       showShortPressHint: vi.fn(async () => undefined),
-      getSession: vi
+      getSessionSnapshot: vi
         .fn()
         .mockReturnValueOnce({
           status: 'arming',
@@ -745,7 +745,7 @@ describe('registerShortcuts', () => {
       toggleCapture: vi.fn(async () => undefined),
       requestStop: vi.fn(),
       showShortPressHint: vi.fn(async () => undefined),
-      getSession: vi.fn(() => null),
+      getSessionSnapshot: vi.fn(() => null),
     }
     const store = {
       getSettings: () => ({
@@ -770,7 +770,7 @@ describe('registerShortcuts', () => {
       requestStop: vi.fn(),
       showShortPressHint: vi.fn(async () => undefined),
       cancel: vi.fn(async () => undefined),
-      getSession: vi.fn(() => ({
+      getSessionSnapshot: vi.fn(() => ({
         status: 'streaming',
         activationMode: 'toggle',
       })),

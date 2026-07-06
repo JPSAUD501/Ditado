@@ -11,10 +11,12 @@ import {
 import { AlertCircle, CheckCircle, Loader, Mic, PenLine, Type } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { MotionValue } from 'framer-motion'
+import { useQueryState } from 'syncorejs/react'
 
-import { useOverlayBridge } from '@renderer/hooks/useDitadoBridge'
 import { useThemeAndLanguage } from '@renderer/hooks/useThemeAndLanguage'
-import type { DictationStatus } from '@shared/contracts'
+import type { DictationSession, DictationStatus, Settings } from '@shared/contracts'
+import { defaultSettings } from '@shared/defaults'
+import { api } from '../../../syncore/_generated/api'
 
 /* ── Status-based colors ──────────────────────────────────────────── */
 
@@ -174,10 +176,20 @@ const ContextBadge = ({ reducedMotion }: { reducedMotion: boolean | null }) => (
 
 export const OverlayWindow = () => {
   const reducedMotion = useReducedMotion()
-  const state = useOverlayBridge()
-  useThemeAndLanguage(state.settings, { skipTheme: true })
+  const settingsState = useQueryState(api.settings.get)
+  const sessionState = useQueryState(api.sessions.active)
+  const storedSettings = settingsState.status === 'success'
+    ? settingsState.data as Record<string, unknown> | null
+    : null
+  const settings = {
+    ...defaultSettings,
+    ...(storedSettings ?? {}),
+    apiKeyPresent: false,
+    autoUpdateEnabled: true,
+  } as Settings
+  useThemeAndLanguage(settings, { skipTheme: true })
 
-  const session = state.session
+  const session = (sessionState.status === 'success' ? sessionState.data : null) as DictationSession | null
   const status: DictationStatus = session?.status ?? 'idle'
   const rawAppName = session?.context.appName || session?.targetApp || 'App'
   const appName = rawAppName === 'Unknown App' ? 'App' : rawAppName

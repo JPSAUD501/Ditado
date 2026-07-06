@@ -16,7 +16,6 @@ export const defaultSettings: Settings = {
   toggleHotkey: defaultToggleHotkey,
   preferredMicrophoneId: null,
   sendContextAutomatically: true,
-  telemetryEnabled: true,
   autoUpdateEnabled: true,
   updateChannel: 'stable',
   insertionStreamingMode: 'letter-by-letter',

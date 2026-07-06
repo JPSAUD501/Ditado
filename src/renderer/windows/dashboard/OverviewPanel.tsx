@@ -4,7 +4,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { Check, Copy, Mic, Type, CheckCircle, Clock, Zap, TrendingUp, AppWindow, AlertTriangle, ArrowRight } from 'lucide-react'
 
 import { StatusPill } from '@renderer/components/StatusPill'
-import type { DashboardViewModel, DictationStatus, HistoryEntry } from '@shared/contracts'
+import type { DashboardViewModel, DictationSession, DictationStatus, HistoryEntry } from '@shared/contracts'
 import { formatAudioDuration, formatDate } from './formatters'
 
 const easeOutExpo = [0.16, 1, 0.3, 1] as const
@@ -279,16 +279,18 @@ const MiniHistoryEntry = ({
 
 export const OverviewPanel = ({
   state,
+  session,
   onNavigateToHistory,
 }: {
   state: DashboardViewModel
+  session: DictationSession | null
   onNavigateToHistory: () => void
 }) => {
   const { t } = useTranslation()
   const reducedMotion = useReducedMotion()
   const stats = useMemo(() => computeStats(state.history), [state.history])
   const recentEntries = state.history.slice(0, 3)
-  const sessionStatus: DictationStatus = state.session?.status ?? 'idle'
+  const sessionStatus: DictationStatus = session?.status ?? 'idle'
   const stageLabel = t(stageCopyKeys[sessionStatus] ?? 'overview.unknown')
   const micOk = state.permissions.microphone === 'granted'
   const accOk = state.permissions.accessibility === 'granted'
@@ -313,13 +315,13 @@ export const OverviewPanel = ({
             <StatusPill status={sessionStatus} />
             <span className="text-sm font-semibold" style={{ color: 'var(--text-1)' }}>{stageLabel}</span>
           </div>
-          {state.session?.targetApp && (
+          {session?.targetApp && (
             <span className="text-xs" style={{ color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>
-              {state.session.targetApp}
+              {session.targetApp}
             </span>
           )}
         </div>
-        {state.session?.partialText && (
+        {session?.partialText && (
           <motion.div
             className="surface-muted p-2.5 text-sm wrap-safe mt-3"
             style={{ color: 'var(--text-2)', lineHeight: 1.5 }}
@@ -327,7 +329,7 @@ export const OverviewPanel = ({
             animate={{ opacity: 1, height: 'auto' }}
             transition={{ duration: 0.25, ease: easeOutExpo }}
           >
-            {state.session.partialText}
+            {session.partialText}
           </motion.div>
         )}
       </motion.div>

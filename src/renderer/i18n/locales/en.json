@@ -147,8 +147,6 @@
     "launchOnLoginDesc": "Start in the system tray on boot.",
     "sendContext": "Send context automatically",
     "sendContextDesc": "Sends focused app and selection to the model.",
-    "telemetry": "Telemetry",
-    "telemetryDesc": "Technical telemetry only: no audio or dictated text. Builds without OTLP config stay local-only.",
     "autoUpdate": "Auto updates",
     "autoUpdateDesc": "Download and install updates automatically.",
     "updateChannel": "Update channel",
@@ -195,7 +193,6 @@
     "metaAloneUnsupported": "The Windows key alone is not supported as a shortcut on Windows.",
     "hookFailedMessage": "The keyboard hook failed. Check that no antivirus or security software is blocking it, or try running the app as administrator.",
     "behavior": "Behavior",
-    "updatesAndTelemetry": "Updates & Telemetry",
     "betaChannel": "Beta channel",
     "betaChannelDesc": "Receive prerelease builds.",
     "fallbackClipboardHint": "If text insertion fails, the result stays in your clipboard. All settings can be changed later."

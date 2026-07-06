@@ -3,7 +3,7 @@ import electronUpdater, { type AppUpdater } from 'electron-updater'
 
 import type { UpdateState } from '../../../shared/contracts.js'
 import { defaultUpdateState } from '../../../shared/defaults.js'
-import type { AppStore } from '../store/appStore.js'
+import type { SyncoreAppData } from '../store/syncoreAppData.js'
 
 const getTargetChannel = (channel: UpdateState['channel']): string => (channel === 'beta' ? 'beta' : 'latest')
 
@@ -20,7 +20,7 @@ export class UpdateService {
   private readonly listeners = new Set<StateListener>()
 
   constructor(
-    private readonly store: AppStore,
+    private readonly store: SyncoreAppData,
     private readonly onStateChanged: StateListener = () => undefined,
     private readonly updater: AppUpdater = getDefaultUpdater(),
     private readonly isPackaged: boolean = app.isPackaged,

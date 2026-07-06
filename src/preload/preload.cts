@@ -1,16 +1,14 @@
 import { contextBridge, ipcRenderer } from 'electron'
+import { installSyncoreWindowBridge } from 'syncorejs/node/ipc'
 
 import type {
   DashboardTab,
   DashboardViewModel,
   DeviceInfo,
   DictationAudioPayload,
-  HistoryAudioAsset,
-  OverlayViewModel,
   PermissionState,
   RecorderWarmupStatus,
   Settings,
-  TelemetryRecord,
 } from '../shared/contracts.js'
 import type { HotkeyCapturePayload } from '../shared/hotkeys.js'
 import { ipcChannels } from '../shared/ipc.js'
@@ -39,19 +37,18 @@ const requestRendererMicrophoneAccess = async (): Promise<'granted' | 'denied'> 
   }
 }
 
+eval(installSyncoreWindowBridge())
+
 contextBridge.exposeInMainWorld('ditado', {
-  getOverlayState: () => ipcRenderer.invoke(ipcChannels.overlay.getState),
   getDashboardState: () => ipcRenderer.invoke(ipcChannels.dashboard.getState),
-  subscribeOverlayState: (listener: (state: OverlayViewModel) => void) =>
-    subscribe(ipcChannels.overlay.state, listener),
-  subscribeDashboardState: (listener: (state: DashboardViewModel) => void) =>
-    subscribe(ipcChannels.dashboard.state, listener),
   subscribeDashboardTabRequests: (listener: (tab: DashboardTab) => void) =>
     subscribe(ipcChannels.dashboard.openTab, listener),
   startPushToTalk: () => ipcRenderer.invoke(ipcChannels.dictation.startPushToTalk),
   stopPushToTalk: (payload: DictationAudioPayload) => ipcRenderer.invoke(ipcChannels.dictation.stopPushToTalk, payload),
   toggleDictation: (payload?: DictationAudioPayload) => ipcRenderer.invoke(ipcChannels.dictation.toggle, payload),
   cancelDictation: () => ipcRenderer.invoke(ipcChannels.dictation.cancel),
+  setOnboardingDictationEnabled: (enabled: boolean) =>
+    ipcRenderer.invoke(ipcChannels.dictation.setOnboardingEnabled, enabled),
   notifyRecorderStarted: (sessionId: string) => ipcRenderer.invoke(ipcChannels.dictation.recorderStarted, sessionId),
   notifyRecorderFailed: (sessionId: string, reason: string) =>
     ipcRenderer.invoke(ipcChannels.dictation.recorderFailed, sessionId, reason),
@@ -106,8 +103,6 @@ contextBridge.exposeInMainWorld('ditado', {
   openDashboardTab: (tab: DashboardTab) => ipcRenderer.invoke(ipcChannels.dashboardNavigation.openTab, tab),
   clearHistory: () => ipcRenderer.invoke(ipcChannels.history.clear),
   deleteHistoryEntry: (entryId: string) => ipcRenderer.invoke(ipcChannels.history.deleteEntry, entryId),
-  getHistoryAudio: (entryId: string): Promise<HistoryAudioAsset | null> => ipcRenderer.invoke(ipcChannels.history.audio, entryId),
-  getTelemetryTail: (): Promise<TelemetryRecord[]> => ipcRenderer.invoke(ipcChannels.telemetry.tail),
   checkForUpdates: () => ipcRenderer.invoke(ipcChannels.updates.check),
   downloadUpdate: () => ipcRenderer.invoke(ipcChannels.updates.download),
   installUpdate: () => ipcRenderer.invoke(ipcChannels.updates.install),

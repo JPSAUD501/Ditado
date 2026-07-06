@@ -26,6 +26,12 @@ const settings: Settings = {
   modelId: 'google/gemini-3-flash-preview',
 }
 
+const flushPromises = async (): Promise<void> => {
+  await Promise.resolve()
+  await Promise.resolve()
+  await Promise.resolve()
+}
+
 const createPayload = (): DictationAudioPayload => ({
   audioBase64: 'ZmFrZQ==',
   mimeType: 'audio/mpeg',
@@ -37,25 +43,86 @@ const createPayload = (): DictationAudioPayload => ({
   rmsAmplitude: 0.06,
 })
 
-const createTelemetryDouble = () => ({
-  startSession: vi.fn(async () => undefined),
-  annotateSession: vi.fn(async () => undefined),
-  sessionEvent: vi.fn(() => undefined),
-  metric: vi.fn(async () => undefined),
-  error: vi.fn(async () => undefined),
-  finishSession: vi.fn(async () => undefined),
-  shutdown: vi.fn(async () => undefined),
-})
-
 const createStoreDouble = (
   overrides: Partial<{
     appendHistoryWithAudio: ReturnType<typeof vi.fn>
     getSettings: () => Settings
   }> = {},
-) => ({
-  getSettings: overrides.getSettings ?? (() => settings),
-  appendHistoryWithAudio: overrides.appendHistoryWithAudio ?? vi.fn(async () => undefined),
-})
+) => {
+  let activeSession: DictationSession | null = null
+  const publish = (session: DictationSession | null): DictationSession | null => {
+    activeSession = session
+    return activeSession
+  }
+  const updateActive = (sessionId: string, patch: Partial<DictationSession>): DictationSession | null => {
+    if (!activeSession || activeSession.id !== sessionId) {
+      return activeSession
+    }
+    return publish({ ...activeSession, ...patch })
+  }
+
+  return {
+    getSettings: overrides.getSettings ?? (() => settings),
+    appendHistoryWithAudio: overrides.appendHistoryWithAudio ?? vi.fn(async () => undefined),
+    getActiveSession: vi.fn(async () => activeSession),
+    startSession: vi.fn(async (session: DictationSession) => publish(session)),
+    updateSessionContext: vi.fn(async (sessionId: string, targetApp: string, contextPatch: DictationSession['context']) =>
+      updateActive(sessionId, { targetApp, context: contextPatch }),
+    ),
+    markSessionListening: vi.fn(async (sessionId: string) =>
+      updateActive(sessionId, { status: 'listening' }),
+    ),
+    markSessionRecorderFailed: vi.fn(async (
+      sessionId: string,
+      status: 'error' | 'permission-required',
+      errorMessage: string,
+      finishedAt: string,
+    ) => updateActive(sessionId, { status, captureIntent: 'none', errorMessage, finishedAt })),
+    requestSessionStop: vi.fn(async (sessionId: string, processingStartedAt: string) =>
+      updateActive(sessionId, { status: 'processing', captureIntent: 'stop', processingStartedAt }),
+    ),
+    markSessionProcessing: vi.fn(async (
+      sessionId: string,
+      processingStartedAt: string,
+      targetApp: string,
+      contextPatch: DictationSession['context'],
+      insertionPlan: DictationSession['insertionPlan'],
+    ) => updateActive(sessionId, {
+      status: 'processing',
+      captureIntent: 'none',
+      processingStartedAt,
+      targetApp,
+      context: contextPatch,
+      insertionPlan,
+    })),
+    appendSessionPartial: vi.fn(async (sessionId: string, partialText: string) =>
+      updateActive(sessionId, { status: 'streaming', partialText }),
+    ),
+    completeSession: vi.fn(async (sessionId: string, finishedAt: string, partialText: string, finalText: string) =>
+      updateActive(sessionId, {
+        status: 'completed',
+        captureIntent: 'none',
+        finishedAt,
+        partialText,
+        finalText,
+      }),
+    ),
+    failSession: vi.fn(async (sessionId: string, finishedAt: string, errorMessage: string, partialText: string) =>
+      updateActive(sessionId, {
+        status: 'error',
+        captureIntent: 'none',
+        finishedAt,
+        errorMessage,
+        partialText,
+      }),
+    ),
+    showSessionNotice: vi.fn(async (session: DictationSession) => publish(session)),
+    cancelSession: vi.fn(async (sessionId: string, finishedAt: string) =>
+      updateActive(sessionId, { status: 'cancelled', captureIntent: 'none', finishedAt }),
+    ),
+    dismissCurrentSession: vi.fn(async () => publish(null)),
+  }
+}
 
 const createProgressiveSessionDouble = (
   overrides: Partial<{
@@ -111,39 +178,34 @@ describe('DictationSessionOrchestrator', () => {
   it('starts armed, updates the target app, and only switches to listening after the recorder confirms start', async () => {
     const sessions: Array<DictationSession | null> = []
     const capture = vi.fn(async () => context)
-    const telemetry = createTelemetryDouble()
 
     const orchestrator = new DictationSessionOrchestrator(
       createStoreDouble() as never,
       { capture } as never,
       createInsertionEngineDouble() as never,
       { stream: vi.fn() } as never,
-      telemetry as never,
       { getState: vi.fn(async () => ({ microphone: 'granted', accessibility: 'granted' })) } as never,
     )
 
     orchestrator.subscribe((session: DictationSession | null) => sessions.push(session))
     await orchestrator.startCapture('toggle')
+    await flushPromises()
 
     expect(sessions.at(-1)?.status).toBe('arming')
     expect(capture).toHaveBeenCalledWith(true, true)
     expect(sessions.at(-1)?.targetApp).toBe('VS Code')
-    expect(telemetry.startSession).toHaveBeenCalledTimes(1)
-    expect(telemetry.metric).toHaveBeenCalledWith('dictation-started', { mode: 'toggle' }, expect.any(Object))
 
-    const sessionId = orchestrator.getSession()?.id
+    const sessionId = orchestrator.getSessionSnapshot()?.id
     if (!sessionId) {
       throw new Error('Expected session id')
     }
-    orchestrator.markRecorderStarted(sessionId)
+    await orchestrator.markRecorderStarted(sessionId)
 
-    expect(orchestrator.getSession()?.status).toBe('listening')
-    expect(telemetry.sessionEvent).toHaveBeenCalledWith(sessionId, 'recorder-started')
+    expect(orchestrator.getSessionSnapshot()?.status).toBe('listening')
   })
 
-  it('captures context at start, reuses it during submit, streams text, stores history, and closes the span as completed', async () => {
+  it('captures context at start, reuses it during submit, streams text, and stores history', async () => {
     const store = createStoreDouble()
-    const telemetry = createTelemetryDouble()
     const append = vi.fn(async () => undefined)
     const finalize = vi.fn(async () => ({
       requestedMode: 'letter-by-letter' as const,
@@ -176,17 +238,16 @@ describe('DictationSessionOrchestrator', () => {
         ),
       }) as never,
       llm as never,
-      telemetry as never,
       { getState: vi.fn(async () => ({ microphone: 'granted', accessibility: 'granted' })) } as never,
     )
 
     await orchestrator.startCapture('toggle')
-    const sessionId = orchestrator.getSession()?.id
+    const sessionId = orchestrator.getSessionSnapshot()?.id
     if (!sessionId) {
       throw new Error('Expected session id')
     }
 
-    orchestrator.markRecorderStarted(sessionId)
+    await orchestrator.markRecorderStarted(sessionId)
     await orchestrator.submitAudio('toggle', createPayload())
 
     expect(append).toHaveBeenCalledTimes(2)
@@ -203,48 +264,28 @@ describe('DictationSessionOrchestrator', () => {
       }),
       expect.any(Object),
     )
-    expect(orchestrator.getSession()?.status).toBe('completed')
-    expect(telemetry.finishSession).toHaveBeenCalledWith(
-      sessionId,
-      'completed',
-      expect.objectContaining({
-        latencyMs: 240,
-        fallbackUsed: true,
-      }),
-    )
+    expect(orchestrator.getSessionSnapshot()?.status).toBe('completed')
   })
 
   it('moves to permission-required when the recorder fails to start and microphone access is blocked', async () => {
-    const telemetry = createTelemetryDouble()
     const orchestrator = new DictationSessionOrchestrator(
       createStoreDouble() as never,
       { capture: vi.fn(async () => context) } as never,
       createInsertionEngineDouble() as never,
       { stream: vi.fn() } as never,
-      telemetry as never,
       { getState: vi.fn(async () => ({ microphone: 'denied', accessibility: 'granted' })) } as never,
     )
 
     await orchestrator.startCapture('push-to-talk')
-    const sessionId = orchestrator.getSession()?.id
+    const sessionId = orchestrator.getSessionSnapshot()?.id
     if (!sessionId) {
       throw new Error('Expected session id')
     }
 
     await orchestrator.markRecorderFailed(sessionId, 'Unable to start microphone capture.')
 
-    expect(orchestrator.getSession()?.status).toBe('permission-required')
-    expect(orchestrator.getSession()?.errorMessage).toContain('Microphone access is required')
-    expect(telemetry.error).toHaveBeenCalledWith(
-      'microphone-permission-required',
-      { mode: 'push-to-talk' },
-      { sessionId },
-    )
-    expect(telemetry.finishSession).toHaveBeenCalledWith(
-      sessionId,
-      'permission-required',
-      expect.objectContaining({ reason: 'microphone-permission-required' }),
-    )
+    expect(orchestrator.getSessionSnapshot()?.status).toBe('permission-required')
+    expect(orchestrator.getSessionSnapshot()?.errorMessage).toContain('Microphone access is required')
   })
 
   it('publishes the completed session before history persistence finishes', async () => {
@@ -268,7 +309,6 @@ describe('DictationSessionOrchestrator', () => {
           return { text: 'ready', latencyMs: 180, audioSendMs: 60, finishReason: 'stop' }
         }),
       } as never,
-      createTelemetryDouble() as never,
       { getState: vi.fn(async () => ({ microphone: 'granted', accessibility: 'granted' })) } as never,
     )
 
@@ -280,12 +320,12 @@ describe('DictationSessionOrchestrator', () => {
     })
 
     await orchestrator.startCapture('toggle')
-    const sessionId = orchestrator.getSession()?.id
+    const sessionId = orchestrator.getSessionSnapshot()?.id
     if (!sessionId) {
       throw new Error('Expected session id')
     }
 
-    orchestrator.markRecorderStarted(sessionId)
+    await orchestrator.markRecorderStarted(sessionId)
     await orchestrator.submitAudio('toggle', createPayload())
 
     expect(store.appendHistoryWithAudio).toHaveBeenCalledTimes(1)
@@ -293,9 +333,8 @@ describe('DictationSessionOrchestrator', () => {
     expect(completedObservedBeforeHistory).toBe(true)
   })
 
-  it('does not publish completed after cancellation during finalize and closes the span as cancelled', async () => {
+  it('does not publish completed after cancellation during finalize', async () => {
     const finalizeState: { resolve: (() => void) | null } = { resolve: null }
-    const telemetry = createTelemetryDouble()
     const store = createStoreDouble()
     const finalize = vi.fn(
       () =>
@@ -332,52 +371,44 @@ describe('DictationSessionOrchestrator', () => {
           finishReason: 'stop',
         })),
       } as never,
-      telemetry as never,
       { getState: vi.fn(async () => ({ microphone: 'granted', accessibility: 'granted' })) } as never,
     )
 
     await orchestrator.startCapture('toggle')
-    const sessionId = orchestrator.getSession()?.id
+    const sessionId = orchestrator.getSessionSnapshot()?.id
     if (!sessionId) {
       throw new Error('Expected session id')
     }
 
-    orchestrator.markRecorderStarted(sessionId)
+    await orchestrator.markRecorderStarted(sessionId)
     const submitPromise = orchestrator.submitAudio('toggle', createPayload())
     await Promise.resolve()
     await orchestrator.cancel()
     finalizeState.resolve?.()
     await submitPromise
 
-    expect(orchestrator.getSession()?.status ?? 'idle').not.toBe('completed')
+    expect(orchestrator.getSessionSnapshot()?.status ?? 'idle').not.toBe('completed')
     expect(store.appendHistoryWithAudio).not.toHaveBeenCalled()
-    expect(telemetry.finishSession).toHaveBeenCalledWith(
-      sessionId,
-      'cancelled',
-      expect.objectContaining({ cancelledAt: expect.any(String) }),
-    )
   })
 
-  it('does not call the model when the recorder reports silence and closes the span as notice', async () => {
+  it('does not call the model when the recorder reports silence', async () => {
     const llm = { stream: vi.fn() }
-    const telemetry = createTelemetryDouble()
 
     const orchestrator = new DictationSessionOrchestrator(
       createStoreDouble() as never,
       { capture: vi.fn(async () => context) } as never,
       createInsertionEngineDouble() as never,
       llm as never,
-      telemetry as never,
       { getState: vi.fn(async () => ({ microphone: 'granted', accessibility: 'granted' })) } as never,
     )
 
     await orchestrator.startCapture('toggle')
-    const sessionId = orchestrator.getSession()?.id
+    const sessionId = orchestrator.getSessionSnapshot()?.id
     if (!sessionId) {
       throw new Error('Expected session id')
     }
 
-    orchestrator.markRecorderStarted(sessionId)
+    await orchestrator.markRecorderStarted(sessionId)
     await orchestrator.submitAudio('toggle', {
       ...createPayload(),
       speechDetected: false,
@@ -386,52 +417,39 @@ describe('DictationSessionOrchestrator', () => {
     })
 
     expect(llm.stream).not.toHaveBeenCalled()
-    expect(orchestrator.getSession()?.status).toBe('notice')
-    expect(orchestrator.getSession()?.noticeMessage).toContain('notices.noSpeechDetected')
-    expect(telemetry.finishSession).toHaveBeenCalledWith(
-      sessionId,
-      'notice',
-      expect.objectContaining({ noticeName: 'dictation-no-speech' }),
-    )
+    expect(orchestrator.getSessionSnapshot()?.status).toBe('notice')
+    expect(orchestrator.getSessionSnapshot()?.noticeMessage).toContain('notices.noSpeechDetected')
   })
 
   it('treats audio shorter than 1.5 seconds as no speech for both modes', async () => {
     const llm = { stream: vi.fn() }
-    const telemetry = createTelemetryDouble()
 
     const orchestrator = new DictationSessionOrchestrator(
       createStoreDouble() as never,
       { capture: vi.fn(async () => context) } as never,
       createInsertionEngineDouble() as never,
       llm as never,
-      telemetry as never,
       { getState: vi.fn(async () => ({ microphone: 'granted', accessibility: 'granted' })) } as never,
     )
 
     await orchestrator.startCapture('push-to-talk')
-    const sessionId = orchestrator.getSession()?.id
+    const sessionId = orchestrator.getSessionSnapshot()?.id
     if (!sessionId) {
       throw new Error('Expected session id')
     }
 
-    orchestrator.markRecorderStarted(sessionId)
+    await orchestrator.markRecorderStarted(sessionId)
     await orchestrator.submitAudio('push-to-talk', {
       ...createPayload(),
       durationMs: 1400,
     })
 
     expect(llm.stream).not.toHaveBeenCalled()
-    expect(orchestrator.getSession()?.status).toBe('notice')
-    expect(orchestrator.getSession()?.noticeMessage).toContain('notices.noSpeechDetected')
-    expect(telemetry.finishSession).toHaveBeenCalledWith(
-      sessionId,
-      'notice',
-      expect.objectContaining({ noticeName: 'dictation-no-speech' }),
-    )
+    expect(orchestrator.getSessionSnapshot()?.status).toBe('notice')
+    expect(orchestrator.getSessionSnapshot()?.noticeMessage).toContain('notices.noSpeechDetected')
   })
 
   it('treats an empty model response as notice and avoids persisting history', async () => {
-    const telemetry = createTelemetryDouble()
     const finalize = vi.fn(async () => ({
       requestedMode: 'letter-by-letter' as const,
       effectiveMode: 'letter-by-letter' as const,
@@ -458,33 +476,26 @@ describe('DictationSessionOrchestrator', () => {
           finishReason: 'stop',
         })),
       } as never,
-      telemetry as never,
       { getState: vi.fn(async () => ({ microphone: 'granted', accessibility: 'granted' })) } as never,
     )
 
     await orchestrator.startCapture('toggle')
-    const sessionId = orchestrator.getSession()?.id
+    const sessionId = orchestrator.getSessionSnapshot()?.id
     if (!sessionId) {
       throw new Error('Expected session id')
     }
 
-    orchestrator.markRecorderStarted(sessionId)
+    await orchestrator.markRecorderStarted(sessionId)
     await orchestrator.submitAudio('toggle', createPayload())
 
     expect(finalize).toHaveBeenCalledWith('')
     expect(store.appendHistoryWithAudio).not.toHaveBeenCalled()
-    expect(orchestrator.getSession()?.status).toBe('notice')
-    expect(orchestrator.getSession()?.noticeMessage).toContain('notices.noFinalText')
-    expect(telemetry.finishSession).toHaveBeenCalledWith(
-      sessionId,
-      'notice',
-      expect.objectContaining({ noticeName: 'dictation-empty-output' }),
-    )
+    expect(orchestrator.getSessionSnapshot()?.status).toBe('notice')
+    expect(orchestrator.getSessionSnapshot()?.noticeMessage).toContain('notices.noFinalText')
   })
 
-  it('recovers partial text to clipboard, persists the failed session, and closes the span as error', async () => {
+  it('recovers partial text to clipboard and persists the failed session', async () => {
     const store = createStoreDouble()
-    const telemetry = createTelemetryDouble()
     const recoverToClipboard = vi.fn(async () => undefined)
 
     const orchestrator = new DictationSessionOrchestrator(
@@ -511,21 +522,20 @@ describe('DictationSessionOrchestrator', () => {
           return { text: 'partial text', latencyMs: 150, audioSendMs: 52, finishReason: 'stop' }
         }),
       } as never,
-      telemetry as never,
       { getState: vi.fn(async () => ({ microphone: 'granted', accessibility: 'granted' })) } as never,
     )
 
     await orchestrator.startCapture('toggle')
-    const sessionId = orchestrator.getSession()?.id
+    const sessionId = orchestrator.getSessionSnapshot()?.id
     if (!sessionId) {
       throw new Error('Expected session id')
     }
 
-    orchestrator.markRecorderStarted(sessionId)
+    await orchestrator.markRecorderStarted(sessionId)
     await orchestrator.submitAudio('toggle', createPayload())
 
     expect(recoverToClipboard).toHaveBeenCalledWith('partial text')
-    expect(orchestrator.getSession()?.status).toBe('error')
+    expect(orchestrator.getSessionSnapshot()?.status).toBe('error')
     expect(store.appendHistoryWithAudio).toHaveBeenCalledTimes(1)
     expect(store.appendHistoryWithAudio).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -535,14 +545,6 @@ describe('DictationSessionOrchestrator', () => {
         errorMessage: expect.stringContaining('Protected clipboard write failed'),
       }),
       expect.any(Object),
-    )
-    expect(telemetry.finishSession).toHaveBeenCalledWith(
-      sessionId,
-      'error',
-      expect.objectContaining({
-        'error.message': 'Protected clipboard write failed',
-        recoveredToClipboard: true,
-      }),
     )
   })
 })

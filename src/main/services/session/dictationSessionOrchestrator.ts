@@ -5,18 +5,17 @@ import type { ActiveContextService } from '../context/activeContextService.js'
 import type { InsertionEngine } from '../insertion/insertionEngine.js'
 import type { OpenRouterService } from '../llm/openRouterService.js'
 import type { PermissionService } from '../permissions/permissionService.js'
-import type { AppStore } from '../store/appStore.js'
-import type { TelemetryService } from '../telemetry/telemetryService.js'
+import type { SyncoreAppData } from '../store/syncoreAppData.js'
 import { HistoryService, type HistoryTimingMarks } from './historyService.js'
-import { SessionStore } from './sessionStore.js'
 
 type SessionListener = (session: DictationSession | null) => void
 type ProgressiveInsertionSession = ReturnType<InsertionEngine['createProgressiveSession']>
 
 export class DictationSessionOrchestrator {
-  private readonly sessions = new SessionStore()
   private readonly history: HistoryService
+  private readonly sessionListeners = new Set<SessionListener>()
   private readonly historyListeners = new Set<() => void>()
+  private currentSession: DictationSession | null = null
   private submittingSessionId: string | null = null
   private activeInsertionSession: { sessionId: string; insertion: ProgressiveInsertionSession } | null = null
   private cancelledSessionIds = new Set<string>()
@@ -25,18 +24,21 @@ export class DictationSessionOrchestrator {
   private timingMarksBySessionId = new Map<string, HistoryTimingMarks>()
 
   constructor(
-    private readonly store: AppStore,
+    private readonly store: SyncoreAppData,
     private readonly contextService: ActiveContextService,
     private readonly insertionEngine: InsertionEngine,
     private readonly llm: OpenRouterService,
-    private readonly telemetry: TelemetryService,
     private readonly permissions: PermissionService,
   ) {
     this.history = new HistoryService(store)
   }
 
   subscribe(listener: SessionListener): () => void {
-    return this.sessions.subscribe(listener)
+    this.sessionListeners.add(listener)
+    listener(this.currentSession)
+    return () => {
+      this.sessionListeners.delete(listener)
+    }
   }
 
   subscribeHistoryUpdated(listener: () => void): () => void {
@@ -50,12 +52,28 @@ export class DictationSessionOrchestrator {
     }
   }
 
-  getSession(): DictationSession | null {
-    return this.sessions.get()
+  getSessionSnapshot(): DictationSession | null {
+    return this.currentSession
+  }
+
+  async refreshSessionSnapshot(): Promise<DictationSession | null> {
+    return this.publishSession(await this.store.getActiveSession())
+  }
+
+  async dismissCurrentSession(): Promise<void> {
+    this.publishSession(await this.store.dismissCurrentSession())
+  }
+
+  private publishSession(session: DictationSession | null): DictationSession | null {
+    this.currentSession = session
+    for (const listener of this.sessionListeners) {
+      listener(this.currentSession)
+    }
+    return session
   }
 
   async startCapture(mode: DictationSession['activationMode']): Promise<void> {
-    const currentSession = this.sessions.get()
+    const currentSession = this.currentSession ?? await this.refreshSessionSnapshot()
     if (currentSession && ['arming', 'listening', 'processing', 'streaming'].includes(currentSession.status)) {
       return
     }
@@ -64,7 +82,7 @@ export class DictationSessionOrchestrator {
     const startedAt = new Date().toISOString()
     const contextPreviewStartedAt = new Date().toISOString()
 
-    this.sessions.set({
+    const initialSession: DictationSession = {
       ...createIdleSession(),
       id: sessionId,
       activationMode: mode,
@@ -74,13 +92,9 @@ export class DictationSessionOrchestrator {
       targetApp: 'Foreground app',
       noticeMessage: null,
       errorMessage: null,
-    })
-
-    await this.telemetry.startSession(sessionId, {
-      activationMode: mode,
-      targetApp: 'Foreground app',
-    })
-    await this.telemetry.metric('dictation-started', { mode }, { sessionId })
+    }
+    await this.store.startSession(initialSession)
+    this.publishSession(initialSession)
 
     if (this.store.getSettings().insertionStreamingMode === 'letter-by-letter') {
       try {
@@ -100,7 +114,7 @@ export class DictationSessionOrchestrator {
           contextPreviewStartedAt,
           contextPreviewCompletedAt: new Date().toISOString(),
         })
-        const activeSession = this.sessions.get()
+        const activeSession = this.currentSession
         if (
           !activeSession ||
           activeSession.id !== sessionId ||
@@ -109,22 +123,12 @@ export class DictationSessionOrchestrator {
           return previewContext
         }
 
-        this.sessions.set({
+        await this.store.updateSessionContext(sessionId, previewContext.appName, previewContext)
+        this.publishSession({
           ...activeSession,
           targetApp: previewContext.appName,
           context: previewContext,
         })
-        await this.telemetry.annotateSession(sessionId, {
-          targetApp: previewContext.appName,
-          contextConfidence: previewContext.confidence,
-          permissionsGranted: previewContext.permissionsGranted,
-          selectedTextPresent: Boolean(previewContext.selectedText),
-        })
-        this.telemetry.sessionEvent(sessionId, 'context-captured', {
-          selectedTextPresent: Boolean(previewContext.selectedText),
-          confidence: previewContext.confidence,
-        })
-
         return previewContext
       })
       .catch(() => {
@@ -139,21 +143,21 @@ export class DictationSessionOrchestrator {
     this.updateTimingMarks(sessionId, { contextPreviewStartedAt })
   }
 
-  markRecorderStarted(sessionId: string): void {
-    const currentSession = this.sessions.get()
+  async markRecorderStarted(sessionId: string): Promise<void> {
+    const currentSession = this.currentSession ?? await this.refreshSessionSnapshot()
     if (!currentSession || currentSession.id !== sessionId || currentSession.status !== 'arming') {
       return
     }
 
-    this.sessions.set({
+    await this.store.markSessionListening(sessionId)
+    this.publishSession({
       ...currentSession,
       status: 'listening',
     })
-    this.telemetry.sessionEvent(sessionId, 'recorder-started')
   }
 
   async markRecorderFailed(sessionId: string, reason: string): Promise<void> {
-    const currentSession = this.sessions.get()
+    const currentSession = this.currentSession ?? await this.refreshSessionSnapshot()
     if (!currentSession || currentSession.id !== sessionId || currentSession.status !== 'arming') {
       return
     }
@@ -162,42 +166,35 @@ export class DictationSessionOrchestrator {
     const message = reason || 'Unable to start microphone capture.'
     const microphoneBlocked =
       permissions?.microphone === 'denied' || permissions?.microphone === 'restricted'
+    const failedStatus: 'error' | 'permission-required' = microphoneBlocked ? 'permission-required' : 'error'
 
-    this.sessions.set({
+    const erroredSession: DictationSession = {
       ...currentSession,
-      status: microphoneBlocked ? 'permission-required' : 'error',
+      status: failedStatus,
       captureIntent: 'none',
       errorMessage: microphoneBlocked
         ? 'Microphone access is required before dictation can start.'
         : message,
       finishedAt: new Date().toISOString(),
-    })
+    }
+    await this.store.markSessionRecorderFailed(
+      sessionId,
+      failedStatus,
+      erroredSession.errorMessage ?? message,
+      erroredSession.finishedAt ?? new Date().toISOString(),
+    )
+    this.publishSession(erroredSession)
 
     if (microphoneBlocked) {
-      await this.telemetry.error('microphone-permission-required', {
-        mode: currentSession.activationMode,
-      }, { sessionId })
-      await this.telemetry.finishSession(sessionId, 'permission-required', {
-        reason: 'microphone-permission-required',
-      })
       return
     }
-
-    await this.telemetry.error('recorder-start-failed', {
-      id: currentSession.id,
-      message,
-    }, { sessionId })
-    await this.telemetry.finishSession(sessionId, 'error', {
-      reason: 'recorder-start-failed',
-      'error.message': message,
-    })
   }
 
   async toggleCapture(): Promise<void> {
-    const currentSession = this.sessions.get()
+    const currentSession = this.currentSession ?? await this.refreshSessionSnapshot()
     if (
       !currentSession ||
-      ['idle', 'completed', 'notice', 'error', 'permission-required'].includes(currentSession.status)
+      ['completed', 'notice', 'error', 'permission-required', 'cancelled'].includes(currentSession.status)
     ) {
       await this.startCapture('toggle')
       return
@@ -207,7 +204,8 @@ export class DictationSessionOrchestrator {
       const now = new Date().toISOString()
       this.updateTimingMarks(currentSession.id, { stopRequestedAt: now })
       this.speechEndedAtBySessionId.set(currentSession.id, performance.now())
-      this.sessions.set({
+      await this.store.requestSessionStop(currentSession.id, now)
+      this.publishSession({
         ...currentSession,
         status: 'processing',
         captureIntent: 'stop',
@@ -218,8 +216,8 @@ export class DictationSessionOrchestrator {
     }
   }
 
-  requestStop(mode: DictationSession['activationMode']): void {
-    const currentSession = this.sessions.get()
+  async requestStop(mode: DictationSession['activationMode']): Promise<void> {
+    const currentSession = this.currentSession ?? await this.refreshSessionSnapshot()
     if (
       !currentSession ||
       !['arming', 'listening'].includes(currentSession.status) ||
@@ -232,7 +230,8 @@ export class DictationSessionOrchestrator {
     const now = new Date().toISOString()
     this.updateTimingMarks(currentSession.id, { stopRequestedAt: now })
     this.speechEndedAtBySessionId.set(currentSession.id, performance.now())
-    this.sessions.set({
+    await this.store.requestSessionStop(currentSession.id, now)
+    this.publishSession({
       ...currentSession,
       status: 'processing',
       captureIntent: 'stop',
@@ -243,7 +242,7 @@ export class DictationSessionOrchestrator {
   }
 
   async cancel(): Promise<void> {
-    const currentSession = this.sessions.get()
+    const currentSession = this.currentSession ?? await this.refreshSessionSnapshot()
     if (!currentSession) {
       return
     }
@@ -254,38 +253,35 @@ export class DictationSessionOrchestrator {
       this.activeInsertionSession = null
     }
 
-    await this.telemetry.metric('dictation-cancelled', { id: currentSession.id }, { sessionId: currentSession.id })
-    await this.telemetry.finishSession(currentSession.id, 'cancelled', {
-      cancelledAt: new Date().toISOString(),
-    })
-    this.sessions.set({
+    const finishedAt = new Date().toISOString()
+    await this.store.cancelSession(currentSession.id, finishedAt)
+    this.publishSession({
       ...currentSession,
-      status: 'idle',
+      status: 'cancelled',
       captureIntent: 'none',
-      finishedAt: new Date().toISOString(),
+      finishedAt,
     })
   }
 
   async showShortPressHint(): Promise<void> {
-    await this.telemetry.metric('dictation-short-press-hint', {
-      toggleHotkey: this.store.getSettings().toggleHotkey,
-    })
-
-    this.sessions.set({
+    const now = new Date().toISOString()
+    const noticeSession: DictationSession = {
       ...createIdleSession(),
       id: createId('session'),
       activationMode: 'push-to-talk',
       status: 'notice',
       captureIntent: 'none',
-      startedAt: new Date().toISOString(),
-      finishedAt: new Date().toISOString(),
+      startedAt: now,
+      finishedAt: now,
       targetApp: 'Ditado',
       noticeMessage: 'notices.doubleTapToToggle',
-    })
+    }
+    await this.store.showSessionNotice(noticeSession)
+    this.publishSession(noticeSession)
   }
 
   async submitAudio(mode: DictationSession['activationMode'], payload: DictationAudioPayload): Promise<void> {
-    const currentSession = this.sessions.get()
+    const currentSession = this.currentSession ?? await this.refreshSessionSnapshot()
     if (
       !currentSession ||
       !['listening', 'processing'].includes(currentSession.status) ||
@@ -300,10 +296,7 @@ export class DictationSessionOrchestrator {
 
     if (!payload.speechDetected || payload.durationMs < 1500) {
       this.submittingSessionId = null
-      await this.showNotice('notices.noSpeechDetected', 'dictation-no-speech', {
-        peakAmplitude: payload.peakAmplitude.toFixed(5),
-        rmsAmplitude: payload.rmsAmplitude.toFixed(5),
-      }, currentSession.id)
+      await this.showNotice('notices.noSpeechDetected')
       return
     }
 
@@ -332,23 +325,19 @@ export class DictationSessionOrchestrator {
         }
       }
       const insertionPlan = this.insertionEngine.createPlan(context)
-      await this.telemetry.annotateSession(currentSession.id, {
-        targetApp: context.appName,
-        insertionStrategy: insertionPlan.strategy,
-        insertionCapability: insertionPlan.capability,
-        selectedTextPresent: Boolean(context.selectedText),
-        requestedMode: this.store.getSettings().insertionStreamingMode,
-      })
-      this.telemetry.sessionEvent(currentSession.id, 'submission-started', {
-        hasSelectedText: Boolean(context.selectedText),
-      })
-
       const processingStartedAt = new Date().toISOString()
       if (!this.speechEndedAtBySessionId.has(currentSession.id)) {
         this.speechEndedAtBySessionId.set(currentSession.id, performance.now())
       }
 
-      this.sessions.set({
+      await this.store.markSessionProcessing(
+        currentSession.id,
+        processingStartedAt,
+        context.appName,
+        context,
+        insertionPlan,
+      )
+      this.publishSession({
         ...currentSession,
         status: 'processing',
         captureIntent: 'none',
@@ -388,12 +377,12 @@ export class DictationSessionOrchestrator {
           if (!streamingStarted) {
             streamingStarted = true
             firstTokenAtIso = new Date().toISOString()
-            this.telemetry.sessionEvent(currentSession.id, 'streaming-started')
           }
           partialText += delta
-          const activeSession = this.sessions.get()
+          const activeSession = this.currentSession
           if (activeSession?.id === currentSession.id) {
-            this.sessions.set({
+            await this.store.appendSessionPartial(currentSession.id, partialText)
+            this.publishSession({
               ...activeSession,
               status: 'streaming',
               partialText,
@@ -409,20 +398,18 @@ export class DictationSessionOrchestrator {
 
       if (!response.text.trim()) {
         await insertion.finalize('')
-        await this.showNotice('notices.noFinalText', 'dictation-empty-output', {
-          modelId: this.store.getSettings().modelId,
-        }, currentSession.id)
+        await this.showNotice('notices.noFinalText')
         return
       }
 
       const execution = await insertion.finalize(response.text)
-      if (this.cancelledSessionIds.has(currentSession.id) || this.sessions.get()?.id !== currentSession.id) {
+      if (this.cancelledSessionIds.has(currentSession.id) || this.currentSession?.id !== currentSession.id) {
         return
       }
 
       const finishedAt = new Date().toISOString()
       const completedSession = {
-        ...(this.sessions.get() ?? currentSession),
+        ...(this.currentSession ?? currentSession),
         status: 'completed' as const,
         captureIntent: 'none' as const,
         finishedAt,
@@ -430,24 +417,8 @@ export class DictationSessionOrchestrator {
         finalText: response.text,
       }
 
-      this.sessions.set(completedSession)
-      await this.telemetry.metric('dictation-completed', {
-        id: completedSession.id,
-        latencyMs: response.latencyMs,
-        finishReason: response.finishReason ?? 'unknown',
-        fallbackUsed: execution.fallbackUsed,
-        insertionMethod: execution.insertionMethod,
-        requestedMode: execution.requestedMode,
-        effectiveMode: execution.effectiveMode,
-      }, { sessionId: completedSession.id })
-      await this.telemetry.finishSession(completedSession.id, 'completed', {
-        latencyMs: response.latencyMs,
-        finishReason: response.finishReason ?? 'unknown',
-        fallbackUsed: execution.fallbackUsed,
-        insertionMethod: execution.insertionMethod,
-        requestedMode: execution.requestedMode,
-        effectiveMode: execution.effectiveMode,
-      })
+      await this.store.completeSession(currentSession.id, finishedAt, response.text, response.text)
+      this.publishSession(completedSession)
       try {
         await this.history.appendCompletedSession(completedSession, response, payload, execution, {
           firstTokenAt: firstTokenAtIso,
@@ -463,7 +434,7 @@ export class DictationSessionOrchestrator {
       }
 
       const message = error instanceof Error ? error.message : 'Unknown dictation error'
-      const lastText = this.sessions.get()?.partialText ?? ''
+      const lastText = this.currentSession?.partialText ?? ''
       const execution =
         this.activeInsertionSession?.sessionId === currentSession.id
           ? this.activeInsertionSession.insertion.getExecutionReport()
@@ -475,14 +446,20 @@ export class DictationSessionOrchestrator {
           .recoverToClipboard(lastText)
       }
 
-      const activeSession = this.sessions.get() ?? currentSession
+      const activeSession = this.currentSession ?? currentSession
       const erroredSession: DictationSession = {
         ...activeSession,
         status: 'error',
         errorMessage: lastText ? `${message} Latest text copied to clipboard.` : message,
         finishedAt: new Date().toISOString(),
       }
-      this.sessions.set(erroredSession)
+      await this.store.failSession(
+        currentSession.id,
+        erroredSession.finishedAt ?? new Date().toISOString(),
+        erroredSession.errorMessage ?? message,
+        lastText,
+      )
+      this.publishSession(erroredSession)
 
       try {
         await this.history.appendFailedSession(
@@ -496,18 +473,6 @@ export class DictationSessionOrchestrator {
         // History persistence must not mask the primary dictation failure.
       }
 
-      await this.telemetry.error('dictation-failed', {
-        id: activeSession.id,
-        message,
-        fallbackUsed: execution?.fallbackUsed ?? false,
-        insertionMethod: execution?.insertionMethod ?? 'clipboard-all-at-once',
-      }, { sessionId: activeSession.id, exception: error })
-      await this.telemetry.finishSession(activeSession.id, 'error', {
-        'error.message': message,
-        fallbackUsed: execution?.fallbackUsed ?? false,
-        insertionMethod: execution?.insertionMethod ?? 'clipboard-all-at-once',
-        recoveredToClipboard: Boolean(lastText),
-      })
     } finally {
       this.contextCaptureBySessionId.delete(currentSession.id)
       this.speechEndedAtBySessionId.delete(currentSession.id)
@@ -530,33 +495,24 @@ export class DictationSessionOrchestrator {
     })
   }
 
-  private async showNotice(
-    message: string,
-    telemetryName: string,
-    detail: Record<string, string> = {},
-    sessionId?: string,
-  ): Promise<void> {
-    await this.telemetry.metric(telemetryName, detail, sessionId ? { sessionId } : {})
-    if (sessionId) {
-      await this.telemetry.finishSession(sessionId, 'notice', {
-        noticeName: telemetryName,
-        ...detail,
-      })
-    }
-    const current = this.sessions.get()
-    this.sessions.set({
+  private async showNotice(message: string): Promise<void> {
+    const current = this.currentSession
+    const now = new Date().toISOString()
+    const noticeSession: DictationSession = {
       ...createIdleSession(),
       id: current?.id ?? createId('session'),
       activationMode: current?.activationMode ?? 'push-to-talk',
       status: 'notice',
       captureIntent: 'none',
-      startedAt: current?.startedAt ?? new Date().toISOString(),
-      finishedAt: new Date().toISOString(),
+      startedAt: current?.startedAt ?? now,
+      finishedAt: now,
       targetApp: current?.targetApp ?? 'Ditado',
       context: current?.context ?? createIdleSession().context,
       insertionPlan: current?.insertionPlan ?? createIdleSession().insertionPlan,
       noticeMessage: message,
       errorMessage: null,
-    })
+    }
+    await this.store.showSessionNotice(noticeSession)
+    this.publishSession(noticeSession)
   }
 }

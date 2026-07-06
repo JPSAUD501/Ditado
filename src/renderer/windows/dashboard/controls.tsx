@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Check, ChevronDown, Copy, Pause, Play, Trash2 } from 'lucide-react'
+import { skip, useQueryState } from 'syncorejs/react'
 
 import type { HistoryEntry } from '@shared/contracts'
 import { formatHotkeyForDisplay, type HotkeyCapturePayload } from '@shared/hotkeys'
+import { api } from '../../../../syncore/_generated/api'
 import { formatAudioDuration, formatDate } from './formatters'
 
 const easeOutExpo = [0.16, 1, 0.3, 1] as const
@@ -214,10 +216,12 @@ export const MicrophoneSelect = ({
   refreshKey,
   selected,
   onSelect,
+  onDeviceCountChange,
 }: {
   refreshKey: number
   selected: string | null
   onSelect: (deviceId: string | null) => void
+  onDeviceCountChange?: (count: number) => void
 }) => {
   const { t } = useTranslation()
   const [devices, setDevices] = useState<Array<{ deviceId: string; label: string }>>([])
@@ -225,10 +229,18 @@ export const MicrophoneSelect = ({
   useEffect(() => {
     let mounted = true
     void enumerateBrowserMicrophones()
-      .then((r) => { if (mounted) setDevices(r) })
-      .catch(() => { if (mounted) setDevices([]) })
+      .then((r) => {
+        if (!mounted) return
+        setDevices(r)
+        onDeviceCountChange?.(r.length)
+      })
+      .catch(() => {
+        if (!mounted) return
+        setDevices([])
+        onDeviceCountChange?.(0)
+      })
     return () => { mounted = false }
-  }, [refreshKey])
+  }, [onDeviceCountChange, refreshKey])
 
   return (
     <select className="field" value={selected ?? ''} onChange={(e) => onSelect(e.target.value || null)} aria-label={t('settings.preferredMicrophone')}>
@@ -374,30 +386,23 @@ const ProcessingTimeline = ({
 
 export const HistoryAudioPlayer = ({ entryId, hasAudio }: { entryId: string; hasAudio: boolean }) => {
   const { t } = useTranslation()
+  const audioState = useQueryState(api.history.audio, hasAudio ? { sessionId: entryId } : skip)
   const audioRef = useRef<HTMLAudioElement | null>(null)
-  const [src, setSrc] = useState<string | null>(null)
-  const [loadFailed, setLoadFailed] = useState(false)
   const [isPlaying, setIsPlaying] = useState(false)
   const [progress, setProgress] = useState(0)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
 
+  const src = useMemo(() => {
+    if (!hasAudio || audioState.isLoading || audioState.isError || !audioState.data) return null
+    const binary = atob(audioState.data.base64)
+    const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0))
+    return URL.createObjectURL(new Blob([bytes], { type: audioState.data.mimeType }))
+  }, [audioState.data, audioState.isError, audioState.isLoading, hasAudio])
+
   useEffect(() => {
-    let mounted = true
-    let objectUrl: string | null = null
-    if (!hasAudio) return () => { mounted = false }
-    void window.ditado.getHistoryAudio(entryId)
-      .then((value) => {
-        if (!mounted || !value) { if (mounted) setLoadFailed(true); return }
-        const binary = atob(value.base64)
-        const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0))
-        objectUrl = URL.createObjectURL(new Blob([bytes], { type: value.mimeType }))
-        setSrc(objectUrl)
-        setLoadFailed(false)
-      })
-      .catch(() => { if (mounted) setLoadFailed(true) })
-    return () => { mounted = false; if (objectUrl) URL.revokeObjectURL(objectUrl) }
-  }, [entryId, hasAudio])
+    return () => { if (src) URL.revokeObjectURL(src) }
+  }, [src])
 
   const togglePlayback = useCallback(() => {
     const audio = audioRef.current
@@ -421,7 +426,7 @@ export const HistoryAudioPlayer = ({ entryId, hasAudio }: { entryId: string; has
   }, [])
 
   if (!hasAudio) return null
-  if (loadFailed) return (
+  if (!audioState.isLoading && (audioState.isError || !audioState.data)) return (
     <div className="audio-player-error">
       <span>{t('history.audioUnavailable')}</span>
     </div>
@@ -530,7 +535,7 @@ export const HistoryRow = ({
   const textPreview = entry.outputText
     || (isError ? (entry.errorMessage ?? t('history.noTextInserted')) : t('history.noTextInserted'))
   const modeLabel = entry.activationMode === 'push-to-talk' ? t('common.push') : t('common.toggle')
-  const hasAudio = Boolean(entry.audioFilePath)
+  const hasAudio = entry.audioBytes > 0 && Boolean(entry.audioMimeType)
   const hasContext = Boolean(entry.submittedContext?.selectedText)
   const timelineStages = buildTimelineStages(entry)
   const hasMetrics = timelineStages.length > 0

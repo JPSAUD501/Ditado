@@ -1,20 +1,12 @@
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 
 import { defaultPermissionState, defaultSettings } from '@shared/defaults'
-import type { DashboardViewModel, DictationSession, OverlayViewModel } from '@shared/contracts'
+import type { DashboardViewModel, DictationSession } from '@shared/contracts'
 import { MAX_RECORDING_DURATION_MS, WavRecorder } from '@renderer/lib/wavRecorder'
 
-const initialOverlayState: OverlayViewModel = {
-  session: null,
-  settings: defaultSettings,
-  permissions: defaultPermissionState,
-}
-
 const initialDashboardState: DashboardViewModel = {
-  session: null,
   settings: defaultSettings,
   history: [],
-  telemetryTail: [],
   permissions: defaultPermissionState,
   updateState: {
     enabled: true,
@@ -24,33 +16,6 @@ const initialDashboardState: DashboardViewModel = {
     downloadProgress: null,
   },
   appVersion: '',
-}
-
-export const useOverlayBridge = (): OverlayViewModel => {
-  const [state, setState] = useState(initialOverlayState)
-
-  useEffect(() => {
-    let mounted = true
-    let receivedLiveState = false
-
-    const unsubscribe = window.ditado.subscribeOverlayState((value) => {
-      receivedLiveState = true
-      setState(value)
-    })
-
-    void window.ditado.getOverlayState().then((value) => {
-      if (mounted && !receivedLiveState) {
-        setState(value)
-      }
-    })
-
-    return () => {
-      mounted = false
-      unsubscribe()
-    }
-  }, [])
-
-  return state
 }
 
 export const useDashboardBridge = (): DashboardViewModel => {
@@ -64,13 +29,8 @@ export const useDashboardBridge = (): DashboardViewModel => {
       }
     })
 
-    const unsubscribe = window.ditado.subscribeDashboardState((value) => {
-      setState(value)
-    })
-
     return () => {
       mounted = false
-      unsubscribe()
     }
   }, [])
 
@@ -92,6 +52,7 @@ export const useDictationRecorder = (
   session: DictationSession | null,
   preferredMicrophoneId: string | null,
   startupWarmupEnabled = false,
+  enabled = true,
 ): { isRecording: boolean } => {
   const recorder = useMemo(() => new WavRecorder(), [])
   const warmedMicrophone = useRef<string | null | undefined>(undefined)
@@ -161,6 +122,9 @@ export const useDictationRecorder = (
 
   useEffect(() => {
     const warmupKey = preferredMicrophoneId ?? '__default__'
+    if (!enabled) {
+      return
+    }
     if (warmedMicrophone.current === warmupKey) {
       return
     }
@@ -184,9 +148,18 @@ export const useDictationRecorder = (
         startupWarmupReported.current = true
         void window.ditado.notifyRecorderWarmupFinished('failed')
       })
-  }, [preferredMicrophoneId, recorder, startupWarmupEnabled])
+  }, [enabled, preferredMicrophoneId, recorder, startupWarmupEnabled])
 
   useEffect(() => {
+    if (!enabled) {
+      handledIntent.current = null
+      clearMaxDurationTimer()
+      if (recorder.isRecording()) {
+        void recorder.cancel().finally(() => setIsRecording(false))
+      }
+      return
+    }
+
     if (!session) {
       handledIntent.current = null
       clearMaxDurationTimer()
@@ -256,7 +229,7 @@ export const useDictationRecorder = (
         void recorder.cancel().finally(() => setIsRecording(false))
       }
     }
-  }, [preferredMicrophoneId, recorder, session])
+  }, [enabled, preferredMicrophoneId, recorder, session])
 
   return { isRecording }
 }

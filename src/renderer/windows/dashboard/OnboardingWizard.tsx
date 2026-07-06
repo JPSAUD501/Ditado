@@ -5,10 +5,11 @@ import {
   AlertCircle, ArrowLeft, ArrowRight, Check, CheckCircle, ExternalLink,
   KeyRound, Mic, Monitor, Moon, Repeat, Sparkles, Sun, Zap,
 } from 'lucide-react'
-import type { DictationSession, Settings } from '@shared/contracts'
+import type { DictationSession, PermissionState, Settings } from '@shared/contracts'
 import { defaultPushToTalkHotkey } from '@shared/defaults'
 import { formatHotkeyForDisplay } from '@shared/hotkeys'
 import { HotkeyField, MicrophoneSelect } from './controls'
+import { shouldShowMicrophoneGrantButton } from './microphonePermissions'
 import { OnboardingWizardRightPane } from './OnboardingWizardRightPane'
 import {
   TOTAL_STEPS,
@@ -29,6 +30,8 @@ type WizardProps = {
   updateSettings: (patch: Partial<Settings>) => Promise<Settings>
   microphoneRefreshKey: number
   refreshMicrophones: () => void
+  permissions: PermissionState
+  onDictationEnabledChange: (enabled: boolean) => void
   finishOnboarding: () => Promise<void>
   isUpgradeOnboarding?: boolean
   initialStep?: number
@@ -245,14 +248,17 @@ const StepAppearance = ({
 /* -- Step 4: Microphone --------------------------------------------------- */
 
 const StepMicrophone = ({
-  settings, updateSettings, microphoneRefreshKey, refreshMicrophones,
+  settings, updateSettings, microphoneRefreshKey, refreshMicrophones, permissions,
 }: {
   settings: Settings
   updateSettings: (patch: Partial<Settings>) => Promise<Settings>
   microphoneRefreshKey: number
   refreshMicrophones: () => void
+  permissions: PermissionState
 }) => {
   const { t } = useTranslation()
+  const [microphoneDeviceCount, setMicrophoneDeviceCount] = useState(0)
+  const showMicrophoneGrant = shouldShowMicrophoneGrantButton(permissions.microphone, microphoneDeviceCount)
   const requestMic = async () => {
     await window.ditado.requestMicrophoneAccess()
     refreshMicrophones()
@@ -271,12 +277,15 @@ const StepMicrophone = ({
             refreshKey={microphoneRefreshKey}
             selected={settings.preferredMicrophoneId}
             onSelect={(id) => void updateSettings({ preferredMicrophoneId: id })}
+            onDeviceCountChange={setMicrophoneDeviceCount}
           />
         </label>
         <div className="flex gap-2">
-          <button className="button-secondary" type="button" onClick={() => void requestMic()}>
-            {t('common.grantPermission')}
-          </button>
+          {showMicrophoneGrant && (
+            <button className="button-secondary" type="button" onClick={() => void requestMic()}>
+              {t('common.grantPermission')}
+            </button>
+          )}
           <button className="button-ghost" type="button" onClick={refreshMicrophones}>
             {t('common.refresh')}
           </button>
@@ -635,6 +644,8 @@ export const OnboardingWizard = ({
   updateSettings,
   microphoneRefreshKey,
   refreshMicrophones,
+  permissions,
+  onDictationEnabledChange,
   finishOnboarding,
   isUpgradeOnboarding = false,
   initialStep = 0,
@@ -652,6 +663,13 @@ export const OnboardingWizard = ({
   const [finishing, setFinishing] = useState(false)
 
   const isMacOS = navigator.userAgent.includes('Mac')
+
+  useEffect(() => {
+    onDictationEnabledChange(step === 6 || step === 7 || step === 8)
+    return () => {
+      onDictationEnabledChange(true)
+    }
+  }, [onDictationEnabledChange, step])
 
   const goNext = () => {
     if (step === 7) {
@@ -792,6 +810,7 @@ export const OnboardingWizard = ({
                 updateSettings={updateSettings}
                 microphoneRefreshKey={microphoneRefreshKey}
                 refreshMicrophones={refreshMicrophones}
+                permissions={permissions}
               />
             )}
             {step === 4 && (

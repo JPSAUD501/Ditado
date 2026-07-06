@@ -10,6 +10,7 @@ export const dictationStatusSchema = z.enum([
   'notice',
   'error',
   'permission-required',
+  'cancelled',
 ])
 
 export type DictationStatus = z.infer<typeof dictationStatusSchema>
@@ -353,23 +354,12 @@ export const historyEntrySchema = z.union([normalizedHistoryEntrySchema, legacyH
 
 export type HistoryEntry = z.infer<typeof historyEntrySchema>
 
-export const telemetryRecordSchema = z.object({
-  id: z.string(),
-  timestamp: z.string(),
-  kind: z.enum(['metric', 'error']),
-  name: z.string(),
-  detail: z.record(z.string(), z.string()).default({}),
-})
-
-export type TelemetryRecord = z.infer<typeof telemetryRecordSchema>
-
 export const settingsSchema = z.object({
   launchOnLogin: z.boolean().default(true),
   pushToTalkHotkey: z.string().default('Ctrl+Alt'),
   toggleHotkey: z.string().default('Shift+Alt'),
   preferredMicrophoneId: z.string().nullable().default(null),
   sendContextAutomatically: z.boolean().default(true),
-  telemetryEnabled: z.boolean().default(true),
   autoUpdateEnabled: z.boolean().default(true),
   updateChannel: z.enum(['stable', 'beta']).default('stable'),
   insertionStreamingMode: insertionStreamingModeSchema.default('letter-by-letter'),
@@ -393,7 +383,6 @@ export const settingsPatchSchema = z.object({
   toggleHotkey: z.string().optional(),
   preferredMicrophoneId: z.string().nullable().optional(),
   sendContextAutomatically: z.boolean().optional(),
-  telemetryEnabled: z.boolean().optional(),
   autoUpdateEnabled: z.boolean().optional(),
   updateChannel: z.enum(['stable', 'beta']).optional(),
   insertionStreamingMode: insertionStreamingModeSchema.optional(),
@@ -446,13 +435,6 @@ export const recorderWarmupStatusSchema = z.enum(['warmed', 'skipped', 'failed']
 
 export type RecorderWarmupStatus = z.infer<typeof recorderWarmupStatusSchema>
 
-export const historyAudioAssetSchema = z.object({
-  mimeType: z.string(),
-  base64: z.string(),
-})
-
-export type HistoryAudioAsset = z.infer<typeof historyAudioAssetSchema>
-
 export const insertionBenchmarkResultSchema = z.object({
   mode: insertionStreamingModeSchema,
   effectiveMode: insertionStreamingModeSchema,
@@ -495,19 +477,9 @@ export const permissionStateSchema = z.object({
 
 export type PermissionState = z.infer<typeof permissionStateSchema>
 
-export const overlayViewModelSchema = z.object({
-  session: dictationSessionSchema.nullable(),
-  settings: settingsSchema,
-  permissions: permissionStateSchema,
-})
-
-export type OverlayViewModel = z.infer<typeof overlayViewModelSchema>
-
 export const dashboardViewModelSchema = z.object({
-  session: dictationSessionSchema.nullable(),
   settings: settingsSchema,
   history: z.array(historyEntrySchema),
-  telemetryTail: z.array(telemetryRecordSchema),
   permissions: permissionStateSchema,
   updateState: updateStateSchema,
   appVersion: z.string(),
@@ -541,7 +513,6 @@ export const dictationAudioPayloadSchema = z.object({
 export type DictationAudioPayload = z.input<typeof dictationAudioPayloadSchema>
 
 export const apiKeyInputSchema = z.string().trim().max(4096)
-export const historyAudioRequestSchema = z.string().min(1)
 export const sessionIdInputSchema = z.string().min(1)
 
 export const deriveHistoryDurations = (timing: HistorySessionTiming): HistorySessionDurations => {

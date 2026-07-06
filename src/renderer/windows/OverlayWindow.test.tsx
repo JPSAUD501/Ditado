@@ -1,10 +1,11 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
 import i18n from '@renderer/i18n'
 import { OverlayWindow } from './OverlayWindow'
 import { defaultPermissionState, defaultSettings } from '@shared/defaults'
-import type { DictationSession } from '@shared/contracts'
+import type { DashboardViewModel, DictationSession } from '@shared/contracts'
+import { renderWithSyncore, syncoreTestStateEvent } from '@renderer/test/syncoreTestClient'
 
 const noticeSession: DictationSession = {
   id: 'session-1',
@@ -66,27 +67,34 @@ const updatingNoticeSession: DictationSession = {
 }
 
 const installOverlayApi = (session: DictationSession | null): void => {
+  ;(window as Window & {
+    __syncoreDashboardState?: DashboardViewModel
+    __syncoreActiveSession?: DictationSession | null
+  }).__syncoreDashboardState = {
+    settings: defaultSettings,
+    history: [],
+    permissions: defaultPermissionState,
+    updateState: {
+      enabled: true,
+      channel: 'stable',
+      lastCheckedAt: null,
+      status: 'idle',
+      downloadProgress: null,
+    },
+    appVersion: '0.0.0-test',
+  }
+  ;(window as Window & {
+    __syncoreActiveSession?: DictationSession | null
+  }).__syncoreActiveSession = session
+  window.dispatchEvent(new Event(syncoreTestStateEvent))
   window.ditado = {
-    getOverlayState: vi.fn(async () => ({
-      session,
-      settings: defaultSettings,
-      permissions: defaultPermissionState,
-    })),
     getDashboardState: vi.fn(),
-    subscribeOverlayState: vi.fn((listener) => {
-      listener({
-        session,
-        settings: defaultSettings,
-        permissions: defaultPermissionState,
-      })
-      return () => undefined
-    }),
-    subscribeDashboardState: vi.fn(() => () => undefined),
     subscribeDashboardTabRequests: vi.fn(() => () => undefined),
     startPushToTalk: vi.fn(async () => undefined),
     stopPushToTalk: vi.fn(async () => undefined),
     toggleDictation: vi.fn(async () => undefined),
     cancelDictation: vi.fn(async () => undefined),
+    setOnboardingDictationEnabled: vi.fn(async () => undefined),
     notifyRecorderStarted: vi.fn(async () => undefined),
     notifyRecorderFailed: vi.fn(async () => undefined),
     notifyRecorderReady: vi.fn(async () => undefined),
@@ -102,8 +110,6 @@ const installOverlayApi = (session: DictationSession | null): void => {
     openDashboardTab: vi.fn(async () => undefined),
     clearHistory: vi.fn(async () => undefined),
     deleteHistoryEntry: vi.fn(async () => undefined),
-    getHistoryAudio: vi.fn(async () => null),
-    getTelemetryTail: vi.fn(async () => []),
     checkForUpdates: vi.fn(async () => undefined),
     downloadUpdate: vi.fn(async () => undefined),
     installUpdate: vi.fn(async () => undefined),
@@ -116,7 +122,7 @@ const installOverlayApi = (session: DictationSession | null): void => {
 describe('OverlayWindow', () => {
   it('renders the translated updating notice for startup updates', async () => {
     installOverlayApi(updatingNoticeSession)
-    render(<OverlayWindow />)
+    renderWithSyncore(<OverlayWindow />)
 
     expect(await screen.findByText(i18n.t('notices.updating'))).toBeInTheDocument()
     expect(screen.queryByText('notices.updating')).toBeNull()
@@ -124,7 +130,7 @@ describe('OverlayWindow', () => {
 
   it('renders the translated no speech notice without falling back to the raw key', async () => {
     installOverlayApi(noSpeechNoticeSession)
-    render(<OverlayWindow />)
+    renderWithSyncore(<OverlayWindow />)
 
     expect(await screen.findByText(i18n.t('notices.noSpeechDetected'))).toBeInTheDocument()
     expect(screen.queryByText('notices.noSpeechDetected')).toBeNull()
@@ -133,7 +139,7 @@ describe('OverlayWindow', () => {
   it('renders nothing while there is no active dictation session', async () => {
     installOverlayApi(null)
 
-    const { container } = render(<OverlayWindow />)
+    const { container } = renderWithSyncore(<OverlayWindow />)
 
     await waitFor(() => {
       expect(container.querySelector('.overlay-shell')).toBeInTheDocument()
@@ -144,7 +150,7 @@ describe('OverlayWindow', () => {
 
   it('renders the short-press hint when the session is in notice state', async () => {
     installOverlayApi(noticeSession)
-    render(<OverlayWindow />)
+    renderWithSyncore(<OverlayWindow />)
 
     expect(await screen.findByText(/toggle: shift\+alt/i)).toBeInTheDocument()
     const chip = document.querySelector('.overlay-chip')
@@ -154,7 +160,7 @@ describe('OverlayWindow', () => {
 
   it('shows a distinct mode indicator for toggle dictation', async () => {
     installOverlayApi(toggleSession)
-    render(<OverlayWindow />)
+    renderWithSyncore(<OverlayWindow />)
 
     await waitFor(() => {
       const chip = document.querySelector('.overlay-chip')
@@ -165,7 +171,7 @@ describe('OverlayWindow', () => {
 
   it('renders App instead of Unknown App', async () => {
     installOverlayApi(unknownAppSession)
-    render(<OverlayWindow />)
+    renderWithSyncore(<OverlayWindow />)
 
     expect(await screen.findByText('App')).toBeInTheDocument()
     expect(screen.queryByText('Unknown App')).toBeNull()
