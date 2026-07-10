@@ -1,0 +1,5187 @@
+{
+  "formatVersion": 4,
+  "plannerVersion": 3,
+  "tables": [
+    {
+      "name": "dictationSessions",
+      "validator": {
+        "kind": "object",
+        "shape": {
+          "sessionId": {
+            "validator": {
+              "kind": "string"
+            },
+            "optional": false
+          },
+          "isActive": {
+            "validator": {
+              "kind": "boolean"
+            },
+            "optional": false
+          },
+          "activationMode": {
+            "validator": {
+              "kind": "enum",
+              "values": [
+                "push-to-talk",
+                "toggle"
+              ]
+            },
+            "optional": false
+          },
+          "status": {
+            "validator": {
+              "kind": "enum",
+              "values": [
+                "arming",
+                "listening",
+                "processing",
+                "streaming",
+                "completed",
+                "notice",
+                "error",
+                "permission-required",
+                "cancelled"
+              ]
+            },
+            "optional": false
+          },
+          "captureIntent": {
+            "validator": {
+              "kind": "enum",
+              "values": [
+                "none",
+                "start",
+                "stop"
+              ]
+            },
+            "optional": false
+          },
+          "startedAt": {
+            "validator": {
+              "kind": "string"
+            },
+            "optional": false
+          },
+          "finishedAt": {
+            "validator": {
+              "kind": "union",
+              "members": [
+                {
+                  "kind": "string"
+                },
+                {
+                  "kind": "null"
+                }
+              ]
+            },
+            "optional": false
+          },
+          "processingStartedAt": {
+            "validator": {
+              "kind": "union",
+              "members": [
+                {
+                  "kind": "string"
+                },
+                {
+                  "kind": "null"
+                }
+              ]
+            },
+            "optional": false
+          },
+          "targetApp": {
+            "validator": {
+              "kind": "string"
+            },
+            "optional": false
+          },
+          "context": {
+            "validator": {
+              "kind": "object",
+              "shape": {
+                "appName": {
+                  "validator": {
+                    "kind": "string"
+                  },
+                  "optional": false
+                },
+                "windowTitle": {
+                  "validator": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "string"
+                      },
+                      {
+                        "kind": "null"
+                      }
+                    ]
+                  },
+                  "optional": false
+                },
+                "selectedText": {
+                  "validator": {
+                    "kind": "string"
+                  },
+                  "optional": false
+                },
+                "permissionsGranted": {
+                  "validator": {
+                    "kind": "boolean"
+                  },
+                  "optional": false
+                },
+                "confidence": {
+                  "validator": {
+                    "kind": "enum",
+                    "values": [
+                      "high",
+                      "partial",
+                      "low"
+                    ]
+                  },
+                  "optional": false
+                },
+                "capturedAt": {
+                  "validator": {
+                    "kind": "string"
+                  },
+                  "optional": false
+                }
+              }
+            },
+            "optional": false
+          },
+          "insertionPlan": {
+            "validator": {
+              "kind": "object",
+              "shape": {
+                "strategy": {
+                  "validator": {
+                    "kind": "enum",
+                    "values": [
+                      "replace-selection",
+                      "insert-at-cursor"
+                    ]
+                  },
+                  "optional": false
+                },
+                "targetApp": {
+                  "validator": {
+                    "kind": "string"
+                  },
+                  "optional": false
+                },
+                "capability": {
+                  "validator": {
+                    "kind": "enum",
+                    "values": [
+                      "automation",
+                      "clipboard"
+                    ]
+                  },
+                  "optional": false
+                }
+              }
+            },
+            "optional": false
+          },
+          "partialText": {
+            "validator": {
+              "kind": "string"
+            },
+            "optional": false
+          },
+          "finalText": {
+            "validator": {
+              "kind": "string"
+            },
+            "optional": false
+          },
+          "errorMessage": {
+            "validator": {
+              "kind": "union",
+              "members": [
+                {
+                  "kind": "string"
+                },
+                {
+                  "kind": "null"
+                }
+              ]
+            },
+            "optional": false
+          },
+          "noticeMessage": {
+            "validator": {
+              "kind": "union",
+              "members": [
+                {
+                  "kind": "string"
+                },
+                {
+                  "kind": "null"
+                }
+              ]
+            },
+            "optional": false
+          },
+          "timing": {
+            "validator": {
+              "kind": "object",
+              "shape": {
+                "sessionStartedMs": {
+                  "validator": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "number"
+                      },
+                      {
+                        "kind": "null"
+                      }
+                    ]
+                  },
+                  "optional": false
+                },
+                "contextPreviewStartedMs": {
+                  "validator": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "number"
+                      },
+                      {
+                        "kind": "null"
+                      }
+                    ]
+                  },
+                  "optional": false
+                },
+                "contextPreviewCompletedMs": {
+                  "validator": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "number"
+                      },
+                      {
+                        "kind": "null"
+                      }
+                    ]
+                  },
+                  "optional": false
+                },
+                "contextRefreshStartedMs": {
+                  "validator": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "number"
+                      },
+                      {
+                        "kind": "null"
+                      }
+                    ]
+                  },
+                  "optional": false
+                },
+                "contextRefreshCompletedMs": {
+                  "validator": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "number"
+                      },
+                      {
+                        "kind": "null"
+                      }
+                    ]
+                  },
+                  "optional": false
+                },
+                "submissionStartedMs": {
+                  "validator": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "number"
+                      },
+                      {
+                        "kind": "null"
+                      }
+                    ]
+                  },
+                  "optional": false
+                },
+                "stopRequestedMs": {
+                  "validator": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "number"
+                      },
+                      {
+                        "kind": "null"
+                      }
+                    ]
+                  },
+                  "optional": false
+                },
+                "microphoneRequestStartedMs": {
+                  "validator": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "number"
+                      },
+                      {
+                        "kind": "null"
+                      }
+                    ]
+                  },
+                  "optional": false
+                },
+                "microphoneRequestCompletedMs": {
+                  "validator": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "number"
+                      },
+                      {
+                        "kind": "null"
+                      }
+                    ]
+                  },
+                  "optional": false
+                },
+                "recordingStartedMs": {
+                  "validator": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "number"
+                      },
+                      {
+                        "kind": "null"
+                      }
+                    ]
+                  },
+                  "optional": false
+                },
+                "recordingEndedMs": {
+                  "validator": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "number"
+                      },
+                      {
+                        "kind": "null"
+                      }
+                    ]
+                  },
+                  "optional": false
+                },
+                "recorderStopStartedMs": {
+                  "validator": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "number"
+                      },
+                      {
+                        "kind": "null"
+                      }
+                    ]
+                  },
+                  "optional": false
+                },
+                "mediaRecorderStopCompletedMs": {
+                  "validator": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "number"
+                      },
+                      {
+                        "kind": "null"
+                      }
+                    ]
+                  },
+                  "optional": false
+                },
+                "audioPreparationStartedMs": {
+                  "validator": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "number"
+                      },
+                      {
+                        "kind": "null"
+                      }
+                    ]
+                  },
+                  "optional": false
+                },
+                "audioPreparationEndedMs": {
+                  "validator": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "number"
+                      },
+                      {
+                        "kind": "null"
+                      }
+                    ]
+                  },
+                  "optional": false
+                },
+                "processingStartedMs": {
+                  "validator": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "number"
+                      },
+                      {
+                        "kind": "null"
+                      }
+                    ]
+                  },
+                  "optional": false
+                },
+                "llmRequestStartedMs": {
+                  "validator": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "number"
+                      },
+                      {
+                        "kind": "null"
+                      }
+                    ]
+                  },
+                  "optional": false
+                },
+                "llmResponseHeadersMs": {
+                  "validator": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "number"
+                      },
+                      {
+                        "kind": "null"
+                      }
+                    ]
+                  },
+                  "optional": false
+                },
+                "firstTokenMs": {
+                  "validator": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "number"
+                      },
+                      {
+                        "kind": "null"
+                      }
+                    ]
+                  },
+                  "optional": false
+                },
+                "llmCompletedMs": {
+                  "validator": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "number"
+                      },
+                      {
+                        "kind": "null"
+                      }
+                    ]
+                  },
+                  "optional": false
+                },
+                "insertionStartedMs": {
+                  "validator": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "number"
+                      },
+                      {
+                        "kind": "null"
+                      }
+                    ]
+                  },
+                  "optional": false
+                },
+                "insertionCompletedMs": {
+                  "validator": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "number"
+                      },
+                      {
+                        "kind": "null"
+                      }
+                    ]
+                  },
+                  "optional": false
+                },
+                "sessionFinishedMs": {
+                  "validator": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "number"
+                      },
+                      {
+                        "kind": "null"
+                      }
+                    ]
+                  },
+                  "optional": false
+                }
+              }
+            },
+            "optional": false
+          },
+          "audio": {
+            "validator": {
+              "kind": "object",
+              "shape": {
+                "durationMs": {
+                  "validator": {
+                    "kind": "number"
+                  },
+                  "optional": false
+                },
+                "mimeType": {
+                  "validator": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "string"
+                      },
+                      {
+                        "kind": "null"
+                      }
+                    ]
+                  },
+                  "optional": false
+                },
+                "bytes": {
+                  "validator": {
+                    "kind": "number"
+                  },
+                  "optional": false
+                },
+                "speechDetected": {
+                  "validator": {
+                    "kind": "boolean"
+                  },
+                  "optional": false
+                },
+                "peakAmplitude": {
+                  "validator": {
+                    "kind": "number"
+                  },
+                  "optional": false
+                },
+                "rmsAmplitude": {
+                  "validator": {
+                    "kind": "number"
+                  },
+                  "optional": false
+                },
+                "languageHint": {
+                  "validator": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "string"
+                      },
+                      {
+                        "kind": "null"
+                      }
+                    ]
+                  },
+                  "optional": false
+                },
+                "stopReason": {
+                  "validator": {
+                    "kind": "enum",
+                    "values": [
+                      "user-stop",
+                      "max-duration",
+                      "cancelled",
+                      "unknown"
+                    ]
+                  },
+                  "optional": false
+                },
+                "maxDurationReached": {
+                  "validator": {
+                    "kind": "boolean"
+                  },
+                  "optional": false
+                }
+              }
+            },
+            "optional": false
+          },
+          "llm": {
+            "validator": {
+              "kind": "object",
+              "shape": {
+                "provider": {
+                  "validator": {
+                    "kind": "string"
+                  },
+                  "optional": false
+                },
+                "modelId": {
+                  "validator": {
+                    "kind": "string"
+                  },
+                  "optional": false
+                },
+                "finishReason": {
+                  "validator": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "string"
+                      },
+                      {
+                        "kind": "null"
+                      }
+                    ]
+                  },
+                  "optional": false
+                },
+                "usedContext": {
+                  "validator": {
+                    "kind": "boolean"
+                  },
+                  "optional": false
+                }
+              }
+            },
+            "optional": false
+          },
+          "insertion": {
+            "validator": {
+              "kind": "object",
+              "shape": {
+                "strategy": {
+                  "validator": {
+                    "kind": "enum",
+                    "values": [
+                      "replace-selection",
+                      "insert-at-cursor"
+                    ]
+                  },
+                  "optional": false
+                },
+                "requestedMode": {
+                  "validator": {
+                    "kind": "enum",
+                    "values": [
+                      "letter-by-letter",
+                      "all-at-once"
+                    ]
+                  },
+                  "optional": false
+                },
+                "effectiveMode": {
+                  "validator": {
+                    "kind": "enum",
+                    "values": [
+                      "letter-by-letter",
+                      "all-at-once"
+                    ]
+                  },
+                  "optional": false
+                },
+                "method": {
+                  "validator": {
+                    "kind": "enum",
+                    "values": [
+                      "enigo-letter",
+                      "clipboard-all-at-once"
+                    ]
+                  },
+                  "optional": false
+                },
+                "fallbackUsed": {
+                  "validator": {
+                    "kind": "boolean"
+                  },
+                  "optional": false
+                },
+                "targetApp": {
+                  "validator": {
+                    "kind": "string"
+                  },
+                  "optional": false
+                },
+                "writtenCharacterCount": {
+                  "validator": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "number"
+                      },
+                      {
+                        "kind": "null"
+                      }
+                    ]
+                  },
+                  "optional": false
+                }
+              }
+            },
+            "optional": false
+          },
+          "historyStatus": {
+            "validator": {
+              "kind": "enum",
+              "values": [
+                "pending",
+                "saved",
+                "failed",
+                "not-required"
+              ]
+            },
+            "optional": false
+          },
+          "historyError": {
+            "validator": {
+              "kind": "union",
+              "members": [
+                {
+                  "kind": "string"
+                },
+                {
+                  "kind": "null"
+                }
+              ]
+            },
+            "optional": false
+          },
+          "createdAtMs": {
+            "validator": {
+              "kind": "number"
+            },
+            "optional": false
+          },
+          "updatedAtMs": {
+            "validator": {
+              "kind": "number"
+            },
+            "optional": false
+          }
+        }
+      },
+      "fieldPaths": [
+        "sessionId",
+        "isActive",
+        "activationMode",
+        "status",
+        "captureIntent",
+        "startedAt",
+        "finishedAt",
+        "processingStartedAt",
+        "targetApp",
+        "context",
+        "context.appName",
+        "context.windowTitle",
+        "context.selectedText",
+        "context.permissionsGranted",
+        "context.confidence",
+        "context.capturedAt",
+        "insertionPlan",
+        "insertionPlan.strategy",
+        "insertionPlan.targetApp",
+        "insertionPlan.capability",
+        "partialText",
+        "finalText",
+        "errorMessage",
+        "noticeMessage",
+        "timing",
+        "timing.sessionStartedMs",
+        "timing.contextPreviewStartedMs",
+        "timing.contextPreviewCompletedMs",
+        "timing.contextRefreshStartedMs",
+        "timing.contextRefreshCompletedMs",
+        "timing.submissionStartedMs",
+        "timing.stopRequestedMs",
+        "timing.microphoneRequestStartedMs",
+        "timing.microphoneRequestCompletedMs",
+        "timing.recordingStartedMs",
+        "timing.recordingEndedMs",
+        "timing.recorderStopStartedMs",
+        "timing.mediaRecorderStopCompletedMs",
+        "timing.audioPreparationStartedMs",
+        "timing.audioPreparationEndedMs",
+        "timing.processingStartedMs",
+        "timing.llmRequestStartedMs",
+        "timing.llmResponseHeadersMs",
+        "timing.firstTokenMs",
+        "timing.llmCompletedMs",
+        "timing.insertionStartedMs",
+        "timing.insertionCompletedMs",
+        "timing.sessionFinishedMs",
+        "audio",
+        "audio.durationMs",
+        "audio.mimeType",
+        "audio.bytes",
+        "audio.speechDetected",
+        "audio.peakAmplitude",
+        "audio.rmsAmplitude",
+        "audio.languageHint",
+        "audio.stopReason",
+        "audio.maxDurationReached",
+        "llm",
+        "llm.provider",
+        "llm.modelId",
+        "llm.finishReason",
+        "llm.usedContext",
+        "insertion",
+        "insertion.strategy",
+        "insertion.requestedMode",
+        "insertion.effectiveMode",
+        "insertion.method",
+        "insertion.fallbackUsed",
+        "insertion.targetApp",
+        "insertion.writtenCharacterCount",
+        "historyStatus",
+        "historyError",
+        "createdAtMs",
+        "updatedAtMs"
+      ],
+      "fields": [
+        {
+          "name": "activationMode",
+          "validator": {
+            "kind": "enum",
+            "values": [
+              "push-to-talk",
+              "toggle"
+            ]
+          },
+          "storage": {
+            "kind": "enum",
+            "values": [
+              "push-to-talk",
+              "toggle"
+            ]
+          },
+          "optional": false
+        },
+        {
+          "name": "audio",
+          "validator": {
+            "kind": "object",
+            "shape": {
+              "durationMs": {
+                "validator": {
+                  "kind": "number"
+                },
+                "optional": false
+              },
+              "mimeType": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "string"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "bytes": {
+                "validator": {
+                  "kind": "number"
+                },
+                "optional": false
+              },
+              "speechDetected": {
+                "validator": {
+                  "kind": "boolean"
+                },
+                "optional": false
+              },
+              "peakAmplitude": {
+                "validator": {
+                  "kind": "number"
+                },
+                "optional": false
+              },
+              "rmsAmplitude": {
+                "validator": {
+                  "kind": "number"
+                },
+                "optional": false
+              },
+              "languageHint": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "string"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "stopReason": {
+                "validator": {
+                  "kind": "enum",
+                  "values": [
+                    "user-stop",
+                    "max-duration",
+                    "cancelled",
+                    "unknown"
+                  ]
+                },
+                "optional": false
+              },
+              "maxDurationReached": {
+                "validator": {
+                  "kind": "boolean"
+                },
+                "optional": false
+              }
+            }
+          },
+          "storage": {
+            "kind": "object",
+            "shape": {
+              "durationMs": {
+                "validator": {
+                  "kind": "number"
+                },
+                "optional": false
+              },
+              "mimeType": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "string"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "bytes": {
+                "validator": {
+                  "kind": "number"
+                },
+                "optional": false
+              },
+              "speechDetected": {
+                "validator": {
+                  "kind": "boolean"
+                },
+                "optional": false
+              },
+              "peakAmplitude": {
+                "validator": {
+                  "kind": "number"
+                },
+                "optional": false
+              },
+              "rmsAmplitude": {
+                "validator": {
+                  "kind": "number"
+                },
+                "optional": false
+              },
+              "languageHint": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "string"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "stopReason": {
+                "validator": {
+                  "kind": "enum",
+                  "values": [
+                    "user-stop",
+                    "max-duration",
+                    "cancelled",
+                    "unknown"
+                  ]
+                },
+                "optional": false
+              },
+              "maxDurationReached": {
+                "validator": {
+                  "kind": "boolean"
+                },
+                "optional": false
+              }
+            }
+          },
+          "optional": false
+        },
+        {
+          "name": "captureIntent",
+          "validator": {
+            "kind": "enum",
+            "values": [
+              "none",
+              "start",
+              "stop"
+            ]
+          },
+          "storage": {
+            "kind": "enum",
+            "values": [
+              "none",
+              "start",
+              "stop"
+            ]
+          },
+          "optional": false
+        },
+        {
+          "name": "context",
+          "validator": {
+            "kind": "object",
+            "shape": {
+              "appName": {
+                "validator": {
+                  "kind": "string"
+                },
+                "optional": false
+              },
+              "windowTitle": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "string"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "selectedText": {
+                "validator": {
+                  "kind": "string"
+                },
+                "optional": false
+              },
+              "permissionsGranted": {
+                "validator": {
+                  "kind": "boolean"
+                },
+                "optional": false
+              },
+              "confidence": {
+                "validator": {
+                  "kind": "enum",
+                  "values": [
+                    "high",
+                    "partial",
+                    "low"
+                  ]
+                },
+                "optional": false
+              },
+              "capturedAt": {
+                "validator": {
+                  "kind": "string"
+                },
+                "optional": false
+              }
+            }
+          },
+          "storage": {
+            "kind": "object",
+            "shape": {
+              "appName": {
+                "validator": {
+                  "kind": "string"
+                },
+                "optional": false
+              },
+              "windowTitle": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "string"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "selectedText": {
+                "validator": {
+                  "kind": "string"
+                },
+                "optional": false
+              },
+              "permissionsGranted": {
+                "validator": {
+                  "kind": "boolean"
+                },
+                "optional": false
+              },
+              "confidence": {
+                "validator": {
+                  "kind": "enum",
+                  "values": [
+                    "high",
+                    "partial",
+                    "low"
+                  ]
+                },
+                "optional": false
+              },
+              "capturedAt": {
+                "validator": {
+                  "kind": "string"
+                },
+                "optional": false
+              }
+            }
+          },
+          "optional": false
+        },
+        {
+          "name": "createdAtMs",
+          "validator": {
+            "kind": "number"
+          },
+          "storage": {
+            "kind": "number"
+          },
+          "optional": false
+        },
+        {
+          "name": "errorMessage",
+          "validator": {
+            "kind": "union",
+            "members": [
+              {
+                "kind": "string"
+              },
+              {
+                "kind": "null"
+              }
+            ]
+          },
+          "storage": {
+            "kind": "union",
+            "members": [
+              {
+                "kind": "string"
+              },
+              {
+                "kind": "null"
+              }
+            ]
+          },
+          "optional": false
+        },
+        {
+          "name": "finalText",
+          "validator": {
+            "kind": "string"
+          },
+          "storage": {
+            "kind": "string"
+          },
+          "optional": false
+        },
+        {
+          "name": "finishedAt",
+          "validator": {
+            "kind": "union",
+            "members": [
+              {
+                "kind": "string"
+              },
+              {
+                "kind": "null"
+              }
+            ]
+          },
+          "storage": {
+            "kind": "union",
+            "members": [
+              {
+                "kind": "string"
+              },
+              {
+                "kind": "null"
+              }
+            ]
+          },
+          "optional": false
+        },
+        {
+          "name": "historyError",
+          "validator": {
+            "kind": "union",
+            "members": [
+              {
+                "kind": "string"
+              },
+              {
+                "kind": "null"
+              }
+            ]
+          },
+          "storage": {
+            "kind": "union",
+            "members": [
+              {
+                "kind": "string"
+              },
+              {
+                "kind": "null"
+              }
+            ]
+          },
+          "optional": false
+        },
+        {
+          "name": "historyStatus",
+          "validator": {
+            "kind": "enum",
+            "values": [
+              "pending",
+              "saved",
+              "failed",
+              "not-required"
+            ]
+          },
+          "storage": {
+            "kind": "enum",
+            "values": [
+              "pending",
+              "saved",
+              "failed",
+              "not-required"
+            ]
+          },
+          "optional": false
+        },
+        {
+          "name": "insertion",
+          "validator": {
+            "kind": "object",
+            "shape": {
+              "strategy": {
+                "validator": {
+                  "kind": "enum",
+                  "values": [
+                    "replace-selection",
+                    "insert-at-cursor"
+                  ]
+                },
+                "optional": false
+              },
+              "requestedMode": {
+                "validator": {
+                  "kind": "enum",
+                  "values": [
+                    "letter-by-letter",
+                    "all-at-once"
+                  ]
+                },
+                "optional": false
+              },
+              "effectiveMode": {
+                "validator": {
+                  "kind": "enum",
+                  "values": [
+                    "letter-by-letter",
+                    "all-at-once"
+                  ]
+                },
+                "optional": false
+              },
+              "method": {
+                "validator": {
+                  "kind": "enum",
+                  "values": [
+                    "enigo-letter",
+                    "clipboard-all-at-once"
+                  ]
+                },
+                "optional": false
+              },
+              "fallbackUsed": {
+                "validator": {
+                  "kind": "boolean"
+                },
+                "optional": false
+              },
+              "targetApp": {
+                "validator": {
+                  "kind": "string"
+                },
+                "optional": false
+              },
+              "writtenCharacterCount": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              }
+            }
+          },
+          "storage": {
+            "kind": "object",
+            "shape": {
+              "strategy": {
+                "validator": {
+                  "kind": "enum",
+                  "values": [
+                    "replace-selection",
+                    "insert-at-cursor"
+                  ]
+                },
+                "optional": false
+              },
+              "requestedMode": {
+                "validator": {
+                  "kind": "enum",
+                  "values": [
+                    "letter-by-letter",
+                    "all-at-once"
+                  ]
+                },
+                "optional": false
+              },
+              "effectiveMode": {
+                "validator": {
+                  "kind": "enum",
+                  "values": [
+                    "letter-by-letter",
+                    "all-at-once"
+                  ]
+                },
+                "optional": false
+              },
+              "method": {
+                "validator": {
+                  "kind": "enum",
+                  "values": [
+                    "enigo-letter",
+                    "clipboard-all-at-once"
+                  ]
+                },
+                "optional": false
+              },
+              "fallbackUsed": {
+                "validator": {
+                  "kind": "boolean"
+                },
+                "optional": false
+              },
+              "targetApp": {
+                "validator": {
+                  "kind": "string"
+                },
+                "optional": false
+              },
+              "writtenCharacterCount": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              }
+            }
+          },
+          "optional": false
+        },
+        {
+          "name": "insertionPlan",
+          "validator": {
+            "kind": "object",
+            "shape": {
+              "strategy": {
+                "validator": {
+                  "kind": "enum",
+                  "values": [
+                    "replace-selection",
+                    "insert-at-cursor"
+                  ]
+                },
+                "optional": false
+              },
+              "targetApp": {
+                "validator": {
+                  "kind": "string"
+                },
+                "optional": false
+              },
+              "capability": {
+                "validator": {
+                  "kind": "enum",
+                  "values": [
+                    "automation",
+                    "clipboard"
+                  ]
+                },
+                "optional": false
+              }
+            }
+          },
+          "storage": {
+            "kind": "object",
+            "shape": {
+              "strategy": {
+                "validator": {
+                  "kind": "enum",
+                  "values": [
+                    "replace-selection",
+                    "insert-at-cursor"
+                  ]
+                },
+                "optional": false
+              },
+              "targetApp": {
+                "validator": {
+                  "kind": "string"
+                },
+                "optional": false
+              },
+              "capability": {
+                "validator": {
+                  "kind": "enum",
+                  "values": [
+                    "automation",
+                    "clipboard"
+                  ]
+                },
+                "optional": false
+              }
+            }
+          },
+          "optional": false
+        },
+        {
+          "name": "isActive",
+          "validator": {
+            "kind": "boolean"
+          },
+          "storage": {
+            "kind": "boolean"
+          },
+          "optional": false
+        },
+        {
+          "name": "llm",
+          "validator": {
+            "kind": "object",
+            "shape": {
+              "provider": {
+                "validator": {
+                  "kind": "string"
+                },
+                "optional": false
+              },
+              "modelId": {
+                "validator": {
+                  "kind": "string"
+                },
+                "optional": false
+              },
+              "finishReason": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "string"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "usedContext": {
+                "validator": {
+                  "kind": "boolean"
+                },
+                "optional": false
+              }
+            }
+          },
+          "storage": {
+            "kind": "object",
+            "shape": {
+              "provider": {
+                "validator": {
+                  "kind": "string"
+                },
+                "optional": false
+              },
+              "modelId": {
+                "validator": {
+                  "kind": "string"
+                },
+                "optional": false
+              },
+              "finishReason": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "string"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "usedContext": {
+                "validator": {
+                  "kind": "boolean"
+                },
+                "optional": false
+              }
+            }
+          },
+          "optional": false
+        },
+        {
+          "name": "noticeMessage",
+          "validator": {
+            "kind": "union",
+            "members": [
+              {
+                "kind": "string"
+              },
+              {
+                "kind": "null"
+              }
+            ]
+          },
+          "storage": {
+            "kind": "union",
+            "members": [
+              {
+                "kind": "string"
+              },
+              {
+                "kind": "null"
+              }
+            ]
+          },
+          "optional": false
+        },
+        {
+          "name": "partialText",
+          "validator": {
+            "kind": "string"
+          },
+          "storage": {
+            "kind": "string"
+          },
+          "optional": false
+        },
+        {
+          "name": "processingStartedAt",
+          "validator": {
+            "kind": "union",
+            "members": [
+              {
+                "kind": "string"
+              },
+              {
+                "kind": "null"
+              }
+            ]
+          },
+          "storage": {
+            "kind": "union",
+            "members": [
+              {
+                "kind": "string"
+              },
+              {
+                "kind": "null"
+              }
+            ]
+          },
+          "optional": false
+        },
+        {
+          "name": "sessionId",
+          "validator": {
+            "kind": "string"
+          },
+          "storage": {
+            "kind": "string"
+          },
+          "optional": false
+        },
+        {
+          "name": "startedAt",
+          "validator": {
+            "kind": "string"
+          },
+          "storage": {
+            "kind": "string"
+          },
+          "optional": false
+        },
+        {
+          "name": "status",
+          "validator": {
+            "kind": "enum",
+            "values": [
+              "arming",
+              "listening",
+              "processing",
+              "streaming",
+              "completed",
+              "notice",
+              "error",
+              "permission-required",
+              "cancelled"
+            ]
+          },
+          "storage": {
+            "kind": "enum",
+            "values": [
+              "arming",
+              "listening",
+              "processing",
+              "streaming",
+              "completed",
+              "notice",
+              "error",
+              "permission-required",
+              "cancelled"
+            ]
+          },
+          "optional": false
+        },
+        {
+          "name": "targetApp",
+          "validator": {
+            "kind": "string"
+          },
+          "storage": {
+            "kind": "string"
+          },
+          "optional": false
+        },
+        {
+          "name": "timing",
+          "validator": {
+            "kind": "object",
+            "shape": {
+              "sessionStartedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "contextPreviewStartedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "contextPreviewCompletedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "contextRefreshStartedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "contextRefreshCompletedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "submissionStartedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "stopRequestedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "microphoneRequestStartedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "microphoneRequestCompletedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "recordingStartedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "recordingEndedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "recorderStopStartedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "mediaRecorderStopCompletedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "audioPreparationStartedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "audioPreparationEndedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "processingStartedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "llmRequestStartedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "llmResponseHeadersMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "firstTokenMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "llmCompletedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "insertionStartedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "insertionCompletedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "sessionFinishedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              }
+            }
+          },
+          "storage": {
+            "kind": "object",
+            "shape": {
+              "sessionStartedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "contextPreviewStartedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "contextPreviewCompletedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "contextRefreshStartedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "contextRefreshCompletedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "submissionStartedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "stopRequestedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "microphoneRequestStartedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "microphoneRequestCompletedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "recordingStartedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "recordingEndedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "recorderStopStartedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "mediaRecorderStopCompletedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "audioPreparationStartedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "audioPreparationEndedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "processingStartedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "llmRequestStartedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "llmResponseHeadersMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "firstTokenMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "llmCompletedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "insertionStartedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "insertionCompletedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "sessionFinishedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              }
+            }
+          },
+          "optional": false
+        },
+        {
+          "name": "updatedAtMs",
+          "validator": {
+            "kind": "number"
+          },
+          "storage": {
+            "kind": "number"
+          },
+          "optional": false
+        }
+      ],
+      "indexes": [
+        {
+          "name": "by_active",
+          "fields": [
+            "isActive"
+          ]
+        },
+        {
+          "name": "by_created",
+          "fields": [
+            "createdAtMs"
+          ]
+        },
+        {
+          "name": "by_session",
+          "fields": [
+            "sessionId"
+          ]
+        },
+        {
+          "name": "by_updated",
+          "fields": [
+            "updatedAtMs"
+          ]
+        }
+      ],
+      "searchIndexes": []
+    },
+    {
+      "name": "historyAudio",
+      "validator": {
+        "kind": "object",
+        "shape": {
+          "historyEntryId": {
+            "validator": {
+              "kind": "id",
+              "tableName": "historyEntries"
+            },
+            "optional": false
+          },
+          "sessionId": {
+            "validator": {
+              "kind": "string"
+            },
+            "optional": false
+          },
+          "storageId": {
+            "validator": {
+              "kind": "string"
+            },
+            "optional": false
+          },
+          "mimeType": {
+            "validator": {
+              "kind": "string"
+            },
+            "optional": false
+          },
+          "durationMs": {
+            "validator": {
+              "kind": "number"
+            },
+            "optional": false
+          },
+          "bytes": {
+            "validator": {
+              "kind": "number"
+            },
+            "optional": false
+          },
+          "createdAtMs": {
+            "validator": {
+              "kind": "number"
+            },
+            "optional": false
+          }
+        }
+      },
+      "fieldPaths": [
+        "historyEntryId",
+        "sessionId",
+        "storageId",
+        "mimeType",
+        "durationMs",
+        "bytes",
+        "createdAtMs"
+      ],
+      "fields": [
+        {
+          "name": "bytes",
+          "validator": {
+            "kind": "number"
+          },
+          "storage": {
+            "kind": "number"
+          },
+          "optional": false
+        },
+        {
+          "name": "createdAtMs",
+          "validator": {
+            "kind": "number"
+          },
+          "storage": {
+            "kind": "number"
+          },
+          "optional": false
+        },
+        {
+          "name": "durationMs",
+          "validator": {
+            "kind": "number"
+          },
+          "storage": {
+            "kind": "number"
+          },
+          "optional": false
+        },
+        {
+          "name": "historyEntryId",
+          "validator": {
+            "kind": "id",
+            "tableName": "historyEntries"
+          },
+          "storage": {
+            "kind": "id",
+            "tableName": "historyEntries"
+          },
+          "optional": false
+        },
+        {
+          "name": "mimeType",
+          "validator": {
+            "kind": "string"
+          },
+          "storage": {
+            "kind": "string"
+          },
+          "optional": false
+        },
+        {
+          "name": "sessionId",
+          "validator": {
+            "kind": "string"
+          },
+          "storage": {
+            "kind": "string"
+          },
+          "optional": false
+        },
+        {
+          "name": "storageId",
+          "validator": {
+            "kind": "string"
+          },
+          "storage": {
+            "kind": "string"
+          },
+          "optional": false
+        }
+      ],
+      "indexes": [
+        {
+          "name": "by_created",
+          "fields": [
+            "createdAtMs"
+          ]
+        },
+        {
+          "name": "by_history",
+          "fields": [
+            "historyEntryId"
+          ]
+        },
+        {
+          "name": "by_session",
+          "fields": [
+            "sessionId"
+          ]
+        }
+      ],
+      "searchIndexes": []
+    },
+    {
+      "name": "historyEntries",
+      "validator": {
+        "kind": "object",
+        "shape": {
+          "sessionId": {
+            "validator": {
+              "kind": "string"
+            },
+            "optional": false
+          },
+          "createdAt": {
+            "validator": {
+              "kind": "string"
+            },
+            "optional": false
+          },
+          "createdAtMs": {
+            "validator": {
+              "kind": "number"
+            },
+            "optional": false
+          },
+          "outcome": {
+            "validator": {
+              "kind": "enum",
+              "values": [
+                "completed",
+                "error"
+              ]
+            },
+            "optional": false
+          },
+          "appName": {
+            "validator": {
+              "kind": "string"
+            },
+            "optional": false
+          },
+          "windowTitle": {
+            "validator": {
+              "kind": "union",
+              "members": [
+                {
+                  "kind": "string"
+                },
+                {
+                  "kind": "null"
+                }
+              ]
+            },
+            "optional": false
+          },
+          "activationMode": {
+            "validator": {
+              "kind": "enum",
+              "values": [
+                "push-to-talk",
+                "toggle"
+              ]
+            },
+            "optional": false
+          },
+          "modelId": {
+            "validator": {
+              "kind": "string"
+            },
+            "optional": false
+          },
+          "outputText": {
+            "validator": {
+              "kind": "string"
+            },
+            "optional": false
+          },
+          "errorMessage": {
+            "validator": {
+              "kind": "union",
+              "members": [
+                {
+                  "kind": "string"
+                },
+                {
+                  "kind": "null"
+                }
+              ]
+            },
+            "optional": false
+          },
+          "context": {
+            "validator": {
+              "kind": "object",
+              "shape": {
+                "appName": {
+                  "validator": {
+                    "kind": "string"
+                  },
+                  "optional": false
+                },
+                "windowTitle": {
+                  "validator": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "string"
+                      },
+                      {
+                        "kind": "null"
+                      }
+                    ]
+                  },
+                  "optional": false
+                },
+                "selectedText": {
+                  "validator": {
+                    "kind": "string"
+                  },
+                  "optional": false
+                },
+                "permissionsGranted": {
+                  "validator": {
+                    "kind": "boolean"
+                  },
+                  "optional": false
+                },
+                "confidence": {
+                  "validator": {
+                    "kind": "enum",
+                    "values": [
+                      "high",
+                      "partial",
+                      "low"
+                    ]
+                  },
+                  "optional": false
+                },
+                "capturedAt": {
+                  "validator": {
+                    "kind": "string"
+                  },
+                  "optional": false
+                }
+              }
+            },
+            "optional": false
+          },
+          "timing": {
+            "validator": {
+              "kind": "object",
+              "shape": {
+                "sessionStartedMs": {
+                  "validator": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "number"
+                      },
+                      {
+                        "kind": "null"
+                      }
+                    ]
+                  },
+                  "optional": false
+                },
+                "contextPreviewStartedMs": {
+                  "validator": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "number"
+                      },
+                      {
+                        "kind": "null"
+                      }
+                    ]
+                  },
+                  "optional": false
+                },
+                "contextPreviewCompletedMs": {
+                  "validator": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "number"
+                      },
+                      {
+                        "kind": "null"
+                      }
+                    ]
+                  },
+                  "optional": false
+                },
+                "contextRefreshStartedMs": {
+                  "validator": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "number"
+                      },
+                      {
+                        "kind": "null"
+                      }
+                    ]
+                  },
+                  "optional": false
+                },
+                "contextRefreshCompletedMs": {
+                  "validator": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "number"
+                      },
+                      {
+                        "kind": "null"
+                      }
+                    ]
+                  },
+                  "optional": false
+                },
+                "submissionStartedMs": {
+                  "validator": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "number"
+                      },
+                      {
+                        "kind": "null"
+                      }
+                    ]
+                  },
+                  "optional": false
+                },
+                "stopRequestedMs": {
+                  "validator": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "number"
+                      },
+                      {
+                        "kind": "null"
+                      }
+                    ]
+                  },
+                  "optional": false
+                },
+                "microphoneRequestStartedMs": {
+                  "validator": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "number"
+                      },
+                      {
+                        "kind": "null"
+                      }
+                    ]
+                  },
+                  "optional": false
+                },
+                "microphoneRequestCompletedMs": {
+                  "validator": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "number"
+                      },
+                      {
+                        "kind": "null"
+                      }
+                    ]
+                  },
+                  "optional": false
+                },
+                "recordingStartedMs": {
+                  "validator": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "number"
+                      },
+                      {
+                        "kind": "null"
+                      }
+                    ]
+                  },
+                  "optional": false
+                },
+                "recordingEndedMs": {
+                  "validator": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "number"
+                      },
+                      {
+                        "kind": "null"
+                      }
+                    ]
+                  },
+                  "optional": false
+                },
+                "recorderStopStartedMs": {
+                  "validator": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "number"
+                      },
+                      {
+                        "kind": "null"
+                      }
+                    ]
+                  },
+                  "optional": false
+                },
+                "mediaRecorderStopCompletedMs": {
+                  "validator": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "number"
+                      },
+                      {
+                        "kind": "null"
+                      }
+                    ]
+                  },
+                  "optional": false
+                },
+                "audioPreparationStartedMs": {
+                  "validator": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "number"
+                      },
+                      {
+                        "kind": "null"
+                      }
+                    ]
+                  },
+                  "optional": false
+                },
+                "audioPreparationEndedMs": {
+                  "validator": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "number"
+                      },
+                      {
+                        "kind": "null"
+                      }
+                    ]
+                  },
+                  "optional": false
+                },
+                "processingStartedMs": {
+                  "validator": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "number"
+                      },
+                      {
+                        "kind": "null"
+                      }
+                    ]
+                  },
+                  "optional": false
+                },
+                "llmRequestStartedMs": {
+                  "validator": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "number"
+                      },
+                      {
+                        "kind": "null"
+                      }
+                    ]
+                  },
+                  "optional": false
+                },
+                "llmResponseHeadersMs": {
+                  "validator": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "number"
+                      },
+                      {
+                        "kind": "null"
+                      }
+                    ]
+                  },
+                  "optional": false
+                },
+                "firstTokenMs": {
+                  "validator": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "number"
+                      },
+                      {
+                        "kind": "null"
+                      }
+                    ]
+                  },
+                  "optional": false
+                },
+                "llmCompletedMs": {
+                  "validator": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "number"
+                      },
+                      {
+                        "kind": "null"
+                      }
+                    ]
+                  },
+                  "optional": false
+                },
+                "insertionStartedMs": {
+                  "validator": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "number"
+                      },
+                      {
+                        "kind": "null"
+                      }
+                    ]
+                  },
+                  "optional": false
+                },
+                "insertionCompletedMs": {
+                  "validator": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "number"
+                      },
+                      {
+                        "kind": "null"
+                      }
+                    ]
+                  },
+                  "optional": false
+                },
+                "sessionFinishedMs": {
+                  "validator": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "number"
+                      },
+                      {
+                        "kind": "null"
+                      }
+                    ]
+                  },
+                  "optional": false
+                }
+              }
+            },
+            "optional": false
+          },
+          "audio": {
+            "validator": {
+              "kind": "object",
+              "shape": {
+                "durationMs": {
+                  "validator": {
+                    "kind": "number"
+                  },
+                  "optional": false
+                },
+                "mimeType": {
+                  "validator": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "string"
+                      },
+                      {
+                        "kind": "null"
+                      }
+                    ]
+                  },
+                  "optional": false
+                },
+                "bytes": {
+                  "validator": {
+                    "kind": "number"
+                  },
+                  "optional": false
+                },
+                "speechDetected": {
+                  "validator": {
+                    "kind": "boolean"
+                  },
+                  "optional": false
+                },
+                "peakAmplitude": {
+                  "validator": {
+                    "kind": "number"
+                  },
+                  "optional": false
+                },
+                "rmsAmplitude": {
+                  "validator": {
+                    "kind": "number"
+                  },
+                  "optional": false
+                },
+                "languageHint": {
+                  "validator": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "string"
+                      },
+                      {
+                        "kind": "null"
+                      }
+                    ]
+                  },
+                  "optional": false
+                },
+                "stopReason": {
+                  "validator": {
+                    "kind": "enum",
+                    "values": [
+                      "user-stop",
+                      "max-duration",
+                      "cancelled",
+                      "unknown"
+                    ]
+                  },
+                  "optional": false
+                },
+                "maxDurationReached": {
+                  "validator": {
+                    "kind": "boolean"
+                  },
+                  "optional": false
+                }
+              }
+            },
+            "optional": false
+          },
+          "llm": {
+            "validator": {
+              "kind": "object",
+              "shape": {
+                "provider": {
+                  "validator": {
+                    "kind": "string"
+                  },
+                  "optional": false
+                },
+                "modelId": {
+                  "validator": {
+                    "kind": "string"
+                  },
+                  "optional": false
+                },
+                "finishReason": {
+                  "validator": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "string"
+                      },
+                      {
+                        "kind": "null"
+                      }
+                    ]
+                  },
+                  "optional": false
+                },
+                "usedContext": {
+                  "validator": {
+                    "kind": "boolean"
+                  },
+                  "optional": false
+                }
+              }
+            },
+            "optional": false
+          },
+          "insertion": {
+            "validator": {
+              "kind": "object",
+              "shape": {
+                "strategy": {
+                  "validator": {
+                    "kind": "enum",
+                    "values": [
+                      "replace-selection",
+                      "insert-at-cursor"
+                    ]
+                  },
+                  "optional": false
+                },
+                "requestedMode": {
+                  "validator": {
+                    "kind": "enum",
+                    "values": [
+                      "letter-by-letter",
+                      "all-at-once"
+                    ]
+                  },
+                  "optional": false
+                },
+                "effectiveMode": {
+                  "validator": {
+                    "kind": "enum",
+                    "values": [
+                      "letter-by-letter",
+                      "all-at-once"
+                    ]
+                  },
+                  "optional": false
+                },
+                "method": {
+                  "validator": {
+                    "kind": "enum",
+                    "values": [
+                      "enigo-letter",
+                      "clipboard-all-at-once"
+                    ]
+                  },
+                  "optional": false
+                },
+                "fallbackUsed": {
+                  "validator": {
+                    "kind": "boolean"
+                  },
+                  "optional": false
+                },
+                "targetApp": {
+                  "validator": {
+                    "kind": "string"
+                  },
+                  "optional": false
+                },
+                "writtenCharacterCount": {
+                  "validator": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "number"
+                      },
+                      {
+                        "kind": "null"
+                      }
+                    ]
+                  },
+                  "optional": false
+                }
+              }
+            },
+            "optional": false
+          },
+          "searchText": {
+            "validator": {
+              "kind": "string"
+            },
+            "optional": false
+          }
+        }
+      },
+      "fieldPaths": [
+        "sessionId",
+        "createdAt",
+        "createdAtMs",
+        "outcome",
+        "appName",
+        "windowTitle",
+        "activationMode",
+        "modelId",
+        "outputText",
+        "errorMessage",
+        "context",
+        "context.appName",
+        "context.windowTitle",
+        "context.selectedText",
+        "context.permissionsGranted",
+        "context.confidence",
+        "context.capturedAt",
+        "timing",
+        "timing.sessionStartedMs",
+        "timing.contextPreviewStartedMs",
+        "timing.contextPreviewCompletedMs",
+        "timing.contextRefreshStartedMs",
+        "timing.contextRefreshCompletedMs",
+        "timing.submissionStartedMs",
+        "timing.stopRequestedMs",
+        "timing.microphoneRequestStartedMs",
+        "timing.microphoneRequestCompletedMs",
+        "timing.recordingStartedMs",
+        "timing.recordingEndedMs",
+        "timing.recorderStopStartedMs",
+        "timing.mediaRecorderStopCompletedMs",
+        "timing.audioPreparationStartedMs",
+        "timing.audioPreparationEndedMs",
+        "timing.processingStartedMs",
+        "timing.llmRequestStartedMs",
+        "timing.llmResponseHeadersMs",
+        "timing.firstTokenMs",
+        "timing.llmCompletedMs",
+        "timing.insertionStartedMs",
+        "timing.insertionCompletedMs",
+        "timing.sessionFinishedMs",
+        "audio",
+        "audio.durationMs",
+        "audio.mimeType",
+        "audio.bytes",
+        "audio.speechDetected",
+        "audio.peakAmplitude",
+        "audio.rmsAmplitude",
+        "audio.languageHint",
+        "audio.stopReason",
+        "audio.maxDurationReached",
+        "llm",
+        "llm.provider",
+        "llm.modelId",
+        "llm.finishReason",
+        "llm.usedContext",
+        "insertion",
+        "insertion.strategy",
+        "insertion.requestedMode",
+        "insertion.effectiveMode",
+        "insertion.method",
+        "insertion.fallbackUsed",
+        "insertion.targetApp",
+        "insertion.writtenCharacterCount",
+        "searchText"
+      ],
+      "fields": [
+        {
+          "name": "activationMode",
+          "validator": {
+            "kind": "enum",
+            "values": [
+              "push-to-talk",
+              "toggle"
+            ]
+          },
+          "storage": {
+            "kind": "enum",
+            "values": [
+              "push-to-talk",
+              "toggle"
+            ]
+          },
+          "optional": false
+        },
+        {
+          "name": "appName",
+          "validator": {
+            "kind": "string"
+          },
+          "storage": {
+            "kind": "string"
+          },
+          "optional": false
+        },
+        {
+          "name": "audio",
+          "validator": {
+            "kind": "object",
+            "shape": {
+              "durationMs": {
+                "validator": {
+                  "kind": "number"
+                },
+                "optional": false
+              },
+              "mimeType": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "string"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "bytes": {
+                "validator": {
+                  "kind": "number"
+                },
+                "optional": false
+              },
+              "speechDetected": {
+                "validator": {
+                  "kind": "boolean"
+                },
+                "optional": false
+              },
+              "peakAmplitude": {
+                "validator": {
+                  "kind": "number"
+                },
+                "optional": false
+              },
+              "rmsAmplitude": {
+                "validator": {
+                  "kind": "number"
+                },
+                "optional": false
+              },
+              "languageHint": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "string"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "stopReason": {
+                "validator": {
+                  "kind": "enum",
+                  "values": [
+                    "user-stop",
+                    "max-duration",
+                    "cancelled",
+                    "unknown"
+                  ]
+                },
+                "optional": false
+              },
+              "maxDurationReached": {
+                "validator": {
+                  "kind": "boolean"
+                },
+                "optional": false
+              }
+            }
+          },
+          "storage": {
+            "kind": "object",
+            "shape": {
+              "durationMs": {
+                "validator": {
+                  "kind": "number"
+                },
+                "optional": false
+              },
+              "mimeType": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "string"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "bytes": {
+                "validator": {
+                  "kind": "number"
+                },
+                "optional": false
+              },
+              "speechDetected": {
+                "validator": {
+                  "kind": "boolean"
+                },
+                "optional": false
+              },
+              "peakAmplitude": {
+                "validator": {
+                  "kind": "number"
+                },
+                "optional": false
+              },
+              "rmsAmplitude": {
+                "validator": {
+                  "kind": "number"
+                },
+                "optional": false
+              },
+              "languageHint": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "string"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "stopReason": {
+                "validator": {
+                  "kind": "enum",
+                  "values": [
+                    "user-stop",
+                    "max-duration",
+                    "cancelled",
+                    "unknown"
+                  ]
+                },
+                "optional": false
+              },
+              "maxDurationReached": {
+                "validator": {
+                  "kind": "boolean"
+                },
+                "optional": false
+              }
+            }
+          },
+          "optional": false
+        },
+        {
+          "name": "context",
+          "validator": {
+            "kind": "object",
+            "shape": {
+              "appName": {
+                "validator": {
+                  "kind": "string"
+                },
+                "optional": false
+              },
+              "windowTitle": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "string"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "selectedText": {
+                "validator": {
+                  "kind": "string"
+                },
+                "optional": false
+              },
+              "permissionsGranted": {
+                "validator": {
+                  "kind": "boolean"
+                },
+                "optional": false
+              },
+              "confidence": {
+                "validator": {
+                  "kind": "enum",
+                  "values": [
+                    "high",
+                    "partial",
+                    "low"
+                  ]
+                },
+                "optional": false
+              },
+              "capturedAt": {
+                "validator": {
+                  "kind": "string"
+                },
+                "optional": false
+              }
+            }
+          },
+          "storage": {
+            "kind": "object",
+            "shape": {
+              "appName": {
+                "validator": {
+                  "kind": "string"
+                },
+                "optional": false
+              },
+              "windowTitle": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "string"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "selectedText": {
+                "validator": {
+                  "kind": "string"
+                },
+                "optional": false
+              },
+              "permissionsGranted": {
+                "validator": {
+                  "kind": "boolean"
+                },
+                "optional": false
+              },
+              "confidence": {
+                "validator": {
+                  "kind": "enum",
+                  "values": [
+                    "high",
+                    "partial",
+                    "low"
+                  ]
+                },
+                "optional": false
+              },
+              "capturedAt": {
+                "validator": {
+                  "kind": "string"
+                },
+                "optional": false
+              }
+            }
+          },
+          "optional": false
+        },
+        {
+          "name": "createdAt",
+          "validator": {
+            "kind": "string"
+          },
+          "storage": {
+            "kind": "string"
+          },
+          "optional": false
+        },
+        {
+          "name": "createdAtMs",
+          "validator": {
+            "kind": "number"
+          },
+          "storage": {
+            "kind": "number"
+          },
+          "optional": false
+        },
+        {
+          "name": "errorMessage",
+          "validator": {
+            "kind": "union",
+            "members": [
+              {
+                "kind": "string"
+              },
+              {
+                "kind": "null"
+              }
+            ]
+          },
+          "storage": {
+            "kind": "union",
+            "members": [
+              {
+                "kind": "string"
+              },
+              {
+                "kind": "null"
+              }
+            ]
+          },
+          "optional": false
+        },
+        {
+          "name": "insertion",
+          "validator": {
+            "kind": "object",
+            "shape": {
+              "strategy": {
+                "validator": {
+                  "kind": "enum",
+                  "values": [
+                    "replace-selection",
+                    "insert-at-cursor"
+                  ]
+                },
+                "optional": false
+              },
+              "requestedMode": {
+                "validator": {
+                  "kind": "enum",
+                  "values": [
+                    "letter-by-letter",
+                    "all-at-once"
+                  ]
+                },
+                "optional": false
+              },
+              "effectiveMode": {
+                "validator": {
+                  "kind": "enum",
+                  "values": [
+                    "letter-by-letter",
+                    "all-at-once"
+                  ]
+                },
+                "optional": false
+              },
+              "method": {
+                "validator": {
+                  "kind": "enum",
+                  "values": [
+                    "enigo-letter",
+                    "clipboard-all-at-once"
+                  ]
+                },
+                "optional": false
+              },
+              "fallbackUsed": {
+                "validator": {
+                  "kind": "boolean"
+                },
+                "optional": false
+              },
+              "targetApp": {
+                "validator": {
+                  "kind": "string"
+                },
+                "optional": false
+              },
+              "writtenCharacterCount": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              }
+            }
+          },
+          "storage": {
+            "kind": "object",
+            "shape": {
+              "strategy": {
+                "validator": {
+                  "kind": "enum",
+                  "values": [
+                    "replace-selection",
+                    "insert-at-cursor"
+                  ]
+                },
+                "optional": false
+              },
+              "requestedMode": {
+                "validator": {
+                  "kind": "enum",
+                  "values": [
+                    "letter-by-letter",
+                    "all-at-once"
+                  ]
+                },
+                "optional": false
+              },
+              "effectiveMode": {
+                "validator": {
+                  "kind": "enum",
+                  "values": [
+                    "letter-by-letter",
+                    "all-at-once"
+                  ]
+                },
+                "optional": false
+              },
+              "method": {
+                "validator": {
+                  "kind": "enum",
+                  "values": [
+                    "enigo-letter",
+                    "clipboard-all-at-once"
+                  ]
+                },
+                "optional": false
+              },
+              "fallbackUsed": {
+                "validator": {
+                  "kind": "boolean"
+                },
+                "optional": false
+              },
+              "targetApp": {
+                "validator": {
+                  "kind": "string"
+                },
+                "optional": false
+              },
+              "writtenCharacterCount": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              }
+            }
+          },
+          "optional": false
+        },
+        {
+          "name": "llm",
+          "validator": {
+            "kind": "object",
+            "shape": {
+              "provider": {
+                "validator": {
+                  "kind": "string"
+                },
+                "optional": false
+              },
+              "modelId": {
+                "validator": {
+                  "kind": "string"
+                },
+                "optional": false
+              },
+              "finishReason": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "string"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "usedContext": {
+                "validator": {
+                  "kind": "boolean"
+                },
+                "optional": false
+              }
+            }
+          },
+          "storage": {
+            "kind": "object",
+            "shape": {
+              "provider": {
+                "validator": {
+                  "kind": "string"
+                },
+                "optional": false
+              },
+              "modelId": {
+                "validator": {
+                  "kind": "string"
+                },
+                "optional": false
+              },
+              "finishReason": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "string"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "usedContext": {
+                "validator": {
+                  "kind": "boolean"
+                },
+                "optional": false
+              }
+            }
+          },
+          "optional": false
+        },
+        {
+          "name": "modelId",
+          "validator": {
+            "kind": "string"
+          },
+          "storage": {
+            "kind": "string"
+          },
+          "optional": false
+        },
+        {
+          "name": "outcome",
+          "validator": {
+            "kind": "enum",
+            "values": [
+              "completed",
+              "error"
+            ]
+          },
+          "storage": {
+            "kind": "enum",
+            "values": [
+              "completed",
+              "error"
+            ]
+          },
+          "optional": false
+        },
+        {
+          "name": "outputText",
+          "validator": {
+            "kind": "string"
+          },
+          "storage": {
+            "kind": "string"
+          },
+          "optional": false
+        },
+        {
+          "name": "searchText",
+          "validator": {
+            "kind": "string"
+          },
+          "storage": {
+            "kind": "string"
+          },
+          "optional": false
+        },
+        {
+          "name": "sessionId",
+          "validator": {
+            "kind": "string"
+          },
+          "storage": {
+            "kind": "string"
+          },
+          "optional": false
+        },
+        {
+          "name": "timing",
+          "validator": {
+            "kind": "object",
+            "shape": {
+              "sessionStartedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "contextPreviewStartedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "contextPreviewCompletedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "contextRefreshStartedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "contextRefreshCompletedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "submissionStartedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "stopRequestedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "microphoneRequestStartedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "microphoneRequestCompletedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "recordingStartedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "recordingEndedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "recorderStopStartedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "mediaRecorderStopCompletedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "audioPreparationStartedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "audioPreparationEndedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "processingStartedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "llmRequestStartedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "llmResponseHeadersMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "firstTokenMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "llmCompletedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "insertionStartedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "insertionCompletedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "sessionFinishedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              }
+            }
+          },
+          "storage": {
+            "kind": "object",
+            "shape": {
+              "sessionStartedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "contextPreviewStartedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "contextPreviewCompletedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "contextRefreshStartedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "contextRefreshCompletedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "submissionStartedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "stopRequestedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "microphoneRequestStartedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "microphoneRequestCompletedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "recordingStartedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "recordingEndedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "recorderStopStartedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "mediaRecorderStopCompletedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "audioPreparationStartedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "audioPreparationEndedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "processingStartedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "llmRequestStartedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "llmResponseHeadersMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "firstTokenMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "llmCompletedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "insertionStartedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "insertionCompletedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              },
+              "sessionFinishedMs": {
+                "validator": {
+                  "kind": "union",
+                  "members": [
+                    {
+                      "kind": "number"
+                    },
+                    {
+                      "kind": "null"
+                    }
+                  ]
+                },
+                "optional": false
+              }
+            }
+          },
+          "optional": false
+        },
+        {
+          "name": "windowTitle",
+          "validator": {
+            "kind": "union",
+            "members": [
+              {
+                "kind": "string"
+              },
+              {
+                "kind": "null"
+              }
+            ]
+          },
+          "storage": {
+            "kind": "union",
+            "members": [
+              {
+                "kind": "string"
+              },
+              {
+                "kind": "null"
+              }
+            ]
+          },
+          "optional": false
+        }
+      ],
+      "indexes": [
+        {
+          "name": "by_app_created",
+          "fields": [
+            "appName",
+            "createdAtMs"
+          ]
+        },
+        {
+          "name": "by_created",
+          "fields": [
+            "createdAtMs"
+          ]
+        },
+        {
+          "name": "by_model_created",
+          "fields": [
+            "modelId",
+            "createdAtMs"
+          ]
+        },
+        {
+          "name": "by_outcome_created",
+          "fields": [
+            "outcome",
+            "createdAtMs"
+          ]
+        },
+        {
+          "name": "by_session",
+          "fields": [
+            "sessionId"
+          ]
+        }
+      ],
+      "searchIndexes": [
+        {
+          "name": "search_history",
+          "searchField": "searchText",
+          "filterFields": [
+            "outcome",
+            "appName",
+            "modelId"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "settings",
+      "validator": {
+        "kind": "object",
+        "shape": {
+          "key": {
+            "validator": {
+              "kind": "string"
+            },
+            "optional": false
+          },
+          "launchOnLogin": {
+            "validator": {
+              "kind": "boolean"
+            },
+            "optional": false
+          },
+          "pushToTalkHotkey": {
+            "validator": {
+              "kind": "string"
+            },
+            "optional": false
+          },
+          "toggleHotkey": {
+            "validator": {
+              "kind": "string"
+            },
+            "optional": false
+          },
+          "preferredMicrophoneId": {
+            "validator": {
+              "kind": "union",
+              "members": [
+                {
+                  "kind": "string"
+                },
+                {
+                  "kind": "null"
+                }
+              ]
+            },
+            "optional": false
+          },
+          "sendContextAutomatically": {
+            "validator": {
+              "kind": "boolean"
+            },
+            "optional": false
+          },
+          "updateChannel": {
+            "validator": {
+              "kind": "enum",
+              "values": [
+                "stable",
+                "beta"
+              ]
+            },
+            "optional": false
+          },
+          "insertionStreamingMode": {
+            "validator": {
+              "kind": "enum",
+              "values": [
+                "letter-by-letter",
+                "all-at-once"
+              ]
+            },
+            "optional": false
+          },
+          "historyRetentionDays": {
+            "validator": {
+              "kind": "number"
+            },
+            "optional": false
+          },
+          "maxHistoryAudioBytes": {
+            "validator": {
+              "kind": "number"
+            },
+            "optional": false
+          },
+          "modelId": {
+            "validator": {
+              "kind": "string"
+            },
+            "optional": false
+          },
+          "onboardingCompleted": {
+            "validator": {
+              "kind": "boolean"
+            },
+            "optional": false
+          },
+          "theme": {
+            "validator": {
+              "kind": "enum",
+              "values": [
+                "dark",
+                "light",
+                "system"
+              ]
+            },
+            "optional": false
+          },
+          "language": {
+            "validator": {
+              "kind": "enum",
+              "values": [
+                "en",
+                "pt-BR",
+                "es",
+                "system"
+              ]
+            },
+            "optional": false
+          },
+          "lastSeenAppVersion": {
+            "validator": {
+              "kind": "union",
+              "members": [
+                {
+                  "kind": "string"
+                },
+                {
+                  "kind": "null"
+                }
+              ]
+            },
+            "optional": false
+          },
+          "pendingStartupUpdatedNoticeVersion": {
+            "validator": {
+              "kind": "union",
+              "members": [
+                {
+                  "kind": "string"
+                },
+                {
+                  "kind": "null"
+                }
+              ]
+            },
+            "optional": false
+          },
+          "pendingUpgradeOnboardingVersion": {
+            "validator": {
+              "kind": "union",
+              "members": [
+                {
+                  "kind": "string"
+                },
+                {
+                  "kind": "null"
+                }
+              ]
+            },
+            "optional": false
+          },
+          "updatedAt": {
+            "validator": {
+              "kind": "number"
+            },
+            "optional": false
+          }
+        }
+      },
+      "fieldPaths": [
+        "key",
+        "launchOnLogin",
+        "pushToTalkHotkey",
+        "toggleHotkey",
+        "preferredMicrophoneId",
+        "sendContextAutomatically",
+        "updateChannel",
+        "insertionStreamingMode",
+        "historyRetentionDays",
+        "maxHistoryAudioBytes",
+        "modelId",
+        "onboardingCompleted",
+        "theme",
+        "language",
+        "lastSeenAppVersion",
+        "pendingStartupUpdatedNoticeVersion",
+        "pendingUpgradeOnboardingVersion",
+        "updatedAt"
+      ],
+      "fields": [
+        {
+          "name": "historyRetentionDays",
+          "validator": {
+            "kind": "number"
+          },
+          "storage": {
+            "kind": "number"
+          },
+          "optional": false
+        },
+        {
+          "name": "insertionStreamingMode",
+          "validator": {
+            "kind": "enum",
+            "values": [
+              "letter-by-letter",
+              "all-at-once"
+            ]
+          },
+          "storage": {
+            "kind": "enum",
+            "values": [
+              "letter-by-letter",
+              "all-at-once"
+            ]
+          },
+          "optional": false
+        },
+        {
+          "name": "key",
+          "validator": {
+            "kind": "string"
+          },
+          "storage": {
+            "kind": "string"
+          },
+          "optional": false
+        },
+        {
+          "name": "language",
+          "validator": {
+            "kind": "enum",
+            "values": [
+              "en",
+              "pt-BR",
+              "es",
+              "system"
+            ]
+          },
+          "storage": {
+            "kind": "enum",
+            "values": [
+              "en",
+              "pt-BR",
+              "es",
+              "system"
+            ]
+          },
+          "optional": false
+        },
+        {
+          "name": "lastSeenAppVersion",
+          "validator": {
+            "kind": "union",
+            "members": [
+              {
+                "kind": "string"
+              },
+              {
+                "kind": "null"
+              }
+            ]
+          },
+          "storage": {
+            "kind": "union",
+            "members": [
+              {
+                "kind": "string"
+              },
+              {
+                "kind": "null"
+              }
+            ]
+          },
+          "optional": false
+        },
+        {
+          "name": "launchOnLogin",
+          "validator": {
+            "kind": "boolean"
+          },
+          "storage": {
+            "kind": "boolean"
+          },
+          "optional": false
+        },
+        {
+          "name": "maxHistoryAudioBytes",
+          "validator": {
+            "kind": "number"
+          },
+          "storage": {
+            "kind": "number"
+          },
+          "optional": false
+        },
+        {
+          "name": "modelId",
+          "validator": {
+            "kind": "string"
+          },
+          "storage": {
+            "kind": "string"
+          },
+          "optional": false
+        },
+        {
+          "name": "onboardingCompleted",
+          "validator": {
+            "kind": "boolean"
+          },
+          "storage": {
+            "kind": "boolean"
+          },
+          "optional": false
+        },
+        {
+          "name": "pendingStartupUpdatedNoticeVersion",
+          "validator": {
+            "kind": "union",
+            "members": [
+              {
+                "kind": "string"
+              },
+              {
+                "kind": "null"
+              }
+            ]
+          },
+          "storage": {
+            "kind": "union",
+            "members": [
+              {
+                "kind": "string"
+              },
+              {
+                "kind": "null"
+              }
+            ]
+          },
+          "optional": false
+        },
+        {
+          "name": "pendingUpgradeOnboardingVersion",
+          "validator": {
+            "kind": "union",
+            "members": [
+              {
+                "kind": "string"
+              },
+              {
+                "kind": "null"
+              }
+            ]
+          },
+          "storage": {
+            "kind": "union",
+            "members": [
+              {
+                "kind": "string"
+              },
+              {
+                "kind": "null"
+              }
+            ]
+          },
+          "optional": false
+        },
+        {
+          "name": "preferredMicrophoneId",
+          "validator": {
+            "kind": "union",
+            "members": [
+              {
+                "kind": "string"
+              },
+              {
+                "kind": "null"
+              }
+            ]
+          },
+          "storage": {
+            "kind": "union",
+            "members": [
+              {
+                "kind": "string"
+              },
+              {
+                "kind": "null"
+              }
+            ]
+          },
+          "optional": false
+        },
+        {
+          "name": "pushToTalkHotkey",
+          "validator": {
+            "kind": "string"
+          },
+          "storage": {
+            "kind": "string"
+          },
+          "optional": false
+        },
+        {
+          "name": "sendContextAutomatically",
+          "validator": {
+            "kind": "boolean"
+          },
+          "storage": {
+            "kind": "boolean"
+          },
+          "optional": false
+        },
+        {
+          "name": "theme",
+          "validator": {
+            "kind": "enum",
+            "values": [
+              "dark",
+              "light",
+              "system"
+            ]
+          },
+          "storage": {
+            "kind": "enum",
+            "values": [
+              "dark",
+              "light",
+              "system"
+            ]
+          },
+          "optional": false
+        },
+        {
+          "name": "toggleHotkey",
+          "validator": {
+            "kind": "string"
+          },
+          "storage": {
+            "kind": "string"
+          },
+          "optional": false
+        },
+        {
+          "name": "updateChannel",
+          "validator": {
+            "kind": "enum",
+            "values": [
+              "stable",
+              "beta"
+            ]
+          },
+          "storage": {
+            "kind": "enum",
+            "values": [
+              "stable",
+              "beta"
+            ]
+          },
+          "optional": false
+        },
+        {
+          "name": "updatedAt",
+          "validator": {
+            "kind": "number"
+          },
+          "storage": {
+            "kind": "number"
+          },
+          "optional": false
+        }
+      ],
+      "indexes": [
+        {
+          "name": "by_key",
+          "fields": [
+            "key"
+          ]
+        }
+      ],
+      "searchIndexes": []
+    }
+  ],
+  "hash": "sha256:6cf990c797af60e2"
+}

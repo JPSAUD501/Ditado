@@ -38,7 +38,7 @@ describe('OpenRouterService', () => {
       .mockReturnValueOnce(220)
 
     const service = new OpenRouterService({
-      getApiKey: vi.fn(async () => 'sk-test'),
+      get: vi.fn(async () => 'sk-test'),
     } as never)
 
     const response = await service.stream({

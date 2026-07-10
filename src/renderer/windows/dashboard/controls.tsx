@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Check, ChevronDown, Copy, Pause, Play, Trash2 } from 'lucide-react'
+import { skip, useQueryState } from 'syncorejs/react'
 
-import type { HistoryEntry } from '@shared/contracts'
+import { deriveHistoryDurations, type HistoryEntry } from '@shared/contracts'
 import { formatHotkeyForDisplay, type HotkeyCapturePayload } from '@shared/hotkeys'
+import { api } from '../../../../syncore/_generated/api'
 import { formatAudioDuration, formatDate } from './formatters'
 
 const easeOutExpo = [0.16, 1, 0.3, 1] as const
@@ -214,10 +216,12 @@ export const MicrophoneSelect = ({
   refreshKey,
   selected,
   onSelect,
+  onDeviceCountChange,
 }: {
   refreshKey: number
   selected: string | null
   onSelect: (deviceId: string | null) => void
+  onDeviceCountChange?: (count: number) => void
 }) => {
   const { t } = useTranslation()
   const [devices, setDevices] = useState<Array<{ deviceId: string; label: string }>>([])
@@ -225,10 +229,18 @@ export const MicrophoneSelect = ({
   useEffect(() => {
     let mounted = true
     void enumerateBrowserMicrophones()
-      .then((r) => { if (mounted) setDevices(r) })
-      .catch(() => { if (mounted) setDevices([]) })
+      .then((r) => {
+        if (!mounted) return
+        setDevices(r)
+        onDeviceCountChange?.(r.length)
+      })
+      .catch(() => {
+        if (!mounted) return
+        setDevices([])
+        onDeviceCountChange?.(0)
+      })
     return () => { mounted = false }
-  }, [refreshKey])
+  }, [onDeviceCountChange, refreshKey])
 
   return (
     <select className="field" value={selected ?? ''} onChange={(e) => onSelect(e.target.value || null)} aria-label={t('settings.preferredMicrophone')}>
@@ -286,6 +298,7 @@ const safeDiffMs = (start: number | null, end: number | null): number => {
 const formatTimelineDuration = (ms: number): string => `${(ms / 1000).toFixed(2)}s`
 
 const buildTimelineStages = (entry: HistoryEntry): TimelineStage[] => {
+  const durations = deriveHistoryDurations(entry.timing)
   const processingStartedAt = entry.timing.processingStartedMs
   const llmCompletedAt = entry.timing.llmCompletedMs
   const insertionStartedAt = entry.timing.insertionStartedMs
@@ -295,20 +308,20 @@ const buildTimelineStages = (entry: HistoryEntry): TimelineStage[] => {
       ? Math.min(insertionStartedAt, llmCompletedAt)
       : llmCompletedAt
 
-  const recordingMs = entry.durations.recordingMs ?? 0
+  const recordingMs = durations.recordingMs ?? 0
   const processingMs =
     processingStartedAt && processingWindowEndAt
       ? safeDiffMs(processingStartedAt, processingWindowEndAt)
       : [
-          entry.durations.audioPreparationMs,
-          entry.durations.networkHandshakeMs,
-          entry.durations.modelUntilFirstTokenMs,
-          entry.durations.modelStreamingMs,
+          durations.audioPreparationMs,
+          durations.networkHandshakeMs,
+          durations.modelUntilFirstTokenMs,
+          durations.modelStreamingMs,
         ].reduce((sum: number, value) => sum + (value ?? 0), 0)
   const writingMs =
     insertionStartedAt && insertionCompletedAt
       ? safeDiffMs(insertionStartedAt, insertionCompletedAt)
-      : entry.durations.insertionMs ?? 0
+      : durations.insertionMs ?? 0
 
   return [
     { label: 'Recording', ms: recordingMs, color: 'var(--status-listen)' },
@@ -374,30 +387,23 @@ const ProcessingTimeline = ({
 
 export const HistoryAudioPlayer = ({ entryId, hasAudio }: { entryId: string; hasAudio: boolean }) => {
   const { t } = useTranslation()
+  const audioState = useQueryState(api.history.audio, hasAudio ? { sessionId: entryId } : skip)
   const audioRef = useRef<HTMLAudioElement | null>(null)
-  const [src, setSrc] = useState<string | null>(null)
-  const [loadFailed, setLoadFailed] = useState(false)
   const [isPlaying, setIsPlaying] = useState(false)
   const [progress, setProgress] = useState(0)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
 
+  const src = useMemo(() => {
+    if (!hasAudio || audioState.isLoading || audioState.isError || !audioState.data) return null
+    const binary = atob(audioState.data.base64)
+    const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0))
+    return URL.createObjectURL(new Blob([bytes], { type: audioState.data.mimeType }))
+  }, [audioState.data, audioState.isError, audioState.isLoading, hasAudio])
+
   useEffect(() => {
-    let mounted = true
-    let objectUrl: string | null = null
-    if (!hasAudio) return () => { mounted = false }
-    void window.ditado.getHistoryAudio(entryId)
-      .then((value) => {
-        if (!mounted || !value) { if (mounted) setLoadFailed(true); return }
-        const binary = atob(value.base64)
-        const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0))
-        objectUrl = URL.createObjectURL(new Blob([bytes], { type: value.mimeType }))
-        setSrc(objectUrl)
-        setLoadFailed(false)
-      })
-      .catch(() => { if (mounted) setLoadFailed(true) })
-    return () => { mounted = false; if (objectUrl) URL.revokeObjectURL(objectUrl) }
-  }, [entryId, hasAudio])
+    return () => { if (src) URL.revokeObjectURL(src) }
+  }, [src])
 
   const togglePlayback = useCallback(() => {
     const audio = audioRef.current
@@ -421,7 +427,7 @@ export const HistoryAudioPlayer = ({ entryId, hasAudio }: { entryId: string; has
   }, [])
 
   if (!hasAudio) return null
-  if (loadFailed) return (
+  if (!audioState.isLoading && (audioState.isError || !audioState.data)) return (
     <div className="audio-player-error">
       <span>{t('history.audioUnavailable')}</span>
     </div>
@@ -518,8 +524,10 @@ export const ConfirmModal = ({
 
 export const HistoryRow = ({
   entry,
+  onDelete,
 }: {
   entry: HistoryEntry
+  onDelete: (sessionId: string) => Promise<unknown>
 }) => {
   const { t } = useTranslation()
   const [expanded, setExpanded] = useState(false)
@@ -530,8 +538,9 @@ export const HistoryRow = ({
   const textPreview = entry.outputText
     || (isError ? (entry.errorMessage ?? t('history.noTextInserted')) : t('history.noTextInserted'))
   const modeLabel = entry.activationMode === 'push-to-talk' ? t('common.push') : t('common.toggle')
-  const hasAudio = Boolean(entry.audioFilePath)
-  const hasContext = Boolean(entry.submittedContext?.selectedText)
+  const hasAudio = entry.audio.bytes > 0 && Boolean(entry.audio.mimeType)
+  const hasContext = Boolean(entry.context.selectedText)
+  const durations = deriveHistoryDurations(entry.timing)
   const timelineStages = buildTimelineStages(entry)
   const hasMetrics = timelineStages.length > 0
 
@@ -557,7 +566,7 @@ export const HistoryRow = ({
           <div className="hentry-top">
             <div className="hentry-app-row">
               <span className="hentry-app">{entry.appName}</span>
-              {entry.audioDurationMs > 0 && (
+              {entry.audio.durationMs > 0 && (
                 <span className="hentry-duration-badge">
                   <span className="hentry-duration-icon">
                     <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -566,7 +575,7 @@ export const HistoryRow = ({
                       <line x1="12" x2="12" y1="19" y2="22"/>
                     </svg>
                   </span>
-                  {formatAudioDuration(entry.audioDurationMs)}
+                  {formatAudioDuration(entry.audio.durationMs)}
                 </span>
               )}
             </div>
@@ -652,7 +661,7 @@ export const HistoryRow = ({
                     </svg>
                     <span>{t('history.selectionLabel')}</span>
                   </div>
-                  <p className="hentry-context-text">{entry.submittedContext!.selectedText}</p>
+                  <p className="hentry-context-text">{entry.context.selectedText}</p>
                 </div>
               )}
 
@@ -683,7 +692,7 @@ export const HistoryRow = ({
                     </svg>
                   )}
                   label={t('history.meta.latency')}
-                  value={entry.durations.totalSessionMs ? `${Math.round(entry.durations.totalSessionMs)}ms` : entry.latencyMs > 0 ? `${Math.round(entry.latencyMs)}ms` : '—'}
+                  value={durations.totalSessionMs ? `${Math.round(durations.totalSessionMs)}ms` : durations.llmTotalMs ? `${Math.round(durations.llmTotalMs)}ms` : '—'}
                 />
                 <MetricChip
                   icon={() => (
@@ -724,7 +733,7 @@ export const HistoryRow = ({
               {hasAudio && (
                 <div className="hentry-section">
                   <div className="hentry-section-label">Recording</div>
-                  <HistoryAudioPlayer entryId={entry.id} hasAudio={hasAudio} />
+                  <HistoryAudioPlayer entryId={entry.sessionId} hasAudio={hasAudio} />
                 </div>
               )}
 
@@ -739,7 +748,7 @@ export const HistoryRow = ({
             title={t('history.confirmDeleteEntry')}
             desc={t('history.confirmDeleteEntryDesc')}
             confirmLabel={t('history.deleteEntry')}
-            onConfirm={() => { void window.ditado.deleteHistoryEntry(entry.id); setConfirmDelete(false) }}
+            onConfirm={() => { void onDelete(entry.sessionId); setConfirmDelete(false) }}
             onCancel={() => setConfirmDelete(false)}
           />
         )}

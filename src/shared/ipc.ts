@@ -1,11 +1,7 @@
 export const ipcChannels = {
-  overlay: {
-    state: 'overlay:state',
-    getState: 'overlay:getState',
-  },
   dashboard: {
-    state: 'dashboard:state',
-    getState: 'dashboard:getState',
+    getNativeState: 'dashboard:getNativeState',
+    nativeState: 'dashboard:nativeState',
     openTab: 'dashboard:openTab',
   },
   startup: {
@@ -17,26 +13,15 @@ export const ipcChannels = {
     stopPushToTalk: 'dictation:stopPushToTalk',
     toggle: 'dictation:toggle',
     cancel: 'dictation:cancel',
+    setOnboardingEnabled: 'dictation:setOnboardingEnabled',
     recorderStarted: 'dictation:recorderStarted',
     recorderFailed: 'dictation:recorderFailed',
     audioLevel: 'dictation:audioLevel',
-  },
-  settings: {
-    update: 'settings:update',
-    setApiKey: 'settings:setApiKey',
   },
   hotkeys: {
     setCaptureMode: 'hotkeys:setCaptureMode',
     getStatus: 'hotkeys:getStatus',
     captureUpdate: 'hotkeys:captureUpdate',
-  },
-  history: {
-    clear: 'history:clear',
-    audio: 'history:audio',
-    deleteEntry: 'history:deleteEntry',
-  },
-  telemetry: {
-    tail: 'telemetry:tail',
   },
   permissions: {
     requestMicrophone: 'permissions:requestMicrophone',

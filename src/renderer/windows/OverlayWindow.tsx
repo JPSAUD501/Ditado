@@ -11,10 +11,12 @@ import {
 import { AlertCircle, CheckCircle, Loader, Mic, PenLine, Type } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { MotionValue } from 'framer-motion'
+import { useQueries } from 'syncorejs/react'
 
-import { useOverlayBridge } from '@renderer/hooks/useDitadoBridge'
 import { useThemeAndLanguage } from '@renderer/hooks/useThemeAndLanguage'
-import type { DictationStatus } from '@shared/contracts'
+import type { DictationStatus, Settings, SettingsDocument } from '@shared/contracts'
+import { defaultSettings } from '@shared/defaults'
+import { api } from '../../../syncore/_generated/api'
 
 /* ── Status-based colors ──────────────────────────────────────────── */
 
@@ -172,12 +174,30 @@ const ContextBadge = ({ reducedMotion }: { reducedMotion: boolean | null }) => (
 
 /* ── Main component ───────────────────────────────────────────────── */
 
+const toOverlaySettings = (stored: SettingsDocument | null | undefined): Settings => {
+  if (!stored) {
+    return defaultSettings
+  }
+  const { _id, _creationTime, key, updatedAt, ...settings } = stored
+  void _id
+  void _creationTime
+  void key
+  void updatedAt
+  return { ...settings, apiKeyPresent: false }
+}
+
 export const OverlayWindow = () => {
   const reducedMotion = useReducedMotion()
-  const state = useOverlayBridge()
-  useThemeAndLanguage(state.settings, { skipTheme: true })
+  const queries = useQueries({
+    settings: { query: api.settings.get },
+    session: { query: api.sessions.active },
+  })
+  const settings = toOverlaySettings(
+    queries.settings.status === 'success' ? queries.settings.data : null,
+  )
+  useThemeAndLanguage(settings, { skipTheme: true })
 
-  const session = state.session
+  const session = queries.session.status === 'success' ? queries.session.data : null
   const status: DictationStatus = session?.status ?? 'idle'
   const rawAppName = session?.context.appName || session?.targetApp || 'App'
   const appName = rawAppName === 'Unknown App' ? 'App' : rawAppName

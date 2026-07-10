@@ -1,9 +1,8 @@
 import { app } from 'electron'
 import electronUpdater, { type AppUpdater } from 'electron-updater'
 
-import type { UpdateState } from '../../../shared/contracts.js'
+import type { Settings, UpdateState } from '../../../shared/contracts.js'
 import { defaultUpdateState } from '../../../shared/defaults.js'
-import type { AppStore } from '../store/appStore.js'
 
 const getTargetChannel = (channel: UpdateState['channel']): string => (channel === 'beta' ? 'beta' : 'latest')
 
@@ -20,7 +19,7 @@ export class UpdateService {
   private readonly listeners = new Set<StateListener>()
 
   constructor(
-    private readonly store: AppStore,
+    private readonly getSettings: () => Settings,
     private readonly onStateChanged: StateListener = () => undefined,
     private readonly updater: AppUpdater = getDefaultUpdater(),
     private readonly isPackaged: boolean = app.isPackaged,
@@ -38,8 +37,8 @@ export class UpdateService {
   }
 
   syncFromSettings(): void {
-    const settings = this.store.getSettings()
-    const enabled = settings.autoUpdateEnabled
+    const settings = this.getSettings()
+    const enabled = true
     const channel = settings.updateChannel
 
     this.updater.autoDownload = enabled

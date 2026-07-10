@@ -10,10 +10,7 @@ export const formatAudioDuration = (value: number): string => {
 }
 
 export const summarizeContext = (entry: HistoryEntry): string => {
-  const context = entry.submittedContext
-  if (!context) {
-    return `App: ${entry.appName}${entry.windowTitle ? ` | Window: ${entry.windowTitle}` : ''}`
-  }
+  const context = entry.context
 
   const parts = [
     `App: ${context.appName}`,

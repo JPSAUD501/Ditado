@@ -10,7 +10,7 @@ const isShortPressNotice = (session: DictationSession | null): boolean =>
 const isNewShortPressNotice = (previous: DictationSession | null, next: DictationSession): boolean =>
   isShortPressNotice(next)
   && (
-    previous?.id !== next.id
+    previous?.sessionId !== next.sessionId
     || previous?.status !== next.status
     || previous?.noticeMessage !== next.noticeMessage
   )
@@ -25,10 +25,10 @@ const isStartTransition = (previous: DictationSession | null, next: DictationSes
     // Toggle: fire on arming (the user intentionally started toggle mode)
     || (next.activationMode === 'toggle' && ['arming', 'listening'].includes(next.status))
   )
-  && (previous?.id !== next.id || previous.captureIntent !== 'start')
+  && (previous?.sessionId !== next.sessionId || previous.captureIntent !== 'start')
 
 const isStopTransition = (previous: DictationSession | null, next: DictationSession): boolean =>
-  previous?.id === next.id
+  previous?.sessionId === next.sessionId
   && previous.captureIntent !== 'stop'
   && next.captureIntent === 'stop'
   && next.status === 'processing'

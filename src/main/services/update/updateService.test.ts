@@ -27,19 +27,15 @@ vi.mock('electron-updater', () => ({
 }))
 
 import { UpdateService } from './updateService.js'
+import { defaultSettings } from '../../../shared/defaults.js'
 
-const createStore = (enabled = true, channel: UpdateState['channel'] = 'stable') =>
-  ({
-    getSettings: () => ({
-      autoUpdateEnabled: enabled,
-      updateChannel: channel,
-    }),
-  }) as never
+const createSettingsReader = (channel: UpdateState['channel'] = 'stable') =>
+  () => ({ ...defaultSettings, updateChannel: channel })
 
 describe('UpdateService', () => {
   it('stays unsupported in unpackaged environments', async () => {
     const updater = new MockUpdater()
-    const service = new UpdateService(createStore(true), () => undefined, updater as never, false, '0.1.0')
+    const service = new UpdateService(createSettingsReader(), () => undefined, updater as never, false, '0.1.0')
 
     await service.initialize()
 
@@ -49,7 +45,7 @@ describe('UpdateService', () => {
 
   it('configures updater behavior from settings', async () => {
     const updater = new MockUpdater()
-    const service = new UpdateService(createStore(true, 'beta'), () => undefined, updater as never, true, '0.1.0-beta.1')
+    const service = new UpdateService(createSettingsReader('beta'), () => undefined, updater as never, true, '0.1.0-beta.1')
 
     await service.initialize()
 
@@ -63,7 +59,7 @@ describe('UpdateService', () => {
   it('tracks updater event transitions', async () => {
     const updater = new MockUpdater()
     const onStateChanged = vi.fn()
-    const service = new UpdateService(createStore(true), onStateChanged, updater as never, true, '0.1.0')
+    const service = new UpdateService(createSettingsReader(), onStateChanged, updater as never, true, '0.1.0')
 
     await service.initialize()
     await service.checkForUpdates()
@@ -84,7 +80,7 @@ describe('UpdateService', () => {
     vi.useFakeTimers()
     const updater = new MockUpdater()
     const onStateChanged = vi.fn()
-    const service = new UpdateService(createStore(true), onStateChanged, updater as never, true, '0.1.0')
+    const service = new UpdateService(createSettingsReader(), onStateChanged, updater as never, true, '0.1.0')
 
     await service.initialize()
     updater.emit('update-downloaded')

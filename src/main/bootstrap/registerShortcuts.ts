@@ -2,8 +2,8 @@ import { globalShortcut } from 'electron'
 import { UiohookKey, uIOhook, type UiohookKeyboardEvent } from 'uiohook-napi'
 
 import { normalizeHotkey, type HotkeyCapturePayload } from '../../shared/hotkeys.js'
+import type { DictationSession, Settings } from '../../shared/contracts.js'
 import type { DictationSessionOrchestrator } from '../services/session/dictationSessionOrchestrator.js'
-import type { AppStore } from '../services/store/appStore.js'
 
 type ParsedHotkey = {
   mainKey: number | null
@@ -263,15 +263,16 @@ export type ShortcutController = {
 }
 
 export const registerShortcuts = (
-  store: AppStore,
+  getSettings: () => Settings,
+  readActiveSession: () => DictationSession | null,
   orchestrator: DictationSessionOrchestrator,
   isCaptureSuspended: () => boolean,
   onHookStatus?: (running: boolean) => void,
   isHotkeyCaptureActive: () => boolean = () => false,
   onHotkeyCapture?: (payload: HotkeyCapturePayload) => void,
 ): ShortcutController => {
-  let parsedPushHotkey = parseHotkey(store.getSettings().pushToTalkHotkey)
-  let parsedToggleHotkey = parseHotkey(store.getSettings().toggleHotkey)
+  let parsedPushHotkey = parseHotkey(getSettings().pushToTalkHotkey)
+  let parsedToggleHotkey = parseHotkey(getSettings().toggleHotkey)
   let registeredToggleAccelerator: string | null = null
   let registeredPushAccelerator: string | null = null
   let pushActive = false
@@ -596,9 +597,9 @@ export const registerShortcuts = (
       // don't start a new PTT capture (handled in keyup).
       // If we're in the double-tap window, also defer capture to avoid the pttStart
       // sound + cancel overhead when the double-tap is confirmed on keyup.
-      const currentSession = orchestrator.getSession()
-      const toggleIsActive = currentSession?.activationMode === 'toggle'
-        && ['arming', 'listening'].includes(currentSession.status)
+      const activeSession = readActiveSession()
+      const toggleIsActive = activeSession?.activationMode === 'toggle'
+        && ['arming', 'listening'].includes(activeSession.status)
       const inDoubleTapWindow = lastShortPressAt > 0
         && (Date.now() - lastShortPressAt < DOUBLE_TAP_WINDOW_MS)
       if (!toggleIsActive && !inDoubleTapWindow) {
@@ -676,9 +677,9 @@ export const registerShortcuts = (
           return
         }
 
-        const currentSession = orchestrator.getSession()
-        const toggleWasActive = currentSession?.activationMode === 'toggle'
-          && ['arming', 'listening', 'processing'].includes(currentSession.status)
+        const activeSession = readActiveSession()
+        const toggleWasActive = activeSession?.activationMode === 'toggle'
+          && ['arming', 'listening', 'processing'].includes(activeSession.status)
         if (toggleWasActive) {
           // Single tap while toggle active → stop it
           orchestrator.requestStop('toggle')
@@ -712,7 +713,7 @@ export const registerShortcuts = (
   }
 
   const syncPushRegistration = (): void => {
-    const nextPushAccelerator = toAccelerator(store.getSettings().pushToTalkHotkey)
+    const nextPushAccelerator = toAccelerator(getSettings().pushToTalkHotkey)
 
     if (registeredPushAccelerator && registeredPushAccelerator !== nextPushAccelerator) {
       globalShortcut.unregister(registeredPushAccelerator)
@@ -728,7 +729,7 @@ export const registerShortcuts = (
         return
       }
 
-      const session = orchestrator.getSession()
+      const session = readActiveSession()
       const hasActivePushSession =
         session?.status === 'listening' && session.activationMode === 'push-to-talk'
 
@@ -743,7 +744,7 @@ export const registerShortcuts = (
       pushCaptureStarted = true
       clearPendingPushStart()
       await orchestrator.startCapture('push-to-talk')
-      const nextSession = orchestrator.getSession()
+      const nextSession = readActiveSession()
       if (!nextSession || nextSession.status !== 'listening' || nextSession.activationMode !== 'push-to-talk') {
         resetPushState()
       }
@@ -758,7 +759,7 @@ export const registerShortcuts = (
   }
 
   const syncToggleRegistration = (): void => {
-    const nextToggleAccelerator = toAccelerator(store.getSettings().toggleHotkey)
+    const nextToggleAccelerator = toAccelerator(getSettings().toggleHotkey)
 
     if (registeredToggleAccelerator && registeredToggleAccelerator !== nextToggleAccelerator) {
       globalShortcut.unregister(registeredToggleAccelerator)
@@ -799,8 +800,8 @@ export const registerShortcuts = (
   syncToggleRegistration()
 
   const refresh = (): void => {
-    parsedPushHotkey = parseHotkey(store.getSettings().pushToTalkHotkey)
-    parsedToggleHotkey = parseHotkey(store.getSettings().toggleHotkey)
+    parsedPushHotkey = parseHotkey(getSettings().pushToTalkHotkey)
+    parsedToggleHotkey = parseHotkey(getSettings().toggleHotkey)
     resetRuntimeState()
     syncPushRegistration()
     syncToggleRegistration()

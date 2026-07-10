@@ -2,7 +2,7 @@ import { render } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
-import { defaultSettings } from '@shared/defaults'
+import { defaultPermissionState, defaultSettings } from '@shared/defaults'
 import '@renderer/i18n'
 import { OnboardingWizard } from './OnboardingWizard'
 
@@ -31,6 +31,8 @@ describe('OnboardingWizard', () => {
         updateSettings={vi.fn(async () => defaultSettings)}
         microphoneRefreshKey={0}
         refreshMicrophones={() => undefined}
+        permissions={defaultPermissionState}
+        onDictationEnabledChange={vi.fn()}
         finishOnboarding={finishOnboarding}
         initialStep={9}
       />,

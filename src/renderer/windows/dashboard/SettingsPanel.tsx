@@ -1,13 +1,14 @@
 import { type ReactNode, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
-  AlertTriangle, Globe, KeyRound, Mic, Moon, MousePointerClick,
+  AlertTriangle, KeyRound, Mic, Moon, MousePointerClick,
   RefreshCw, Settings2, SlidersHorizontal, Type,
 } from 'lucide-react'
 
-import type { Settings } from '@shared/contracts'
+import type { PermissionState, Settings } from '@shared/contracts'
 import { defaultPushToTalkHotkey } from '@shared/defaults'
 import { HotkeyField, MicrophoneSelect, ToggleRow } from './controls'
+import { shouldShowMicrophoneGrantButton } from './microphonePermissions'
 
 const requestBrowserMicrophonePermission = async (): Promise<void> => {
   await window.ditado.requestMicrophoneAccess()
@@ -65,6 +66,7 @@ export const SettingsPanel = ({
   updateSettings,
   microphoneRefreshKey,
   refreshMicrophones,
+  permissions,
   onRestartOnboarding,
 }: {
   settings: Settings
@@ -74,6 +76,7 @@ export const SettingsPanel = ({
   updateSettings: (patch: Partial<Settings>) => Promise<Settings>
   microphoneRefreshKey: number
   refreshMicrophones: () => void
+  permissions: PermissionState
   onRestartOnboarding: () => void
   reducedMotion: boolean | null
   sectionMotion: {
@@ -85,6 +88,7 @@ export const SettingsPanel = ({
   const { t } = useTranslation()
   const [shortcutStatus, setShortcutStatus] = useState<{ captureActive: boolean; uiohookRunning: boolean } | null>(null)
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle')
+  const [microphoneDeviceCount, setMicrophoneDeviceCount] = useState(0)
 
   useEffect(() => {
     void window.ditado.getShortcutStatus().then(setShortcutStatus)
@@ -102,6 +106,7 @@ export const SettingsPanel = ({
   }
 
   const hookProblem = shortcutStatus && (!shortcutStatus.uiohookRunning || shortcutStatus.captureActive)
+  const showMicrophoneGrant = shouldShowMicrophoneGrantButton(permissions.microphone, microphoneDeviceCount)
 
   return (
     <div className="settings-layout">
@@ -166,16 +171,19 @@ export const SettingsPanel = ({
                   refreshKey={microphoneRefreshKey}
                   selected={settings.preferredMicrophoneId}
                   onSelect={(id) => void updateSettings({ preferredMicrophoneId: id })}
+                  onDeviceCountChange={setMicrophoneDeviceCount}
                 />
               </Field>
               <div className="flex gap-2 items-end">
-                <button
-                  className="button-secondary"
-                  type="button"
-                  onClick={() => void requestBrowserMicrophonePermission().catch(() => undefined).then(refreshMicrophones)}
-                >
-                  {t('common.grantAccess')}
-                </button>
+                {showMicrophoneGrant && (
+                  <button
+                    className="button-secondary"
+                    type="button"
+                    onClick={() => void requestBrowserMicrophonePermission().catch(() => undefined).then(refreshMicrophones)}
+                  >
+                    {t('common.grantAccess')}
+                  </button>
+                )}
                 <button className="button-ghost" type="button" onClick={refreshMicrophones}>
                   {t('common.refresh')}
                 </button>
@@ -318,20 +326,14 @@ export const SettingsPanel = ({
           </Section>
         </div>
 
-        {/* Updates & Telemetry */}
+        {/* Updates */}
         <div className="surface-panel p-4">
-          <Section title={t('settings.updatesAndTelemetry')} icon={Globe}>
+          <Section title={t('settings.updates')}>
             <ToggleRow
               label={t('settings.betaChannel')}
               description={t('settings.betaChannelDesc')}
               value={settings.updateChannel === 'beta'}
               onChange={(v) => void updateSettings({ updateChannel: v ? 'beta' : 'stable' })}
-            />
-            <ToggleRow
-              label={t('settings.telemetry')}
-              description={t('settings.telemetryDesc')}
-              value={settings.telemetryEnabled}
-              onChange={(v) => void updateSettings({ telemetryEnabled: v })}
             />
           </Section>
         </div>

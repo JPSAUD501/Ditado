@@ -13,9 +13,25 @@ type OutcomeFilter = 'all' | 'completed' | 'error'
 export const HistoryPanel = ({
   history,
   retentionDays,
+  search,
+  onSearchChange,
+  searchLoading,
+  hasMore,
+  loadingMore,
+  onLoadMore,
+  onClear,
+  onDelete,
 }: {
   history: HistoryEntry[]
   retentionDays: number
+  search: string
+  onSearchChange: (value: string) => void
+  searchLoading: boolean
+  hasMore: boolean
+  loadingMore: boolean
+  onLoadMore: () => void
+  onClear: () => Promise<unknown>
+  onDelete: (sessionId: string) => Promise<unknown>
   reducedMotion: boolean | null
   sectionMotion: {
     initial: { opacity: number; y: number }
@@ -25,7 +41,6 @@ export const HistoryPanel = ({
 }) => {
   const { t } = useTranslation()
   const [confirmClear, setConfirmClear] = useState(false)
-  const [search, setSearch] = useState('')
   const [outcomeFilter, setOutcomeFilter] = useState<OutcomeFilter>('all')
 
   const filtered = useMemo(() => {
@@ -33,16 +48,8 @@ export const HistoryPanel = ({
     if (outcomeFilter !== 'all') {
       result = result.filter((e) => e.outcome === outcomeFilter)
     }
-    if (search.trim()) {
-      const q = search.toLowerCase()
-      result = result.filter(
-        (e) =>
-          e.appName.toLowerCase().includes(q) ||
-          (e.outputText ?? '').toLowerCase().includes(q),
-      )
-    }
     return result
-  }, [history, outcomeFilter, search])
+  }, [history, outcomeFilter])
 
   const successCount = useMemo(() => history.filter((e) => e.outcome === 'completed').length, [history])
   const errorCount = history.length - successCount
@@ -64,7 +71,7 @@ export const HistoryPanel = ({
       </div>
 
       {/* Search + Filter bar */}
-      {history.length > 0 && (
+      {(history.length > 0 || search.length > 0) && (
         <motion.div
           className="history-controls"
           initial={{ opacity: 0, y: -4 }}
@@ -79,7 +86,7 @@ export const HistoryPanel = ({
               className="history-search-input"
               placeholder={t('history.searchPlaceholder')}
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => onSearchChange(e.target.value)}
             />
           </div>
 
@@ -106,7 +113,13 @@ export const HistoryPanel = ({
       )}
 
       {/* List */}
-      {history.length === 0 ? (
+      {searchLoading ? (
+        <div className="surface-panel p-5 text-center">
+          <div className="text-sm" style={{ color: 'var(--text-3)' }}>
+            {t('common.loading')}
+          </div>
+        </div>
+      ) : history.length === 0 && !search.trim() ? (
         <div className="surface-panel p-6 text-center grid gap-2">
           <div className="text-sm font-medium" style={{ color: 'var(--text-2)' }}>
             {t('history.noEntries')}
@@ -121,9 +134,20 @@ export const HistoryPanel = ({
       ) : (
         <div className="grid gap-1.5">
           {filtered.map((entry) => (
-            <HistoryRow key={entry.id} entry={entry} />
+            <HistoryRow key={entry.sessionId} entry={entry} onDelete={onDelete} />
           ))}
         </div>
+      )}
+
+      {hasMore && (
+        <button
+          className="button-ghost"
+          type="button"
+          disabled={loadingMore}
+          onClick={onLoadMore}
+        >
+          {loadingMore ? t('common.loading') : t('history.loadMore')}
+        </button>
       )}
 
       <AnimatePresence>
@@ -131,7 +155,7 @@ export const HistoryPanel = ({
           <ConfirmModal
             title={t('history.confirmClearAll')}
             desc={t('history.confirmClearAllDesc', { count: history.length })}
-            onConfirm={() => { void window.ditado.clearHistory(); setConfirmClear(false) }}
+            onConfirm={() => { void onClear(); setConfirmClear(false) }}
             onCancel={() => setConfirmClear(false)}
           />
         )}

@@ -1,71 +1,29 @@
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 
-import { defaultPermissionState, defaultSettings } from '@shared/defaults'
-import type { DashboardViewModel, DictationSession, OverlayViewModel } from '@shared/contracts'
+import { defaultPermissionState, defaultUpdateState } from '@shared/defaults'
+import type { DashboardNativeState, DictationSession } from '@shared/contracts'
 import { MAX_RECORDING_DURATION_MS, WavRecorder } from '@renderer/lib/wavRecorder'
 
-const initialOverlayState: OverlayViewModel = {
-  session: null,
-  settings: defaultSettings,
+const initialDashboardState: DashboardNativeState = {
   permissions: defaultPermissionState,
-}
-
-const initialDashboardState: DashboardViewModel = {
-  session: null,
-  settings: defaultSettings,
-  history: [],
-  telemetryTail: [],
-  permissions: defaultPermissionState,
-  updateState: {
-    enabled: true,
-    channel: 'stable',
-    lastCheckedAt: null,
-    status: 'idle',
-    downloadProgress: null,
-  },
+  updateState: defaultUpdateState,
   appVersion: '',
 }
 
-export const useOverlayBridge = (): OverlayViewModel => {
-  const [state, setState] = useState(initialOverlayState)
-
-  useEffect(() => {
-    let mounted = true
-    let receivedLiveState = false
-
-    const unsubscribe = window.ditado.subscribeOverlayState((value) => {
-      receivedLiveState = true
-      setState(value)
-    })
-
-    void window.ditado.getOverlayState().then((value) => {
-      if (mounted && !receivedLiveState) {
-        setState(value)
-      }
-    })
-
-    return () => {
-      mounted = false
-      unsubscribe()
-    }
-  }, [])
-
-  return state
-}
-
-export const useDashboardBridge = (): DashboardViewModel => {
+export const useDashboardBridge = (): DashboardNativeState => {
   const [state, setState] = useState(initialDashboardState)
 
   useEffect(() => {
     let mounted = true
-    void window.ditado.getDashboardState().then((value) => {
+    const unsubscribe = window.ditado.subscribeDashboardNativeState((value) => {
       if (mounted) {
         setState(value)
       }
     })
-
-    const unsubscribe = window.ditado.subscribeDashboardState((value) => {
-      setState(value)
+    void window.ditado.getDashboardNativeState().then((value) => {
+      if (mounted) {
+        setState(value)
+      }
     })
 
     return () => {
@@ -92,6 +50,7 @@ export const useDictationRecorder = (
   session: DictationSession | null,
   preferredMicrophoneId: string | null,
   startupWarmupEnabled = false,
+  enabled = true,
 ): { isRecording: boolean } => {
   const recorder = useMemo(() => new WavRecorder(), [])
   const warmedMicrophone = useRef<string | null | undefined>(undefined)
@@ -126,11 +85,11 @@ export const useDictationRecorder = (
   }, [session])
 
   const finalizeCapture = useEffectEvent((nextSession: DictationSession): void => {
-    if (!recorder.isRecording() || stopInFlight.current === nextSession.id) {
+    if (!recorder.isRecording() || stopInFlight.current === nextSession.sessionId) {
       return
     }
 
-    stopInFlight.current = nextSession.id
+    stopInFlight.current = nextSession.sessionId
     clearMaxDurationTimer()
     void recorder
       .stop(navigator.language)
@@ -146,7 +105,7 @@ export const useDictationRecorder = (
         void window.ditado.cancelDictation()
       })
       .finally(() => {
-        if (stopInFlight.current === nextSession.id) {
+        if (stopInFlight.current === nextSession.sessionId) {
           stopInFlight.current = null
         }
       })
@@ -161,6 +120,9 @@ export const useDictationRecorder = (
 
   useEffect(() => {
     const warmupKey = preferredMicrophoneId ?? '__default__'
+    if (!enabled) {
+      return
+    }
     if (warmedMicrophone.current === warmupKey) {
       return
     }
@@ -184,9 +146,18 @@ export const useDictationRecorder = (
         startupWarmupReported.current = true
         void window.ditado.notifyRecorderWarmupFinished('failed')
       })
-  }, [preferredMicrophoneId, recorder, startupWarmupEnabled])
+  }, [enabled, preferredMicrophoneId, recorder, startupWarmupEnabled])
 
   useEffect(() => {
+    if (!enabled) {
+      handledIntent.current = null
+      clearMaxDurationTimer()
+      if (recorder.isRecording()) {
+        void recorder.cancel().finally(() => setIsRecording(false))
+      }
+      return
+    }
+
     if (!session) {
       handledIntent.current = null
       clearMaxDurationTimer()
@@ -196,7 +167,7 @@ export const useDictationRecorder = (
       return
     }
 
-    const intentKey = `${session.id}:${session.captureIntent}`
+    const intentKey = `${session.sessionId}:${session.captureIntent}`
     if (handledIntent.current === intentKey) {
       return
     }
@@ -209,7 +180,7 @@ export const useDictationRecorder = (
           const latestSession = activeSession.current
           if (
             !latestSession ||
-            latestSession.id !== session.id ||
+            latestSession.sessionId !== session.sessionId ||
             !['arming', 'listening'].includes(latestSession.status)
           ) {
             clearMaxDurationTimer()
@@ -217,26 +188,26 @@ export const useDictationRecorder = (
             return
           }
 
-          void window.ditado.notifyRecorderStarted(session.id)
+          void window.ditado.notifyRecorderStarted(session.sessionId)
           setIsRecording(true)
           clearMaxDurationTimer()
           maxDurationTimer.current = window.setTimeout(() => {
-            const currentSession = activeSession.current
+            const observedSession = activeSession.current
             if (
-              !currentSession ||
-              currentSession.id !== session.id ||
-              !['arming', 'listening'].includes(currentSession.status)
+              !observedSession ||
+              observedSession.sessionId !== session.sessionId ||
+              !['arming', 'listening'].includes(observedSession.status)
             ) {
               return
             }
-            finalizeCapture(currentSession)
+            finalizeCapture(observedSession)
           }, MAX_RECORDING_DURATION_MS)
         })
         .catch(() => {
           setIsRecording(false)
           clearMaxDurationTimer()
           void window.ditado.notifyRecorderFailed(
-            session.id,
+            session.sessionId,
             'Unable to start microphone capture.',
           )
         })
@@ -251,12 +222,12 @@ export const useDictationRecorder = (
 
     if (session.captureIntent === 'none') {
       handledIntent.current = intentKey
-      if (session.status !== 'listening' && recorder.isRecording() && stopInFlight.current !== session.id) {
+      if (session.status !== 'listening' && recorder.isRecording() && stopInFlight.current !== session.sessionId) {
         clearMaxDurationTimer()
         void recorder.cancel().finally(() => setIsRecording(false))
       }
     }
-  }, [preferredMicrophoneId, recorder, session])
+  }, [enabled, preferredMicrophoneId, recorder, session])
 
   return { isRecording }
 }

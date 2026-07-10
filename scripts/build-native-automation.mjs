@@ -112,8 +112,30 @@ export const clearNativeAddonOutput = ({
   }
 }
 
+export const hasAvailableWslDistro = ({
+  platform = process.platform,
+  execFile = execFileSync,
+} = {}) => {
+  if (platform !== 'win32') {
+    return false
+  }
+
+  try {
+    const output = execFile('wsl.exe', ['--list', '--quiet'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    return output
+      .split(/\r?\n/)
+      .map((line) => line.replace(/\0/g, '').trim())
+      .some(Boolean)
+  } catch {
+    return false
+  }
+}
+
 const tryWslBuild = () => {
-  if (process.platform !== 'win32') {
+  if (!hasAvailableWslDistro()) {
     return null
   }
 

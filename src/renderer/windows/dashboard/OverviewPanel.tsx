@@ -4,7 +4,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { Check, Copy, Mic, Type, CheckCircle, Clock, Zap, TrendingUp, AppWindow, AlertTriangle, ArrowRight } from 'lucide-react'
 
 import { StatusPill } from '@renderer/components/StatusPill'
-import type { DashboardViewModel, DictationStatus, HistoryEntry } from '@shared/contracts'
+import { deriveHistoryDurations, type DashboardState, type DictationSession, type DictationStatus, type HistoryEntry } from '@shared/contracts'
 import { formatAudioDuration, formatDate } from './formatters'
 
 const easeOutExpo = [0.16, 1, 0.3, 1] as const
@@ -30,10 +30,10 @@ const computeStats = (history: HistoryEntry[]) => {
   const total = history.length
   const completed = history.filter((e) => e.outcome === 'completed').length
   const successRate = total > 0 ? Math.round((completed / total) * 100) : 0
-  const totalMinutes = history.reduce((sum, e) => sum + e.audioDurationMs, 0) / 60_000
+  const totalMinutes = history.reduce((sum, e) => sum + e.audio.durationMs, 0) / 60_000
   const totalChars = history.reduce((sum, e) => sum + (e.outputText?.length ?? 0), 0)
   const avgLatency = total > 0
-    ? Math.round(history.reduce((sum, e) => sum + e.latencyMs, 0) / total)
+    ? Math.round(history.reduce((sum, e) => sum + (deriveHistoryDurations(e.timing).llmTotalMs ?? 0), 0) / total)
     : 0
 
   const appCounts = new Map<string, number>()
@@ -226,7 +226,7 @@ const MiniHistoryEntry = ({
           <div className="hentry-top">
             <div className="hentry-app-row">
               <span className="hentry-app">{entry.appName}</span>
-              {entry.audioDurationMs > 0 && (
+              {entry.audio.durationMs > 0 && (
                 <span className="hentry-duration-badge">
                   <span className="hentry-duration-icon">
                     <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -235,7 +235,7 @@ const MiniHistoryEntry = ({
                       <line x1="12" x2="12" y1="19" y2="22"/>
                     </svg>
                   </span>
-                  {formatAudioDuration(entry.audioDurationMs)}
+                  {formatAudioDuration(entry.audio.durationMs)}
                 </span>
               )}
             </div>
@@ -279,22 +279,49 @@ const MiniHistoryEntry = ({
 
 export const OverviewPanel = ({
   state,
+  session,
+  historyStats,
   onNavigateToHistory,
 }: {
-  state: DashboardViewModel
+  state: DashboardState
+  session: DictationSession | null
+  historyStats: {
+    total: number
+    completed: number
+    errors: number
+    totalAudioMs: number
+    totalCharacters: number
+    averageLatencyMs: number
+    topApps: Array<{ appName: string; count: number }>
+    weekActivity: number[]
+  } | null
   onNavigateToHistory: () => void
 }) => {
   const { t } = useTranslation()
   const reducedMotion = useReducedMotion()
-  const stats = useMemo(() => computeStats(state.history), [state.history])
+  const paginatedStats = useMemo(() => computeStats(state.history), [state.history])
+  const stats = historyStats
+    ? {
+        total: historyStats.total,
+        completed: historyStats.completed,
+        successRate: historyStats.total > 0
+          ? Math.round((historyStats.completed / historyStats.total) * 100)
+          : 0,
+        totalMinutes: historyStats.totalAudioMs / 60_000,
+        totalChars: historyStats.totalCharacters,
+        avgLatency: historyStats.averageLatencyMs,
+        topApps: historyStats.topApps.map(({ appName, count }) => [appName, count] as [string, number]),
+        weekActivity: historyStats.weekActivity,
+      }
+    : paginatedStats
   const recentEntries = state.history.slice(0, 3)
-  const sessionStatus: DictationStatus = state.session?.status ?? 'idle'
+  const sessionStatus: DictationStatus = session?.status ?? 'idle'
   const stageLabel = t(stageCopyKeys[sessionStatus] ?? 'overview.unknown')
   const micOk = state.permissions.microphone === 'granted'
   const accOk = state.permissions.accessibility === 'granted'
   const apiOk = state.settings.apiKeyPresent
 
-  const hasHistory = state.history.length > 0
+  const hasHistory = stats.total > 0
 
   return (
     <div className="grid gap-3">
@@ -313,13 +340,13 @@ export const OverviewPanel = ({
             <StatusPill status={sessionStatus} />
             <span className="text-sm font-semibold" style={{ color: 'var(--text-1)' }}>{stageLabel}</span>
           </div>
-          {state.session?.targetApp && (
+          {session?.targetApp && (
             <span className="text-xs" style={{ color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>
-              {state.session.targetApp}
+              {session.targetApp}
             </span>
           )}
         </div>
-        {state.session?.partialText && (
+        {session?.partialText && (
           <motion.div
             className="surface-muted p-2.5 text-sm wrap-safe mt-3"
             style={{ color: 'var(--text-2)', lineHeight: 1.5 }}
@@ -327,7 +354,7 @@ export const OverviewPanel = ({
             animate={{ opacity: 1, height: 'auto' }}
             transition={{ duration: 0.25, ease: easeOutExpo }}
           >
-            {state.session.partialText}
+            {session.partialText}
           </motion.div>
         )}
       </motion.div>
@@ -468,7 +495,7 @@ export const OverviewPanel = ({
               <div className="mini-history-list">
                 {recentEntries.map((entry, i) => (
                   <MiniHistoryEntry
-                    key={entry.id}
+                    key={entry.sessionId}
                     entry={entry}
                     index={i}
                     reducedMotion={reducedMotion}

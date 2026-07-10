@@ -160,7 +160,7 @@ export const MockupChatApp = ({
   pushToTalkHotkey: string
 }) => {
   const { t } = useTranslation()
-  const isActive = session?.activationMode === 'push-to-talk' && session.status !== 'idle' && session.status !== 'notice'
+  const isActive = session?.activationMode === 'push-to-talk' && session.status !== 'notice'
   const isListening = session?.activationMode === 'push-to-talk' && (session.status === 'listening' || session.status === 'arming')
   const displayText = session?.finalText || session?.partialText || ''
   const shortcutHint = formatHotkeyForDisplay(pushToTalkHotkey).split('').join(' ')
@@ -208,8 +208,8 @@ export const MockupChatApp = ({
 
 const SelectTransformMockup = ({ session }: { session: DictationSession | null }) => {
   const { t } = useTranslation()
-  const [entrySessionId] = useState<string | null | undefined>(session?.id)
-  const isNewSession = session?.id !== entrySessionId
+  const [entrySessionId] = useState<string | null | undefined>(session?.sessionId)
+  const isNewSession = session?.sessionId !== entrySessionId
   const isListening = isNewSession && session?.activationMode === 'push-to-talk' && (session.status === 'listening' || session.status === 'arming')
   const isProcessing = isNewSession && session?.activationMode === 'push-to-talk' && session.status === 'processing'
   const transformSucceeded = isNewSession && session?.activationMode === 'push-to-talk' && session.status === 'completed' && !!session.context.selectedText
