@@ -103,6 +103,7 @@
     "filterOk": "Success",
     "filterError": "Errors",
     "noResults": "No matching entries.",
+    "loadMore": "Load more",
     "noTextInserted": "No text inserted.",
     "audioUnavailable": "Audio unavailable.",
     "loadingAudio": "Loading audio…",

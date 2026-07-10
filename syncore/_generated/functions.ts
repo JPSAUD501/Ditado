@@ -12,14 +12,13 @@ import { composeProjectFunctionRegistry } from "syncorejs";
 import { appendWithAudio as history__appendWithAudio } from "../functions/history.js";
 import { audio as history__audio } from "../functions/history.js";
 import { clear as history__clear } from "../functions/history.js";
-import { list as history__list } from "../functions/history.js";
 import { page as history__page } from "../functions/history.js";
 import { remove as history__remove } from "../functions/history.js";
 import { search as history__search } from "../functions/history.js";
 import { stats as history__stats } from "../functions/history.js";
-import { listJobs as maintenance__listJobs } from "../functions/maintenance.js";
 import { pruneHistory as maintenance__pruneHistory } from "../functions/maintenance.js";
-import { schedulePrune as maintenance__schedulePrune } from "../functions/maintenance.js";
+import { set as secrets__set } from "../functions/secrets.js";
+import { status as secrets__status } from "../functions/secrets.js";
 import { active as sessions__active } from "../functions/sessions.js";
 import { appendPartial as sessions__appendPartial } from "../functions/sessions.js";
 import { byId as sessions__byId } from "../functions/sessions.js";
@@ -59,10 +58,6 @@ export interface SyncoreRootFunctionsRegistry extends SyncoreFunctionRegistry {
    */
   readonly "history/clear": typeof history__clear;
   /**
-   * Runtime definition for the public Syncore query `history/list`.
-   */
-  readonly "history/list": typeof history__list;
-  /**
    * Runtime definition for the public Syncore query `history/page`.
    */
   readonly "history/page": typeof history__page;
@@ -79,17 +74,17 @@ export interface SyncoreRootFunctionsRegistry extends SyncoreFunctionRegistry {
    */
   readonly "history/stats": typeof history__stats;
   /**
-   * Runtime definition for the public Syncore query `maintenance/listJobs`.
-   */
-  readonly "maintenance/listJobs": typeof maintenance__listJobs;
-  /**
    * Runtime definition for the public Syncore mutation `maintenance/pruneHistory`.
    */
   readonly "maintenance/pruneHistory": typeof maintenance__pruneHistory;
   /**
-   * Runtime definition for the public Syncore mutation `maintenance/schedulePrune`.
+   * Runtime definition for the public Syncore action `secrets/set`.
    */
-  readonly "maintenance/schedulePrune": typeof maintenance__schedulePrune;
+  readonly "secrets/set": typeof secrets__set;
+  /**
+   * Runtime definition for the public Syncore action `secrets/status`.
+   */
+  readonly "secrets/status": typeof secrets__status;
   /**
    * Runtime definition for the public Syncore query `sessions/active`.
    */
@@ -174,7 +169,6 @@ export interface SyncoreRootFunctionsRegistry extends SyncoreFunctionRegistry {
  * Most application code should import from `./api` instead of using this map directly.
  */
 const rootFunctions: SyncoreRootFunctionsRegistry = {
-  "history/list": history__list,
   "history/page": history__page,
   "history/search": history__search,
   "history/stats": history__stats,
@@ -182,9 +176,9 @@ const rootFunctions: SyncoreRootFunctionsRegistry = {
   "history/remove": history__remove,
   "history/clear": history__clear,
   "history/audio": history__audio,
-  "maintenance/listJobs": maintenance__listJobs,
   "maintenance/pruneHistory": maintenance__pruneHistory,
-  "maintenance/schedulePrune": maintenance__schedulePrune,
+  "secrets/status": secrets__status,
+  "secrets/set": secrets__set,
   "sessions/active": sessions__active,
   "sessions/byId": sessions__byId,
   "sessions/recent": sessions__recent,

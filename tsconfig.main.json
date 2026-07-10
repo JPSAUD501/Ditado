@@ -18,5 +18,5 @@
       "@main/*": ["./src/main/*"]
     }
   },
-  "include": ["src/main/**/*.ts", "src/shared/**/*.ts", "src/syncore-runtime.ts", "syncore/**/*.ts"]
+  "include": ["src/main/**/*.ts", "src/shared/**/*.ts", "syncore/**/*.ts"]
 }

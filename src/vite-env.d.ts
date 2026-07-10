@@ -2,17 +2,17 @@
 
 import type {
   DashboardTab,
-  DashboardViewModel,
+  DashboardNativeState,
   DeviceInfo,
   DictationAudioPayload,
   PermissionState,
   RecorderWarmupStatus,
-  Settings,
 } from '@shared/contracts'
 import type { HotkeyCapturePayload } from '@shared/hotkeys'
 
 interface DitadoDesktopApi {
-  getDashboardState: () => Promise<DashboardViewModel>
+  getDashboardNativeState: () => Promise<DashboardNativeState>
+  subscribeDashboardNativeState: (listener: (state: DashboardNativeState) => void) => () => void
   subscribeDashboardTabRequests: (listener: (tab: DashboardTab) => void) => () => void
   startPushToTalk: () => Promise<void>
   stopPushToTalk: (payload: DictationAudioPayload) => Promise<void>
@@ -23,8 +23,6 @@ interface DitadoDesktopApi {
   notifyRecorderFailed: (sessionId: string, reason: string) => Promise<void>
   notifyRecorderReady: () => Promise<void>
   notifyRecorderWarmupFinished: (status: RecorderWarmupStatus) => Promise<void>
-  updateSettings: (patch: Partial<Settings>) => Promise<Settings>
-  setApiKey: (apiKey: string) => Promise<Settings>
   setHotkeyCaptureActive: (active: boolean) => Promise<void>
   getShortcutStatus: () => Promise<{ captureActive: boolean; uiohookRunning: boolean }>
   subscribeHotkeyCapture: (listener: (payload: HotkeyCapturePayload) => void) => () => void
@@ -32,8 +30,6 @@ interface DitadoDesktopApi {
   requestMicrophoneAccess: () => Promise<PermissionState>
   getPermissions: () => Promise<PermissionState>
   openDashboardTab: (tab: DashboardTab) => Promise<void>
-  clearHistory: () => Promise<void>
-  deleteHistoryEntry: (entryId: string) => Promise<void>
   checkForUpdates: () => Promise<void>
   downloadUpdate: () => Promise<void>
   installUpdate: () => Promise<void>

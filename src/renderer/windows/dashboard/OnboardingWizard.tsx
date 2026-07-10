@@ -473,8 +473,8 @@ const StepSelectTransform = ({
   const { t } = useTranslation()
   const status = session?.status ?? 'idle'
   // Only react to sessions that started after this step was shown
-  const [entrySessionId] = useState<string | null | undefined>(session?.id)
-  const isNewSession = session?.id !== entrySessionId
+  const [entrySessionId] = useState<string | null | undefined>(session?.sessionId)
+  const isNewSession = session?.sessionId !== entrySessionId
 
   useEffect(() => {
     if (!isNewSession) return

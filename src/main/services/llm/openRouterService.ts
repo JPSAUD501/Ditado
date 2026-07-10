@@ -2,19 +2,19 @@ import { OpenRouter } from '@openrouter/sdk'
 
 import { llmResponseSchema, type LlmRequest, type LlmResponse } from '../../../shared/contracts.js'
 import { buildSystemPrompt, buildUserPrompt } from '../../../shared/prompt.js'
-import type { SyncoreAppData } from '../store/syncoreAppData.js'
+import type { ApiKeyVault } from '../secrets/apiKeyVault.js'
 
 const OPENROUTER_TIMEOUT_MS = 60_000
 const OPENROUTER_RETRY_CODES = ['408', '429', '500', '502', '503', '504']
 
 export class OpenRouterService {
-  constructor(private readonly store: SyncoreAppData) {}
+  constructor(private readonly apiKeyVault: ApiKeyVault) {}
 
   async stream(
     request: LlmRequest,
     onDelta: (delta: string) => Promise<void>,
   ): Promise<LlmResponse> {
-    const apiKey = await this.store.getApiKey()
+    const apiKey = await this.apiKeyVault.get()
     if (!apiKey) {
       throw new Error('OpenRouter API key missing or secure storage unavailable')
     }

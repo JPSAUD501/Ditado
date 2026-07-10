@@ -1,6 +1,7 @@
 export const ipcChannels = {
   dashboard: {
-    getState: 'dashboard:getState',
+    getNativeState: 'dashboard:getNativeState',
+    nativeState: 'dashboard:nativeState',
     openTab: 'dashboard:openTab',
   },
   startup: {
@@ -17,18 +18,10 @@ export const ipcChannels = {
     recorderFailed: 'dictation:recorderFailed',
     audioLevel: 'dictation:audioLevel',
   },
-  settings: {
-    update: 'settings:update',
-    setApiKey: 'settings:setApiKey',
-  },
   hotkeys: {
     setCaptureMode: 'hotkeys:setCaptureMode',
     getStatus: 'hotkeys:getStatus',
     captureUpdate: 'hotkeys:captureUpdate',
-  },
-  history: {
-    clear: 'history:clear',
-    deleteEntry: 'history:deleteEntry',
   },
   permissions: {
     requestMicrophone: 'permissions:requestMicrophone',

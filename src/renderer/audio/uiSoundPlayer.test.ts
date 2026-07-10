@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 
-import { createIdleSession } from '@shared/defaults'
+import { createTestSession } from '@shared/testFixtures'
 
 import { getUiSoundForSessionTransition } from './uiSoundEvents'
 import { playUiSound, preloadUiSounds, resetUiSoundPlayerForTests } from './uiSoundPlayer'
@@ -37,8 +37,8 @@ const AudioContextStub = vi.fn(() => {
 describe('uiSoundEvents', () => {
   it('maps session transitions to the expected UI sound names', () => {
     const baseSession = {
-      ...createIdleSession(),
-      id: 'session-1',
+      ...createTestSession(),
+      sessionId: 'session-1',
       startedAt: new Date().toISOString(),
       targetApp: 'VS Code',
     }
@@ -110,8 +110,8 @@ describe('uiSoundEvents', () => {
 
   it('does not replay the short-press sound when the same notice is rebroadcast', () => {
     const shortPressNotice = {
-      ...createIdleSession(),
-      id: 'session-1',
+      ...createTestSession(),
+      sessionId: 'session-1',
       activationMode: 'push-to-talk' as const,
       status: 'notice' as const,
       captureIntent: 'none' as const,
@@ -125,8 +125,8 @@ describe('uiSoundEvents', () => {
 
   it('suppresses the push-to-talk start sound when a short-press notice turns into toggle mode', () => {
     const shortPressNotice = {
-      ...createIdleSession(),
-      id: 'session-notice',
+      ...createTestSession(),
+      sessionId: 'session-notice',
       activationMode: 'push-to-talk' as const,
       status: 'notice' as const,
       captureIntent: 'none' as const,
@@ -134,8 +134,8 @@ describe('uiSoundEvents', () => {
     }
 
     expect(getUiSoundForSessionTransition(shortPressNotice, {
-      ...createIdleSession(),
-      id: 'session-toggle',
+      ...createTestSession(),
+      sessionId: 'session-toggle',
       activationMode: 'push-to-talk',
       status: 'arming',
       captureIntent: 'start',

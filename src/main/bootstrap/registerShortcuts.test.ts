@@ -1,4 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { DictationSession, Settings } from '../../shared/contracts.js'
+import type { HotkeyCapturePayload } from '../../shared/hotkeys.js'
+import type { DictationSessionOrchestrator } from '../services/session/dictationSessionOrchestrator.js'
+import type { registerShortcuts as registerShortcutsFunction } from './registerShortcuts.js'
+
+type RegisterShortcuts = typeof registerShortcutsFunction
 
 const listeners = {
   keydown: new Set<(event: { keycode: number; ctrlKey: boolean; altKey: boolean; shiftKey: boolean; metaKey: boolean }) => void>(),
@@ -63,6 +69,24 @@ const withPlatform = async (platform: NodeJS.Platform, run: () => Promise<void>)
   }
 }
 
+const registerTestShortcuts = (
+  register: RegisterShortcuts,
+  state: { getSettings: () => unknown },
+  orchestrator: DictationSessionOrchestrator & { readSession: () => unknown },
+  isCaptureSuspended: () => boolean,
+  onHookStatus?: (running: boolean) => void,
+  isHotkeyCaptureActive?: () => boolean,
+  onHotkeyCapture?: (payload: HotkeyCapturePayload) => void,
+) => register(
+  state.getSettings as () => Settings,
+  orchestrator.readSession as () => DictationSession | null,
+  orchestrator,
+  isCaptureSuspended,
+  onHookStatus,
+  isHotkeyCaptureActive,
+  onHotkeyCapture,
+)
+
 beforeEach(() => {
   vi.useRealTimers()
   listeners.keydown.clear()
@@ -82,7 +106,7 @@ describe('registerShortcuts', () => {
       toggleCapture: vi.fn(async () => undefined),
       requestStop: vi.fn(),
       showShortPressHint: vi.fn(async () => undefined),
-      getSessionSnapshot: vi.fn(() => null),
+      readSession: vi.fn(() => null),
     }
     const store = {
       getSettings: () => ({
@@ -91,7 +115,7 @@ describe('registerShortcuts', () => {
       }),
     }
 
-    registerShortcuts(store as never, orchestrator as never, () => false)
+    registerTestShortcuts(registerShortcuts, store as never, orchestrator as never, () => false)
 
     expect(registerShortcut).not.toHaveBeenCalled()
 
@@ -109,7 +133,7 @@ describe('registerShortcuts', () => {
       toggleCapture: vi.fn(async () => undefined),
       requestStop: vi.fn(),
       showShortPressHint: vi.fn(async () => undefined),
-      getSessionSnapshot: vi
+      readSession: vi
         .fn()
         .mockReturnValueOnce(null)
         .mockReturnValue({
@@ -124,7 +148,7 @@ describe('registerShortcuts', () => {
       }),
     }
 
-    registerShortcuts(store as never, orchestrator as never, () => false)
+    registerTestShortcuts(registerShortcuts, store as never, orchestrator as never, () => false)
 
     emit('keydown', { keycode: 29, ctrlKey: true, altKey: false, shiftKey: false, metaKey: false })
     emit('keydown', { keycode: 56, ctrlKey: true, altKey: true, shiftKey: false, metaKey: false })
@@ -146,7 +170,7 @@ describe('registerShortcuts', () => {
       toggleCapture: vi.fn(async () => undefined),
       requestStop: vi.fn(),
       showShortPressHint: vi.fn(async () => undefined),
-      getSessionSnapshot: vi.fn(() => null),
+      readSession: vi.fn(() => null),
     }
     const store = {
       getSettings: () => ({
@@ -155,7 +179,7 @@ describe('registerShortcuts', () => {
       }),
     }
 
-    registerShortcuts(
+    registerTestShortcuts(registerShortcuts,
       store as never,
       orchestrator as never,
       () => false,
@@ -188,7 +212,7 @@ describe('registerShortcuts', () => {
         toggleCapture: vi.fn(async () => undefined),
         requestStop: vi.fn(),
         showShortPressHint: vi.fn(async () => undefined),
-        getSessionSnapshot: vi.fn(() => null),
+      readSession: vi.fn(() => null),
       }
       const store = {
         getSettings: () => ({
@@ -197,7 +221,7 @@ describe('registerShortcuts', () => {
         }),
       }
 
-      registerShortcuts(
+    registerTestShortcuts(registerShortcuts,
         store as never,
         orchestrator as never,
         () => false,
@@ -225,7 +249,7 @@ describe('registerShortcuts', () => {
       toggleCapture: vi.fn(async () => undefined),
       requestStop: vi.fn(),
       showShortPressHint: vi.fn(async () => undefined),
-      getSessionSnapshot: vi.fn(() => null),
+      readSession: vi.fn(() => null),
     }
     const store = {
       getSettings: () => ({
@@ -234,7 +258,7 @@ describe('registerShortcuts', () => {
       }),
     }
 
-    registerShortcuts(store as never, orchestrator as never, () => false)
+    registerTestShortcuts(registerShortcuts, store as never, orchestrator as never, () => false)
 
     emit('keydown', { keycode: 3675, ctrlKey: false, altKey: false, shiftKey: false, metaKey: true })
     vi.advanceTimersByTime(350)
@@ -254,7 +278,7 @@ describe('registerShortcuts', () => {
         toggleCapture: vi.fn(async () => undefined),
         requestStop: vi.fn(),
         showShortPressHint: vi.fn(async () => undefined),
-        getSessionSnapshot: vi.fn(() => null),
+      readSession: vi.fn(() => null),
       }
       const store = {
         getSettings: () => ({
@@ -263,7 +287,7 @@ describe('registerShortcuts', () => {
         }),
       }
 
-      const shortcuts = registerShortcuts(store as never, orchestrator as never, () => false)
+      const shortcuts = registerTestShortcuts(registerShortcuts, store as never, orchestrator as never, () => false)
 
       emit('keydown', { keycode: 3675, ctrlKey: false, altKey: false, shiftKey: false, metaKey: true })
       shortcuts.resetRuntimeState({ suppressUntilRelease: true })
@@ -284,7 +308,7 @@ describe('registerShortcuts', () => {
         toggleCapture: vi.fn(async () => undefined),
         requestStop: vi.fn(),
         showShortPressHint: vi.fn(async () => undefined),
-        getSessionSnapshot: vi.fn(() => null),
+      readSession: vi.fn(() => null),
       }
       const store = {
         getSettings: () => ({
@@ -293,7 +317,7 @@ describe('registerShortcuts', () => {
         }),
       }
 
-      const shortcuts = registerShortcuts(store as never, orchestrator as never, () => false)
+      const shortcuts = registerTestShortcuts(registerShortcuts, store as never, orchestrator as never, () => false)
 
       shortcuts.resetRuntimeState({ suppressUntilRelease: true })
       emit('keydown', { keycode: 29, ctrlKey: true, altKey: false, shiftKey: false, metaKey: true })
@@ -319,7 +343,7 @@ describe('registerShortcuts', () => {
         toggleCapture: vi.fn(async () => undefined),
         requestStop: vi.fn(),
         showShortPressHint: vi.fn(async () => undefined),
-        getSessionSnapshot: vi.fn(() => null),
+      readSession: vi.fn(() => null),
       }
       const store = {
         getSettings: () => ({
@@ -328,7 +352,7 @@ describe('registerShortcuts', () => {
         }),
       }
 
-      registerShortcuts(store as never, orchestrator as never, () => false)
+    registerTestShortcuts(registerShortcuts, store as never, orchestrator as never, () => false)
 
       emit('keydown', { keycode: 3675, ctrlKey: false, altKey: false, shiftKey: false, metaKey: true })
       emit('keydown', { keycode: 38, ctrlKey: false, altKey: false, shiftKey: false, metaKey: true })
@@ -349,7 +373,7 @@ describe('registerShortcuts', () => {
         toggleCapture: vi.fn(async () => undefined),
         requestStop: vi.fn(),
         showShortPressHint: vi.fn(async () => undefined),
-        getSessionSnapshot: vi.fn(() => null),
+      readSession: vi.fn(() => null),
       }
       const store = {
         getSettings: () => ({
@@ -358,7 +382,7 @@ describe('registerShortcuts', () => {
         }),
       }
 
-      registerShortcuts(store as never, orchestrator as never, () => false)
+    registerTestShortcuts(registerShortcuts, store as never, orchestrator as never, () => false)
 
       emit('keydown', { keycode: 3675, ctrlKey: false, altKey: false, shiftKey: false, metaKey: true })
       emit('keydown', { keycode: 38, ctrlKey: false, altKey: false, shiftKey: false, metaKey: true })
@@ -378,7 +402,7 @@ describe('registerShortcuts', () => {
       toggleCapture: vi.fn(async () => undefined),
       requestStop: vi.fn(),
       showShortPressHint: vi.fn(async () => undefined),
-      getSessionSnapshot: vi
+      readSession: vi
         .fn()
         .mockReturnValueOnce(null)
         .mockReturnValue({
@@ -393,7 +417,7 @@ describe('registerShortcuts', () => {
       }),
     }
 
-    registerShortcuts(store as never, orchestrator as never, () => false)
+    registerTestShortcuts(registerShortcuts, store as never, orchestrator as never, () => false)
 
     emit('keydown', { keycode: 29, ctrlKey: true, altKey: false, shiftKey: false, metaKey: false })
     emit('keydown', { keycode: 3675, ctrlKey: true, altKey: false, shiftKey: false, metaKey: true })
@@ -415,7 +439,7 @@ describe('registerShortcuts', () => {
       toggleCapture: vi.fn(async () => undefined),
       requestStop: vi.fn(),
       showShortPressHint: vi.fn(async () => undefined),
-      getSessionSnapshot: vi.fn(() => null),
+      readSession: vi.fn(() => null),
     }
     const store = {
       getSettings: () => ({
@@ -424,7 +448,7 @@ describe('registerShortcuts', () => {
       }),
     }
 
-    registerShortcuts(store as never, orchestrator as never, () => false)
+    registerTestShortcuts(registerShortcuts, store as never, orchestrator as never, () => false)
 
     emit('keydown', { keycode: 29, ctrlKey: true, altKey: false, shiftKey: false, metaKey: false })
     emit('keydown', { keycode: 56, ctrlKey: true, altKey: true, shiftKey: false, metaKey: false })
@@ -450,7 +474,7 @@ describe('registerShortcuts', () => {
       toggleCapture: vi.fn(async () => undefined),
       requestStop: vi.fn(),
       showShortPressHint: vi.fn(async () => undefined),
-      getSessionSnapshot: vi.fn(() => null),
+      readSession: vi.fn(() => null),
     }
     const store = {
       getSettings: () => ({
@@ -459,7 +483,7 @@ describe('registerShortcuts', () => {
       }),
     }
 
-    registerShortcuts(store as never, orchestrator as never, () => false)
+    registerTestShortcuts(registerShortcuts, store as never, orchestrator as never, () => false)
 
     emit('keydown', { keycode: 29, ctrlKey: true, altKey: false, shiftKey: false, metaKey: false })
     emit('keydown', { keycode: 56, ctrlKey: true, altKey: true, shiftKey: false, metaKey: false })
@@ -486,7 +510,7 @@ describe('registerShortcuts', () => {
       toggleCapture: vi.fn(async () => undefined),
       requestStop: vi.fn(),
       showShortPressHint: vi.fn(async () => undefined),
-      getSessionSnapshot: vi.fn(() => null),
+      readSession: vi.fn(() => null),
     }
     const store = {
       getSettings: () => ({
@@ -495,7 +519,7 @@ describe('registerShortcuts', () => {
       }),
     }
 
-    registerShortcuts(store as never, orchestrator as never, () => false)
+    registerTestShortcuts(registerShortcuts, store as never, orchestrator as never, () => false)
 
     emit('keydown', { keycode: 29, ctrlKey: true, altKey: false, shiftKey: false, metaKey: false })
     emit('keydown', { keycode: 56, ctrlKey: true, altKey: true, shiftKey: false, metaKey: false })
@@ -522,7 +546,7 @@ describe('registerShortcuts', () => {
       toggleCapture: vi.fn(async () => undefined),
       requestStop: vi.fn(),
       showShortPressHint: vi.fn(async () => undefined),
-      getSessionSnapshot: vi.fn(() => null),
+      readSession: vi.fn(() => null),
     }
     const store = {
       getSettings: () => ({
@@ -531,7 +555,7 @@ describe('registerShortcuts', () => {
       }),
     }
 
-    registerShortcuts(store as never, orchestrator as never, () => false)
+    registerTestShortcuts(registerShortcuts, store as never, orchestrator as never, () => false)
 
     emit('keydown', { keycode: 29, ctrlKey: true, altKey: false, shiftKey: false, metaKey: false })
     emit('keydown', { keycode: 56, ctrlKey: true, altKey: true, shiftKey: false, metaKey: false })
@@ -561,7 +585,7 @@ describe('registerShortcuts', () => {
       toggleCapture: vi.fn(async () => undefined),
       requestStop: vi.fn(),
       showShortPressHint: vi.fn(async () => undefined),
-      getSessionSnapshot: vi.fn(() => null),
+      readSession: vi.fn(() => null),
     }
     const store = {
       getSettings: () => ({
@@ -570,7 +594,7 @@ describe('registerShortcuts', () => {
       }),
     }
 
-    registerShortcuts(store as never, orchestrator as never, () => false)
+    registerTestShortcuts(registerShortcuts, store as never, orchestrator as never, () => false)
 
     emit('keydown', { keycode: 29, ctrlKey: true, altKey: false, shiftKey: false, metaKey: false })
     emit('keydown', { keycode: 56, ctrlKey: true, altKey: true, shiftKey: false, metaKey: false })
@@ -598,7 +622,7 @@ describe('registerShortcuts', () => {
       toggleCapture: vi.fn(async () => undefined),
       requestStop: vi.fn(),
       showShortPressHint: vi.fn(async () => undefined),
-      getSessionSnapshot: vi.fn(() => null),
+      readSession: vi.fn(() => null),
     }
     const store = {
       getSettings: () => ({
@@ -607,7 +631,7 @@ describe('registerShortcuts', () => {
       }),
     }
 
-    registerShortcuts(store as never, orchestrator as never, () => false)
+    registerTestShortcuts(registerShortcuts, store as never, orchestrator as never, () => false)
 
     emit('keydown', { keycode: 29, ctrlKey: true, altKey: false, shiftKey: false, metaKey: false })
     emit('keydown', { keycode: 56, ctrlKey: true, altKey: true, shiftKey: false, metaKey: false })
@@ -640,14 +664,14 @@ describe('registerShortcuts', () => {
       getSettings: () => settings,
     }
 
-    const shortcuts = registerShortcuts(
+    const shortcuts = registerTestShortcuts(registerShortcuts,
       store as never,
       {
         startCapture: vi.fn(async () => undefined),
         toggleCapture: vi.fn(async () => undefined),
         requestStop: vi.fn(),
         showShortPressHint: vi.fn(async () => undefined),
-        getSessionSnapshot: vi.fn(() => null),
+      readSession: vi.fn(() => null),
       } as never,
       () => false,
     )
@@ -667,7 +691,7 @@ describe('registerShortcuts', () => {
       toggleCapture: vi.fn(async () => undefined),
       requestStop: vi.fn(),
       showShortPressHint: vi.fn(async () => undefined),
-      getSessionSnapshot: vi.fn(() => ({
+      readSession: vi.fn(() => ({
         status: 'listening',
         activationMode: 'push-to-talk',
       })),
@@ -679,7 +703,7 @@ describe('registerShortcuts', () => {
       }),
     }
 
-    registerShortcuts(store as never, orchestrator as never, () => false)
+    registerTestShortcuts(registerShortcuts, store as never, orchestrator as never, () => false)
 
     const pushCall = (registerShortcut.mock.calls as Array<unknown[]>).find((call) => call[0] === 'Alt+D')
     const pushCallback = pushCall?.[1]
@@ -700,7 +724,7 @@ describe('registerShortcuts', () => {
       toggleCapture: vi.fn(async () => undefined),
       requestStop: vi.fn(),
       showShortPressHint: vi.fn(async () => undefined),
-      getSessionSnapshot: vi
+      readSession: vi
         .fn()
         .mockReturnValueOnce({
           status: 'arming',
@@ -718,7 +742,7 @@ describe('registerShortcuts', () => {
       }),
     }
 
-    registerShortcuts(store as never, orchestrator as never, () => false)
+    registerTestShortcuts(registerShortcuts, store as never, orchestrator as never, () => false)
 
     const pushCall = (registerShortcut.mock.calls as Array<unknown[]>).find((call) => call[0] === 'Alt+D')
     const pushCallback = pushCall?.[1]
@@ -745,7 +769,7 @@ describe('registerShortcuts', () => {
       toggleCapture: vi.fn(async () => undefined),
       requestStop: vi.fn(),
       showShortPressHint: vi.fn(async () => undefined),
-      getSessionSnapshot: vi.fn(() => null),
+      readSession: vi.fn(() => null),
     }
     const store = {
       getSettings: () => ({
@@ -754,7 +778,7 @@ describe('registerShortcuts', () => {
       }),
     }
 
-    registerShortcuts(store as never, orchestrator as never, () => false)
+    registerTestShortcuts(registerShortcuts, store as never, orchestrator as never, () => false)
 
     emit('keydown', { keycode: 29, ctrlKey: true, altKey: false, shiftKey: false, metaKey: false })
     emit('keydown', { keycode: 32, ctrlKey: true, altKey: false, shiftKey: false, metaKey: false })
@@ -770,7 +794,7 @@ describe('registerShortcuts', () => {
       requestStop: vi.fn(),
       showShortPressHint: vi.fn(async () => undefined),
       cancel: vi.fn(async () => undefined),
-      getSessionSnapshot: vi.fn(() => ({
+      readSession: vi.fn(() => ({
         status: 'streaming',
         activationMode: 'toggle',
       })),
@@ -782,7 +806,7 @@ describe('registerShortcuts', () => {
       }),
     }
 
-    registerShortcuts(store as never, orchestrator as never, () => false)
+    registerTestShortcuts(registerShortcuts, store as never, orchestrator as never, () => false)
 
     emit('keydown', { keycode: 1, ctrlKey: false, altKey: false, shiftKey: false, metaKey: false })
 

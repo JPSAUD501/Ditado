@@ -11,10 +11,10 @@ import {
 import { AlertCircle, CheckCircle, Loader, Mic, PenLine, Type } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { MotionValue } from 'framer-motion'
-import { useQueryState } from 'syncorejs/react'
+import { useQueries } from 'syncorejs/react'
 
 import { useThemeAndLanguage } from '@renderer/hooks/useThemeAndLanguage'
-import type { DictationSession, DictationStatus, Settings } from '@shared/contracts'
+import type { DictationStatus, Settings, SettingsDocument } from '@shared/contracts'
 import { defaultSettings } from '@shared/defaults'
 import { api } from '../../../syncore/_generated/api'
 
@@ -174,22 +174,30 @@ const ContextBadge = ({ reducedMotion }: { reducedMotion: boolean | null }) => (
 
 /* ── Main component ───────────────────────────────────────────────── */
 
+const toOverlaySettings = (stored: SettingsDocument | null | undefined): Settings => {
+  if (!stored) {
+    return defaultSettings
+  }
+  const { _id, _creationTime, key, updatedAt, ...settings } = stored
+  void _id
+  void _creationTime
+  void key
+  void updatedAt
+  return { ...settings, apiKeyPresent: false }
+}
+
 export const OverlayWindow = () => {
   const reducedMotion = useReducedMotion()
-  const settingsState = useQueryState(api.settings.get)
-  const sessionState = useQueryState(api.sessions.active)
-  const storedSettings = settingsState.status === 'success'
-    ? settingsState.data as Record<string, unknown> | null
-    : null
-  const settings = {
-    ...defaultSettings,
-    ...(storedSettings ?? {}),
-    apiKeyPresent: false,
-    autoUpdateEnabled: true,
-  } as Settings
+  const queries = useQueries({
+    settings: { query: api.settings.get },
+    session: { query: api.sessions.active },
+  })
+  const settings = toOverlaySettings(
+    queries.settings.status === 'success' ? queries.settings.data : null,
+  )
   useThemeAndLanguage(settings, { skipTheme: true })
 
-  const session = (sessionState.status === 'success' ? sessionState.data : null) as DictationSession | null
+  const session = queries.session.status === 'success' ? queries.session.data : null
   const status: DictationStatus = session?.status ?? 'idle'
   const rawAppName = session?.context.appName || session?.targetApp || 'App'
   const appName = rawAppName === 'Unknown App' ? 'App' : rawAppName

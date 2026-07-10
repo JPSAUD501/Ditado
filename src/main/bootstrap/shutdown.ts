@@ -11,13 +11,9 @@ const withTimeout = async (task: Promise<unknown>, timeoutMs: number): Promise<v
 
 export const shutdownServices = async (
   services: {
-    store: { flush: () => Promise<void> }
     insertion: { dispose: () => void | Promise<void> }
   },
   timeoutMs = DEFAULT_SHUTDOWN_TIMEOUT_MS,
 ): Promise<void> => {
-  await Promise.all([
-    withTimeout(services.store.flush(), timeoutMs),
-    withTimeout(Promise.resolve(services.insertion.dispose()), timeoutMs),
-  ])
+  await withTimeout(Promise.resolve(services.insertion.dispose()), timeoutMs)
 }

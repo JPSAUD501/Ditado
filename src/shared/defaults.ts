@@ -1,6 +1,5 @@
 import type {
   ContextSnapshot,
-  DictationSession,
   InsertionPlan,
   PermissionState,
   Settings,
@@ -16,7 +15,6 @@ export const defaultSettings: Settings = {
   toggleHotkey: defaultToggleHotkey,
   preferredMicrophoneId: null,
   sendContextAutomatically: true,
-  autoUpdateEnabled: true,
   updateChannel: 'stable',
   insertionStreamingMode: 'letter-by-letter',
   historyRetentionDays: 365,
@@ -58,20 +56,3 @@ export const defaultUpdateState: UpdateState = {
   status: 'idle',
   downloadProgress: null,
 }
-
-export const createIdleSession = (): DictationSession => ({
-  id: 'idle',
-  activationMode: 'toggle',
-  status: 'idle',
-  captureIntent: 'none',
-  startedAt: new Date().toISOString(),
-  finishedAt: null,
-  processingStartedAt: null,
-  targetApp: 'App',
-  context: emptyContextSnapshot,
-  partialText: '',
-  finalText: '',
-  insertionPlan: defaultInsertionPlan,
-  errorMessage: null,
-  noticeMessage: null,
-})

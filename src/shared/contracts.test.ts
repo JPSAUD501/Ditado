@@ -1,37 +1,52 @@
 import { describe, expect, it } from 'vitest'
 
-import { historyEntrySchema, settingsPatchSchema } from './contracts.js'
+import { deriveHistoryDurations, type HistorySessionTiming } from './contracts.js'
 
-describe('settingsPatchSchema', () => {
-  it('keeps partial updates partial instead of injecting defaults', () => {
-    expect(settingsPatchSchema.parse({ theme: 'dark' })).toEqual({ theme: 'dark' })
-    expect(settingsPatchSchema.parse({ launchOnLogin: true })).toEqual({ launchOnLogin: true })
-  })
+const emptyTiming = (): HistorySessionTiming => ({
+  sessionStartedMs: null,
+  contextPreviewStartedMs: null,
+  contextPreviewCompletedMs: null,
+  contextRefreshStartedMs: null,
+  contextRefreshCompletedMs: null,
+  submissionStartedMs: null,
+  stopRequestedMs: null,
+  microphoneRequestStartedMs: null,
+  microphoneRequestCompletedMs: null,
+  recordingStartedMs: null,
+  recordingEndedMs: null,
+  recorderStopStartedMs: null,
+  mediaRecorderStopCompletedMs: null,
+  audioPreparationStartedMs: null,
+  audioPreparationEndedMs: null,
+  processingStartedMs: null,
+  llmRequestStartedMs: null,
+  llmResponseHeadersMs: null,
+  firstTokenMs: null,
+  llmCompletedMs: null,
+  insertionStartedMs: null,
+  insertionCompletedMs: null,
+  sessionFinishedMs: null,
 })
 
-describe('historyEntrySchema', () => {
-  it('backfills latency breakdown defaults for legacy history entries', () => {
-    expect(historyEntrySchema.parse({
-      id: 'entry-1',
-      createdAt: '2026-03-17T00:00:00.000Z',
-      outcome: 'completed',
-      appName: 'VS Code',
-      windowTitle: 'main.ts',
-      activationMode: 'toggle',
-      modelId: 'google/gemini-3-flash-preview',
-      outputText: 'hello',
-      usedContext: false,
-      latencyMs: 120,
-      insertionStrategy: 'insert-at-cursor',
-      requestedMode: 'all-at-once',
-      effectiveMode: 'all-at-once',
-      insertionMethod: 'clipboard-all-at-once',
-      fallbackUsed: false,
+describe('deriveHistoryDurations', () => {
+  it('derives audit durations from canonical Syncore timing fields', () => {
+    expect(deriveHistoryDurations({
+      ...emptyTiming(),
+      sessionStartedMs: 100,
+      recordingStartedMs: 200,
+      recordingEndedMs: 1_200,
+      llmRequestStartedMs: 1_300,
+      llmResponseHeadersMs: 1_400,
+      firstTokenMs: 1_500,
+      llmCompletedMs: 1_900,
+      sessionFinishedMs: 2_000,
     })).toEqual(expect.objectContaining({
-      audioProcessingMs: 0,
-      audioSendMs: 0,
-      timeToFirstTokenMs: 0,
-      timeToCompleteMs: 0,
+      recordingMs: 1_000,
+      networkHandshakeMs: 100,
+      modelUntilFirstTokenMs: 100,
+      modelStreamingMs: 400,
+      llmTotalMs: 600,
+      totalSessionMs: 1_900,
     }))
   })
 })

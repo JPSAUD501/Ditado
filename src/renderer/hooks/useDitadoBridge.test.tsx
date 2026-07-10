@@ -2,7 +2,7 @@ import { act, render } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { DictationSession } from '@shared/contracts'
-import { createIdleSession } from '@shared/defaults'
+import { createTestSession } from '@shared/testFixtures'
 import { useDictationRecorder } from './useDitadoBridge'
 
 const recorderState = {
@@ -54,8 +54,8 @@ const Harness = ({ session }: { session: DictationSession | null }) => {
 }
 
 const buildSession = (overrides: Partial<DictationSession>): DictationSession => ({
-  ...createIdleSession(),
-  id: 'session-1',
+  ...createTestSession(),
+  sessionId: 'session-1',
   activationMode: 'push-to-talk',
   status: 'listening',
   captureIntent: 'start',
@@ -77,7 +77,8 @@ beforeEach(() => {
   recorderState.setOnAudioLevel.mockClear()
 
   window.ditado = {
-    getDashboardState: vi.fn(),
+    getDashboardNativeState: vi.fn(),
+    subscribeDashboardNativeState: vi.fn(() => () => undefined),
     subscribeDashboardTabRequests: vi.fn(() => () => undefined),
     startPushToTalk: vi.fn(async () => undefined),
     stopPushToTalk: vi.fn(async () => undefined),
@@ -88,8 +89,6 @@ beforeEach(() => {
     notifyRecorderFailed: vi.fn(async () => undefined),
     notifyRecorderReady: vi.fn(async () => undefined),
     notifyRecorderWarmupFinished: vi.fn(async () => undefined),
-    updateSettings: vi.fn(),
-    setApiKey: vi.fn(),
     setHotkeyCaptureActive: vi.fn(),
     getShortcutStatus: vi.fn(async () => ({ captureActive: false, uiohookRunning: true })),
     subscribeHotkeyCapture: vi.fn(() => () => undefined),
@@ -97,8 +96,6 @@ beforeEach(() => {
     requestMicrophoneAccess: vi.fn(),
     getPermissions: vi.fn(),
     openDashboardTab: vi.fn(),
-    clearHistory: vi.fn(),
-    deleteHistoryEntry: vi.fn(async () => undefined),
     checkForUpdates: vi.fn(),
     downloadUpdate: vi.fn(async () => undefined),
     installUpdate: vi.fn(async () => undefined),

@@ -1,51 +1,97 @@
-import { mutation, query, s, type MutationCtx } from "../_generated/server.js";
+import {
+  mutation,
+  query,
+  s,
+  type Doc,
+  type DocPatch,
+  type MutationCtx
+} from "../_generated/server.js";
+import {
+  activationMode,
+  contextSnapshot,
+  insertionPlan,
+  insertionStreamingMode,
+  terminalAudit
+} from "../model.js";
 
-const nullableString = s.nullable(s.string());
+const terminalStatuses = [
+  "completed",
+  "notice",
+  "error",
+  "permission-required",
+  "cancelled"
+] as const;
 
-const contextSnapshot = s.object({
-  appName: s.string(),
-  windowTitle: nullableString,
-  selectedText: s.string(),
-  permissionsGranted: s.boolean(),
-  confidence: s.enum(["high", "partial", "low"] as const),
-  capturedAt: s.string()
-});
-
-const insertionPlan = s.object({
-  strategy: s.enum(["replace-selection", "insert-at-cursor"] as const),
-  targetApp: s.string(),
-  capability: s.enum(["automation", "clipboard"] as const)
-});
-
-const activationMode = s.enum(["push-to-talk", "toggle"] as const);
+const isTerminalStatus = (
+  status: Doc<"dictationSessions">["status"]
+): status is (typeof terminalStatuses)[number] =>
+  terminalStatuses.some((terminalStatus) => terminalStatus === status);
 
 const nowMs = (): number => Date.now();
-type MutationLikeCtx = MutationCtx;
 
-const toSession = (doc: Record<string, unknown> | null) => {
-  if (!doc) return null;
-  const { _id, _creationTime, sessionId, createdAtMs, updatedAtMs, isActive, activeKey, ...rest } = doc;
-  void _id;
-  void _creationTime;
-  void createdAtMs;
-  void updatedAtMs;
-  void isActive;
-  void activeKey;
-  return {
-    ...rest,
-    id: sessionId
-  };
-};
+const emptyTiming = () => ({
+  sessionStartedMs: 0,
+  contextPreviewStartedMs: null,
+  contextPreviewCompletedMs: null,
+  contextRefreshStartedMs: null,
+  contextRefreshCompletedMs: null,
+  submissionStartedMs: null,
+  stopRequestedMs: null,
+  microphoneRequestStartedMs: null,
+  microphoneRequestCompletedMs: null,
+  recordingStartedMs: null,
+  recordingEndedMs: null,
+  recorderStopStartedMs: null,
+  mediaRecorderStopCompletedMs: null,
+  audioPreparationStartedMs: null,
+  audioPreparationEndedMs: null,
+  processingStartedMs: null,
+  llmRequestStartedMs: null,
+  llmResponseHeadersMs: null,
+  firstTokenMs: null,
+  llmCompletedMs: null,
+  insertionStartedMs: null,
+  insertionCompletedMs: null,
+  sessionFinishedMs: null
+});
 
-const getActiveDoc = async (ctx: MutationLikeCtx) =>
-  ctx.db.query("dictationSessions").withIndex("by_active", (q) => q.eq("activeKey", "active")).first();
+const emptyAudio = () => ({
+  durationMs: 0,
+  mimeType: null,
+  bytes: 0,
+  speechDetected: false,
+  peakAmplitude: 0,
+  rmsAmplitude: 0,
+  languageHint: null,
+  stopReason: "unknown" as const,
+  maxDurationReached: false
+});
 
-const requireActiveSession = async (
-  ctx: MutationLikeCtx,
+const emptyInsertion = (
+  plan: { strategy: "replace-selection" | "insert-at-cursor"; targetApp: string },
+  requestedMode: "letter-by-letter" | "all-at-once"
+) => ({
+  strategy: plan.strategy,
+  requestedMode,
+  effectiveMode: requestedMode,
+  method: "clipboard-all-at-once" as const,
+  fallbackUsed: false,
+  targetApp: plan.targetApp,
+  writtenCharacterCount: null
+});
+
+const getActive = async (ctx: MutationCtx) =>
+  ctx.db
+    .query("dictationSessions")
+    .withIndex("by_active", (q) => q.eq("isActive", true))
+    .first();
+
+const requireActive = async (
+  ctx: MutationCtx,
   sessionId: string,
-  allowedStatuses: string[]
+  allowedStatuses: readonly Doc<"dictationSessions">["status"][]
 ) => {
-  const session = await getActiveDoc(ctx);
+  const session = await getActive(ctx);
   if (!session || session.sessionId !== sessionId) {
     throw new Error("Active session does not match the requested session.");
   }
@@ -55,43 +101,70 @@ const requireActiveSession = async (
   return session;
 };
 
-const deactivateExisting = async (ctx: MutationLikeCtx) => {
-  const existing = await getActiveDoc(ctx);
-  if (!existing) return;
-  const now = new Date().toISOString();
-  await ctx.db.patch("dictationSessions", existing._id, {
+const patchSession = async (
+  ctx: MutationCtx,
+  session: Doc<"dictationSessions">,
+  patch: DocPatch<"dictationSessions">
+) => {
+  await ctx.db.patch("dictationSessions", session._id, {
+    ...patch,
+    updatedAtMs: nowMs()
+  });
+  const updated = await ctx.db.get("dictationSessions", session._id);
+  if (!updated) {
+    throw new Error("Session disappeared after update.");
+  }
+  return updated;
+};
+
+const deactivateExisting = async (ctx: MutationCtx): Promise<void> => {
+  const existing = await getActive(ctx);
+  if (!existing) {
+    return;
+  }
+  if (isTerminalStatus(existing.status)) {
+    await patchSession(ctx, existing, { isActive: false });
+    return;
+  }
+
+  const finishedAt = new Date().toISOString();
+  await patchSession(ctx, existing, {
     isActive: false,
-    activeKey: "inactive",
     status: "error",
     captureIntent: "none",
-    finishedAt: now,
-    errorMessage: existing.errorMessage ?? "Dictation was interrupted before it finished.",
-    updatedAtMs: nowMs()
+    finishedAt,
+    errorMessage: "Dictation was interrupted before it finished.",
+    historyStatus: "failed",
+    historyError: "Session was replaced before history could be saved."
   });
 };
 
 export const active = query({
   args: {},
-  handler: async (ctx) => toSession(await ctx.db
-    .query("dictationSessions")
-    .withIndex("by_active", (q) => q.eq("activeKey", "active"))
-    .first() as unknown as Record<string, unknown> | null)
+  handler: async (ctx) =>
+    ctx.db
+      .query("dictationSessions")
+      .withIndex("by_active", (q) => q.eq("isActive", true))
+      .first()
 });
 
 export const byId = query({
   args: { sessionId: s.string() },
-  handler: async (ctx, args) => toSession(await ctx.db
-    .query("dictationSessions")
-    .withIndex("by_session", (q) => q.eq("sessionId", args.sessionId))
-    .first() as unknown as Record<string, unknown> | null)
+  handler: async (ctx, args) =>
+    ctx.db
+      .query("dictationSessions")
+      .withIndex("by_session", (q) => q.eq("sessionId", args.sessionId))
+      .first()
 });
 
 export const recent = query({
-  args: {},
-  handler: async (ctx) => {
-    const sessions = await ctx.db.query("dictationSessions").withIndex("by_updated").order("desc").take(20);
-    return sessions.map((session) => toSession(session as unknown as Record<string, unknown>));
-  }
+  args: { limit: s.optional(s.number()) },
+  handler: async (ctx, args) =>
+    ctx.db
+      .query("dictationSessions")
+      .withIndex("by_updated")
+      .order("desc")
+      .take(Math.min(Math.max(args.limit ?? 20, 1), 100))
 });
 
 export const start = mutation({
@@ -101,17 +174,19 @@ export const start = mutation({
     startedAt: s.string(),
     targetApp: s.string(),
     context: contextSnapshot,
-    insertionPlan
+    insertionPlan,
+    modelId: s.string(),
+    requestedMode: insertionStreamingMode
   },
-  returns: s.null(),
   handler: async (ctx, args) => {
     await deactivateExisting(ctx);
-    const timestamp = Date.parse(args.startedAt);
-    const createdAtMs = Number.isFinite(timestamp) ? timestamp : nowMs();
-    await ctx.db.insert("dictationSessions", {
+    const parsedStartedAt = Date.parse(args.startedAt);
+    const createdAtMs = Number.isFinite(parsedStartedAt)
+      ? parsedStartedAt
+      : nowMs();
+    const id = await ctx.db.insert("dictationSessions", {
       sessionId: args.sessionId,
       isActive: true,
-      activeKey: "active",
       activationMode: args.activationMode,
       status: "arming",
       captureIntent: "start",
@@ -121,86 +196,113 @@ export const start = mutation({
       targetApp: args.targetApp,
       context: args.context,
       insertionPlan: args.insertionPlan,
+      partialText: "",
+      finalText: "",
       errorMessage: null,
       noticeMessage: null,
-      finalText: "",
-      partialText: "",
-      createdAt: args.startedAt,
+      timing: emptyTiming(),
+      audio: emptyAudio(),
+      llm: {
+        provider: "openrouter",
+        modelId: args.modelId,
+        finishReason: null,
+        usedContext: false
+      },
+      insertion: emptyInsertion(args.insertionPlan, args.requestedMode),
+      historyStatus: "pending",
+      historyError: null,
       createdAtMs,
       updatedAtMs: nowMs()
     });
-    return null;
+    const created = await ctx.db.get("dictationSessions", id);
+    if (!created) {
+      throw new Error("Session initialization did not create a document.");
+    }
+    return created;
   }
 });
 
 export const updateContext = mutation({
-  args: { sessionId: s.string(), targetApp: s.string(), context: contextSnapshot },
-  returns: s.null(),
+  args: {
+    sessionId: s.string(),
+    targetApp: s.string(),
+    context: contextSnapshot
+  },
   handler: async (ctx, args) => {
-    const session = await requireActiveSession(ctx, args.sessionId, ["arming", "listening", "processing", "streaming"]);
-    await ctx.db.patch("dictationSessions", session._id, {
+    const session = await requireActive(ctx, args.sessionId, [
+      "arming",
+      "listening",
+      "processing",
+      "streaming"
+    ]);
+    return patchSession(ctx, session, {
       targetApp: args.targetApp,
-      context: args.context,
-      updatedAtMs: nowMs()
+      context: args.context
     });
-    return null;
   }
 });
 
 export const markListening = mutation({
   args: { sessionId: s.string() },
-  returns: s.null(),
   handler: async (ctx, args) => {
-    const session = await requireActiveSession(ctx, args.sessionId, ["arming"]);
-    await ctx.db.patch("dictationSessions", session._id, {
+    const session = await requireActive(ctx, args.sessionId, ["arming"]);
+    return patchSession(ctx, session, {
       status: "listening",
-      updatedAtMs: nowMs()
+      captureIntent: "none"
     });
-    return null;
   }
 });
 
 export const markRecorderFailed = mutation({
-  args: { sessionId: s.string(), status: s.enum(["error", "permission-required"] as const), errorMessage: s.string(), finishedAt: s.string() },
-  returns: s.null(),
+  args: {
+    sessionId: s.string(),
+    status: s.enum(["error", "permission-required"] as const),
+    errorMessage: s.string(),
+    finishedAt: s.string()
+  },
   handler: async (ctx, args) => {
-    const session = await requireActiveSession(ctx, args.sessionId, ["arming"]);
-    await ctx.db.patch("dictationSessions", session._id, {
-      isActive: false,
-      activeKey: "inactive",
+    const session = await requireActive(ctx, args.sessionId, ["arming"]);
+    return patchSession(ctx, session, {
       status: args.status,
       captureIntent: "none",
-      errorMessage: args.errorMessage,
       finishedAt: args.finishedAt,
-      updatedAtMs: nowMs()
+      errorMessage: args.errorMessage,
+      historyStatus: "not-required"
     });
-    return null;
   }
 });
 
 export const requestStop = mutation({
   args: { sessionId: s.string(), processingStartedAt: s.string() },
-  returns: s.null(),
   handler: async (ctx, args) => {
-    const session = await requireActiveSession(ctx, args.sessionId, ["arming", "listening"]);
-    await ctx.db.patch("dictationSessions", session._id, {
+    const session = await requireActive(ctx, args.sessionId, [
+      "arming",
+      "listening"
+    ]);
+    return patchSession(ctx, session, {
       status: "processing",
       captureIntent: "stop",
       processingStartedAt: args.processingStartedAt,
       noticeMessage: null,
-      errorMessage: null,
-      updatedAtMs: nowMs()
+      errorMessage: null
     });
-    return null;
   }
 });
 
 export const markProcessing = mutation({
-  args: { sessionId: s.string(), processingStartedAt: s.string(), targetApp: s.string(), context: contextSnapshot, insertionPlan },
-  returns: s.null(),
+  args: {
+    sessionId: s.string(),
+    processingStartedAt: s.string(),
+    targetApp: s.string(),
+    context: contextSnapshot,
+    insertionPlan
+  },
   handler: async (ctx, args) => {
-    const session = await requireActiveSession(ctx, args.sessionId, ["listening", "processing"]);
-    await ctx.db.patch("dictationSessions", session._id, {
+    const session = await requireActive(ctx, args.sessionId, [
+      "listening",
+      "processing"
+    ]);
+    return patchSession(ctx, session, {
       status: "processing",
       captureIntent: "none",
       processingStartedAt: args.processingStartedAt,
@@ -208,75 +310,104 @@ export const markProcessing = mutation({
       context: args.context,
       insertionPlan: args.insertionPlan,
       noticeMessage: null,
-      errorMessage: null,
-      updatedAtMs: nowMs()
+      errorMessage: null
     });
-    return null;
   }
 });
 
 export const appendPartial = mutation({
   args: { sessionId: s.string(), partialText: s.string() },
-  returns: s.null(),
   handler: async (ctx, args) => {
-    const session = await requireActiveSession(ctx, args.sessionId, ["processing", "streaming"]);
-    await ctx.db.patch("dictationSessions", session._id, {
+    const session = await requireActive(ctx, args.sessionId, [
+      "processing",
+      "streaming"
+    ]);
+    return patchSession(ctx, session, {
       status: "streaming",
-      partialText: args.partialText,
-      updatedAtMs: nowMs()
+      partialText: args.partialText
     });
-    return null;
   }
 });
 
 export const complete = mutation({
-  args: { sessionId: s.string(), finishedAt: s.string(), finalText: s.string(), partialText: s.string() },
-  returns: s.null(),
+  args: {
+    sessionId: s.string(),
+    finishedAt: s.string(),
+    finalText: s.string(),
+    partialText: s.string(),
+    audit: terminalAudit
+  },
   handler: async (ctx, args) => {
-    const session = await requireActiveSession(ctx, args.sessionId, ["processing", "streaming"]);
-    await ctx.db.patch("dictationSessions", session._id, {
-      isActive: true,
-      activeKey: "active",
+    const session = await requireActive(ctx, args.sessionId, [
+      "processing",
+      "streaming"
+    ]);
+    return patchSession(ctx, session, {
       status: "completed",
       captureIntent: "none",
       finishedAt: args.finishedAt,
       finalText: args.finalText,
       partialText: args.partialText,
-      updatedAtMs: nowMs()
+      timing: args.audit.timing,
+      audio: args.audit.audio,
+      llm: args.audit.llm,
+      insertion: args.audit.insertion,
+      historyStatus: "pending",
+      historyError: null
     });
-    return null;
   }
 });
 
 export const fail = mutation({
-  args: { sessionId: s.string(), finishedAt: s.string(), errorMessage: s.string(), partialText: s.string() },
-  returns: s.null(),
+  args: {
+    sessionId: s.string(),
+    finishedAt: s.string(),
+    errorMessage: s.string(),
+    partialText: s.string(),
+    audit: terminalAudit
+  },
   handler: async (ctx, args) => {
-    const session = await requireActiveSession(ctx, args.sessionId, ["arming", "listening", "processing", "streaming"]);
-    await ctx.db.patch("dictationSessions", session._id, {
-      isActive: true,
-      activeKey: "active",
+    const session = await requireActive(ctx, args.sessionId, [
+      "arming",
+      "listening",
+      "processing",
+      "streaming"
+    ]);
+    return patchSession(ctx, session, {
       status: "error",
       captureIntent: "none",
       finishedAt: args.finishedAt,
       errorMessage: args.errorMessage,
       partialText: args.partialText,
-      updatedAtMs: nowMs()
+      timing: args.audit.timing,
+      audio: args.audit.audio,
+      llm: args.audit.llm,
+      insertion: args.audit.insertion,
+      historyStatus: "pending",
+      historyError: null
     });
-    return null;
   }
 });
 
 export const notice = mutation({
-  args: { sessionId: s.string(), activationMode, startedAt: s.string(), finishedAt: s.string(), targetApp: s.string(), context: contextSnapshot, insertionPlan, noticeMessage: s.string() },
-  returns: s.null(),
+  args: {
+    sessionId: s.string(),
+    activationMode,
+    startedAt: s.string(),
+    finishedAt: s.string(),
+    targetApp: s.string(),
+    context: contextSnapshot,
+    insertionPlan,
+    noticeMessage: s.string(),
+    modelId: s.string(),
+    requestedMode: insertionStreamingMode
+  },
   handler: async (ctx, args) => {
     await deactivateExisting(ctx);
-    const timestamp = Date.parse(args.startedAt);
-    await ctx.db.insert("dictationSessions", {
+    const parsedStartedAt = Date.parse(args.startedAt);
+    const id = await ctx.db.insert("dictationSessions", {
       sessionId: args.sessionId,
       isActive: true,
-      activeKey: "active",
       activationMode: args.activationMode,
       status: "notice",
       captureIntent: "none",
@@ -286,79 +417,82 @@ export const notice = mutation({
       targetApp: args.targetApp,
       context: args.context,
       insertionPlan: args.insertionPlan,
+      partialText: "",
+      finalText: "",
       errorMessage: null,
       noticeMessage: args.noticeMessage,
-      finalText: "",
-      partialText: "",
-      createdAt: args.startedAt,
-      createdAtMs: Number.isFinite(timestamp) ? timestamp : nowMs(),
+      timing: emptyTiming(),
+      audio: emptyAudio(),
+      llm: {
+        provider: "openrouter",
+        modelId: args.modelId,
+        finishReason: null,
+        usedContext: false
+      },
+      insertion: emptyInsertion(args.insertionPlan, args.requestedMode),
+      historyStatus: "not-required",
+      historyError: null,
+      createdAtMs: Number.isFinite(parsedStartedAt)
+        ? parsedStartedAt
+        : nowMs(),
       updatedAtMs: nowMs()
     });
-    return null;
+    const created = await ctx.db.get("dictationSessions", id);
+    if (!created) {
+      throw new Error("Notice session was not created.");
+    }
+    return created;
   }
 });
 
 export const cancel = mutation({
   args: { sessionId: s.string(), finishedAt: s.string() },
-  returns: s.null(),
   handler: async (ctx, args) => {
-    const session = await requireActiveSession(ctx, args.sessionId, ["arming", "listening", "processing", "streaming"]);
-    await ctx.db.patch("dictationSessions", session._id, {
-      isActive: true,
-      activeKey: "active",
+    const session = await requireActive(ctx, args.sessionId, [
+      "arming",
+      "listening",
+      "processing",
+      "streaming"
+    ]);
+    return patchSession(ctx, session, {
       status: "cancelled",
       captureIntent: "none",
       finishedAt: args.finishedAt,
-      updatedAtMs: nowMs()
+      historyStatus: "not-required"
     });
-    return null;
   }
 });
 
 export const finalizeInterruptedActive = mutation({
   args: {},
-  returns: s.null(),
   handler: async (ctx) => {
-    const session = await getActiveDoc(ctx);
-    if (!session) return null;
-    if (["completed", "notice", "error", "permission-required", "cancelled"].includes(session.status)) {
-      await ctx.db.patch("dictationSessions", session._id, {
-        isActive: false,
-        activeKey: "inactive",
-        captureIntent: "none",
-        updatedAtMs: nowMs()
-      });
+    const session = await getActive(ctx);
+    if (!session) {
       return null;
     }
-    const now = new Date().toISOString();
-    await ctx.db.patch("dictationSessions", session._id, {
+    if (isTerminalStatus(session.status)) {
+      return patchSession(ctx, session, { isActive: false });
+    }
+
+    return patchSession(ctx, session, {
       isActive: false,
-      activeKey: "inactive",
       status: "error",
       captureIntent: "none",
-      finishedAt: now,
+      finishedAt: new Date().toISOString(),
       errorMessage: "Dictation was interrupted before it finished.",
-      updatedAtMs: nowMs()
+      historyStatus: "failed",
+      historyError: "The app stopped before history could be saved."
     });
-    return null;
   }
 });
 
 export const dismissCurrent = mutation({
   args: {},
-  returns: s.null(),
   handler: async (ctx) => {
-    const session = await getActiveDoc(ctx);
-    if (!session) return null;
-    if (!["completed", "notice", "error", "permission-required", "cancelled"].includes(session.status)) {
-      return null;
+    const session = await getActive(ctx);
+    if (!session || !isTerminalStatus(session.status)) {
+      return session;
     }
-    await ctx.db.patch("dictationSessions", session._id, {
-      isActive: false,
-      activeKey: "inactive",
-      captureIntent: "none",
-      updatedAtMs: nowMs()
-    });
-    return null;
+    return patchSession(ctx, session, { isActive: false });
   }
 });

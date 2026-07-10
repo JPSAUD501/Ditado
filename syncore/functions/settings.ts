@@ -1,4 +1,5 @@
-import { mutation, query, s } from "../_generated/server.js";
+import { mutation, query, s, type DocPatch } from "../_generated/server.js";
+import { insertionStreamingMode } from "../model.js";
 
 const SETTINGS_KEY = "current";
 
@@ -8,9 +9,8 @@ const settingsPatch = {
   toggleHotkey: s.optional(s.string()),
   preferredMicrophoneId: s.optional(s.nullable(s.string())),
   sendContextAutomatically: s.optional(s.boolean()),
-  autoUpdateEnabled: s.optional(s.boolean()),
   updateChannel: s.optional(s.enum(["stable", "beta"] as const)),
-  insertionStreamingMode: s.optional(s.enum(["letter-by-letter", "all-at-once"] as const)),
+  insertionStreamingMode: s.optional(insertionStreamingMode),
   historyRetentionDays: s.optional(s.number()),
   maxHistoryAudioBytes: s.optional(s.number()),
   modelId: s.optional(s.string()),
@@ -29,7 +29,6 @@ const defaultStoredSettings = (appVersion: string) => ({
   toggleHotkey: "",
   preferredMicrophoneId: null,
   sendContextAutomatically: true,
-  autoUpdateEnabled: true,
   updateChannel: "stable" as const,
   insertionStreamingMode: "letter-by-letter" as const,
   historyRetentionDays: 365,
@@ -43,17 +42,17 @@ const defaultStoredSettings = (appVersion: string) => ({
   pendingUpgradeOnboardingVersion: null,
   updatedAt: Date.now()
 });
-
 export const get = query({
   args: {},
   handler: async (ctx) =>
-    ctx.db.query("settings").withIndex("by_key", (q) => q.eq("key", SETTINGS_KEY)).first()
+    ctx.db
+      .query("settings")
+      .withIndex("by_key", (q) => q.eq("key", SETTINGS_KEY))
+      .first()
 });
 
 export const ensure = mutation({
-  args: {
-    appVersion: s.string()
-  },
+  args: { appVersion: s.string() },
   handler: async (ctx, args) => {
     const existing = await ctx.db
       .query("settings")
@@ -62,15 +61,21 @@ export const ensure = mutation({
     if (existing) {
       return existing;
     }
-    const id = await ctx.db.insert("settings", defaultStoredSettings(args.appVersion));
-    return ctx.db.get("settings", id);
+
+    const id = await ctx.db.insert(
+      "settings",
+      defaultStoredSettings(args.appVersion)
+    );
+    const created = await ctx.db.get("settings", id);
+    if (!created) {
+      throw new Error("Settings initialization did not create a document.");
+    }
+    return created;
   }
 });
 
 export const update = mutation({
-  args: {
-    patch: s.object(settingsPatch)
-  },
+  args: { patch: s.object(settingsPatch) },
   handler: async (ctx, args) => {
     const existing = await ctx.db
       .query("settings")
@@ -79,11 +84,16 @@ export const update = mutation({
     if (!existing) {
       throw new Error("Settings have not been initialized.");
     }
-    await ctx.db.patch("settings", existing._id, {
+
+    const patch: DocPatch<"settings"> = {
       ...args.patch,
-      autoUpdateEnabled: true,
       updatedAt: Date.now()
-    });
-    return ctx.db.get("settings", existing._id);
+    };
+    await ctx.db.patch("settings", existing._id, patch);
+    const updated = await ctx.db.get("settings", existing._id);
+    if (!updated) {
+      throw new Error("Settings disappeared after update.");
+    }
+    return updated;
   }
 });

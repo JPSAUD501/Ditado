@@ -3,12 +3,11 @@ import { installSyncoreWindowBridge } from 'syncorejs/node/ipc'
 
 import type {
   DashboardTab,
-  DashboardViewModel,
+  DashboardNativeState,
   DeviceInfo,
   DictationAudioPayload,
   PermissionState,
   RecorderWarmupStatus,
-  Settings,
 } from '../shared/contracts.js'
 import type { HotkeyCapturePayload } from '../shared/hotkeys.js'
 import { ipcChannels } from '../shared/ipc.js'
@@ -40,7 +39,10 @@ const requestRendererMicrophoneAccess = async (): Promise<'granted' | 'denied'> 
 eval(installSyncoreWindowBridge())
 
 contextBridge.exposeInMainWorld('ditado', {
-  getDashboardState: () => ipcRenderer.invoke(ipcChannels.dashboard.getState),
+  getDashboardNativeState: (): Promise<DashboardNativeState> =>
+    ipcRenderer.invoke(ipcChannels.dashboard.getNativeState),
+  subscribeDashboardNativeState: (listener: (state: DashboardNativeState) => void) =>
+    subscribe(ipcChannels.dashboard.nativeState, listener),
   subscribeDashboardTabRequests: (listener: (tab: DashboardTab) => void) =>
     subscribe(ipcChannels.dashboard.openTab, listener),
   startPushToTalk: () => ipcRenderer.invoke(ipcChannels.dictation.startPushToTalk),
@@ -55,8 +57,6 @@ contextBridge.exposeInMainWorld('ditado', {
   notifyRecorderReady: () => ipcRenderer.invoke(ipcChannels.startup.recorderReady),
   notifyRecorderWarmupFinished: (status: RecorderWarmupStatus) =>
     ipcRenderer.invoke(ipcChannels.startup.recorderWarmupFinished, status),
-  updateSettings: (patch: Partial<Settings>) => ipcRenderer.invoke(ipcChannels.settings.update, patch),
-  setApiKey: (apiKey: string) => ipcRenderer.invoke(ipcChannels.settings.setApiKey, apiKey),
   setHotkeyCaptureActive: (active: boolean) => ipcRenderer.invoke(ipcChannels.hotkeys.setCaptureMode, active),
   getShortcutStatus: (): Promise<{ captureActive: boolean; uiohookRunning: boolean }> => ipcRenderer.invoke(ipcChannels.hotkeys.getStatus),
   subscribeHotkeyCapture: (listener: (payload: HotkeyCapturePayload) => void) =>
@@ -66,18 +66,7 @@ contextBridge.exposeInMainWorld('ditado', {
       return []
     }
 
-    let devices = await navigator.mediaDevices.enumerateDevices()
-    const audioInputs = devices.filter((device) => device.kind === 'audioinput')
-
-    if (!audioInputs.some((device) => device.label)) {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-        stream.getTracks().forEach((track) => track.stop())
-        devices = await navigator.mediaDevices.enumerateDevices()
-      } catch {
-        // Keep best-effort enumeration even when permission is still blocked.
-      }
-    }
+    const devices = await navigator.mediaDevices.enumerateDevices()
 
     return devices
       .filter((device) => device.kind === 'audioinput')
@@ -101,8 +90,6 @@ contextBridge.exposeInMainWorld('ditado', {
   },
   getPermissions: (): Promise<PermissionState> => ipcRenderer.invoke(ipcChannels.permissions.get),
   openDashboardTab: (tab: DashboardTab) => ipcRenderer.invoke(ipcChannels.dashboardNavigation.openTab, tab),
-  clearHistory: () => ipcRenderer.invoke(ipcChannels.history.clear),
-  deleteHistoryEntry: (entryId: string) => ipcRenderer.invoke(ipcChannels.history.deleteEntry, entryId),
   checkForUpdates: () => ipcRenderer.invoke(ipcChannels.updates.check),
   downloadUpdate: () => ipcRenderer.invoke(ipcChannels.updates.download),
   installUpdate: () => ipcRenderer.invoke(ipcChannels.updates.install),

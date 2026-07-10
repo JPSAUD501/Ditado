@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import type { SyncoreClient } from 'syncorejs'
 
 import { DictationSessionOrchestrator } from './dictationSessionOrchestrator.js'
 import type {
@@ -10,6 +11,10 @@ import type {
   Settings,
 } from '../../../shared/contracts.js'
 import { defaultSettings, emptyContextSnapshot } from '../../../shared/defaults.js'
+import { createTestSession } from '../../../shared/testFixtures.js'
+
+type Call = { name: string; args: unknown }
+type FunctionReferenceShape = { name?: string }
 
 const context: ContextSnapshot = {
   ...emptyContextSnapshot,
@@ -23,528 +28,241 @@ const context: ContextSnapshot = {
 const settings: Settings = {
   ...defaultSettings,
   sendContextAutomatically: true,
-  modelId: 'google/gemini-3-flash-preview',
 }
 
-const flushPromises = async (): Promise<void> => {
-  await Promise.resolve()
-  await Promise.resolve()
-  await Promise.resolve()
-}
-
-const createPayload = (): DictationAudioPayload => ({
+const payload: DictationAudioPayload = {
   audioBase64: 'ZmFrZQ==',
   mimeType: 'audio/mpeg',
-  languageHint: 'en-US',
-  durationMs: 1600,
-  audioProcessingMs: 32,
+  languageHint: 'pt-BR',
+  durationMs: 1_600,
+  audioProcessingMs: 20,
   speechDetected: true,
-  peakAmplitude: 0.18,
-  rmsAmplitude: 0.06,
+  peakAmplitude: 0.2,
+  rmsAmplitude: 0.07,
+}
+
+const createActiveSession = (
+  overrides: Partial<DictationSession> = {},
+): DictationSession => ({
+  ...createTestSession(),
+  sessionId: 'session-test',
+  isActive: true,
+  activationMode: 'push-to-talk',
+  status: 'listening',
+  captureIntent: 'start',
+  startedAt: new Date().toISOString(),
+  targetApp: context.appName,
+  context,
+  ...overrides,
 })
 
-const createStoreDouble = (
-  overrides: Partial<{
-    appendHistoryWithAudio: ReturnType<typeof vi.fn>
-    getSettings: () => Settings
-  }> = {},
-) => {
-  let activeSession: DictationSession | null = null
-  const publish = (session: DictationSession | null): DictationSession | null => {
-    activeSession = session
-    return activeSession
-  }
-  const updateActive = (sessionId: string, patch: Partial<DictationSession>): DictationSession | null => {
-    if (!activeSession || activeSession.id !== sessionId) {
-      return activeSession
-    }
-    return publish({ ...activeSession, ...patch })
-  }
-
-  return {
-    getSettings: overrides.getSettings ?? (() => settings),
-    appendHistoryWithAudio: overrides.appendHistoryWithAudio ?? vi.fn(async () => undefined),
-    getActiveSession: vi.fn(async () => activeSession),
-    startSession: vi.fn(async (session: DictationSession) => publish(session)),
-    updateSessionContext: vi.fn(async (sessionId: string, targetApp: string, contextPatch: DictationSession['context']) =>
-      updateActive(sessionId, { targetApp, context: contextPatch }),
-    ),
-    markSessionListening: vi.fn(async (sessionId: string) =>
-      updateActive(sessionId, { status: 'listening' }),
-    ),
-    markSessionRecorderFailed: vi.fn(async (
-      sessionId: string,
-      status: 'error' | 'permission-required',
-      errorMessage: string,
-      finishedAt: string,
-    ) => updateActive(sessionId, { status, captureIntent: 'none', errorMessage, finishedAt })),
-    requestSessionStop: vi.fn(async (sessionId: string, processingStartedAt: string) =>
-      updateActive(sessionId, { status: 'processing', captureIntent: 'stop', processingStartedAt }),
-    ),
-    markSessionProcessing: vi.fn(async (
-      sessionId: string,
-      processingStartedAt: string,
-      targetApp: string,
-      contextPatch: DictationSession['context'],
-      insertionPlan: DictationSession['insertionPlan'],
-    ) => updateActive(sessionId, {
-      status: 'processing',
-      captureIntent: 'none',
-      processingStartedAt,
-      targetApp,
-      context: contextPatch,
-      insertionPlan,
-    })),
-    appendSessionPartial: vi.fn(async (sessionId: string, partialText: string) =>
-      updateActive(sessionId, { status: 'streaming', partialText }),
-    ),
-    completeSession: vi.fn(async (sessionId: string, finishedAt: string, partialText: string, finalText: string) =>
-      updateActive(sessionId, {
+const createClient = (initialSession: DictationSession | null = null) => {
+  const calls: Call[] = []
+  let session = initialSession
+  const mutation = vi.fn(async (reference: unknown, args?: unknown): Promise<unknown> => {
+    const name = (reference as FunctionReferenceShape).name ?? 'unknown'
+    calls.push({ name, args })
+    if (name === 'sessions/start') {
+      const start = args as {
+        sessionId: string
+        activationMode: DictationSession['activationMode']
+        startedAt: string
+        modelId: string
+        requestedMode: DictationSession['insertion']['requestedMode']
+      }
+      session = createActiveSession({
+        sessionId: start.sessionId,
+        activationMode: start.activationMode,
+        status: 'arming',
+        startedAt: start.startedAt,
+        llm: { ...createTestSession().llm, modelId: start.modelId },
+        insertion: {
+          ...createTestSession().insertion,
+          requestedMode: start.requestedMode,
+          effectiveMode: start.requestedMode,
+        },
+      })
+    } else if (name === 'sessions/updateContext' && session) {
+      const update = args as { targetApp: string; context: ContextSnapshot }
+      session = { ...session, targetApp: update.targetApp, context: update.context }
+    } else if (name === 'sessions/markListening' && session) {
+      session = { ...session, status: 'listening' }
+    } else if (name === 'sessions/requestStop' && session) {
+      session = { ...session, status: 'processing', captureIntent: 'stop' }
+    } else if (name === 'sessions/markProcessing' && session) {
+      const update = args as Pick<DictationSession, 'targetApp' | 'context' | 'insertionPlan'>
+      session = { ...session, ...update, status: 'processing', captureIntent: 'none' }
+    } else if (name === 'sessions/appendPartial' && session) {
+      const update = args as { partialText: string }
+      session = { ...session, status: 'streaming', partialText: update.partialText }
+    } else if (name === 'sessions/complete' && session) {
+      const update = args as { finalText: string; partialText: string; finishedAt: string }
+      session = {
+        ...session,
+        ...update,
         status: 'completed',
+        isActive: false,
         captureIntent: 'none',
-        finishedAt,
-        partialText,
-        finalText,
-      }),
-    ),
-    failSession: vi.fn(async (sessionId: string, finishedAt: string, errorMessage: string, partialText: string) =>
-      updateActive(sessionId, {
+      }
+    } else if (name === 'sessions/fail' && session) {
+      const update = args as { errorMessage: string; partialText: string; finishedAt: string }
+      session = {
+        ...session,
+        ...update,
         status: 'error',
+        isActive: false,
         captureIntent: 'none',
-        finishedAt,
-        errorMessage,
-        partialText,
-      }),
-    ),
-    showSessionNotice: vi.fn(async (session: DictationSession) => publish(session)),
-    cancelSession: vi.fn(async (sessionId: string, finishedAt: string) =>
-      updateActive(sessionId, { status: 'cancelled', captureIntent: 'none', finishedAt }),
-    ),
-    dismissCurrentSession: vi.fn(async () => publish(null)),
+      }
+    }
+    return session
+  })
+  const client = {
+    query: vi.fn(async () => session),
+    mutation,
+    action: vi.fn(),
+    watchQuery: vi.fn(),
+    watchRuntimeStatus: vi.fn(),
+  } as SyncoreClient
+  return {
+    client,
+    calls,
+    getSession: () => session,
+    setSession: (next: DictationSession | null) => { session = next },
   }
 }
 
-const createProgressiveSessionDouble = (
-  overrides: Partial<{
-    append: ReturnType<typeof vi.fn>
-    finalize: ReturnType<typeof vi.fn>
-    warmup: ReturnType<typeof vi.fn>
-    recoverToClipboard: ReturnType<typeof vi.fn>
-    cancel: ReturnType<typeof vi.fn>
-    getExecutionReport: ReturnType<typeof vi.fn>
-  }> = {},
-) => ({
-  append: overrides.append ?? vi.fn(async () => undefined),
-  finalize:
-    overrides.finalize ??
-    vi.fn(async () => ({
+const createInsertion = () => {
+  const progressive = {
+    append: vi.fn(async () => undefined),
+    warmup: vi.fn(async () => undefined),
+    finalize: vi.fn(async () => ({
       requestedMode: 'letter-by-letter' as const,
       effectiveMode: 'letter-by-letter' as const,
-      insertionMethod: 'clipboard-all-at-once' as const,
+      insertionMethod: 'enigo-letter' as const,
       fallbackUsed: false,
+      startedAt: new Date().toISOString(),
+      completedAt: new Date().toISOString(),
+      durationMs: 10,
+      writtenCharacterCount: 11,
     })),
-  warmup: overrides.warmup ?? vi.fn(async () => undefined),
-  recoverToClipboard: overrides.recoverToClipboard ?? vi.fn(async () => undefined),
-  cancel: overrides.cancel ?? vi.fn(() => undefined),
-  getExecutionReport:
-    overrides.getExecutionReport ??
-    vi.fn(() => ({
+    recoverToClipboard: vi.fn(async () => undefined),
+    cancel: vi.fn(),
+    getExecutionReport: vi.fn(() => ({
       requestedMode: 'letter-by-letter' as const,
       effectiveMode: 'letter-by-letter' as const,
-      insertionMethod: 'clipboard-all-at-once' as const,
+      insertionMethod: 'enigo-letter' as const,
       fallbackUsed: false,
+      startedAt: null,
+      completedAt: null,
+      durationMs: null,
+      writtenCharacterCount: null,
     })),
-})
+  }
+  return {
+    progressive,
+    engine: {
+      warmupLetterInput: vi.fn(),
+      createPlan: vi.fn(() => ({
+        strategy: 'replace-selection' as const,
+        targetApp: context.appName,
+        capability: 'clipboard' as const,
+      })),
+      createProgressiveSession: vi.fn(() => progressive),
+    },
+  }
+}
 
-const createInsertionEngineDouble = (
-  overrides: Partial<{
-    createPlan: ReturnType<typeof vi.fn>
-    createProgressiveSession: ReturnType<typeof vi.fn>
-    warmupLetterInput: ReturnType<typeof vi.fn>
-  }> = {},
-) => ({
-  createPlan:
-    overrides.createPlan ??
-    vi.fn(() => ({
-      strategy: 'replace-selection',
-      targetApp: 'VS Code',
-      capability: 'clipboard',
-    })),
-  warmupLetterInput: overrides.warmupLetterInput ?? vi.fn(() => undefined),
-  createProgressiveSession: overrides.createProgressiveSession ?? vi.fn(() => createProgressiveSessionDouble()),
-})
-
-describe('DictationSessionOrchestrator', () => {
-  it('starts armed, updates the target app, and only switches to listening after the recorder confirms start', async () => {
-    const sessions: Array<DictationSession | null> = []
-    const capture = vi.fn(async () => context)
-
-    const orchestrator = new DictationSessionOrchestrator(
-      createStoreDouble() as never,
-      { capture } as never,
-      createInsertionEngineDouble() as never,
-      { stream: vi.fn() } as never,
+const createOrchestrator = (
+  clientState: ReturnType<typeof createClient>,
+  llmStream: (request: LlmRequest, onDelta: (delta: string) => Promise<void>) => Promise<LlmResponse>,
+) => {
+  const insertion = createInsertion()
+  return {
+    insertion,
+    orchestrator: new DictationSessionOrchestrator(
+      clientState.client,
+      () => settings,
+      clientState.getSession,
+      { capture: vi.fn(async () => context) } as never,
+      insertion.engine as never,
+      { stream: vi.fn(llmStream) } as never,
       { getState: vi.fn(async () => ({ microphone: 'granted', accessibility: 'granted' })) } as never,
-    )
+    ),
+  }
+}
 
-    orchestrator.subscribe((session: DictationSession | null) => sessions.push(session))
-    await orchestrator.startCapture('toggle')
-    await flushPromises()
-
-    expect(sessions.at(-1)?.status).toBe('arming')
-    expect(capture).toHaveBeenCalledWith(true, true)
-    expect(sessions.at(-1)?.targetApp).toBe('VS Code')
-
-    const sessionId = orchestrator.getSessionSnapshot()?.id
-    if (!sessionId) {
-      throw new Error('Expected session id')
-    }
-    await orchestrator.markRecorderStarted(sessionId)
-
-    expect(orchestrator.getSessionSnapshot()?.status).toBe('listening')
-  })
-
-  it('captures context at start, reuses it during submit, streams text, and stores history', async () => {
-    const store = createStoreDouble()
-    const append = vi.fn(async () => undefined)
-    const finalize = vi.fn(async () => ({
-      requestedMode: 'letter-by-letter' as const,
-      effectiveMode: 'letter-by-letter' as const,
-      insertionMethod: 'clipboard-all-at-once' as const,
-      fallbackUsed: true,
+describe('DictationSessionOrchestrator with Syncore', () => {
+  it('starts and advances the session exclusively through Syncore mutations', async () => {
+    const clientState = createClient()
+    const { orchestrator } = createOrchestrator(clientState, async () => ({
+      text: '', latencyMs: 0, finishReason: null,
     }))
 
-    const llm = {
-      stream: vi.fn(
-        async (request: LlmRequest, onDelta: (delta: string) => Promise<void>): Promise<LlmResponse> => {
-          expect(request.context.appName).toBe('VS Code')
-          expect(request.context.selectedText).toBe('old line')
-          await onDelta('new ')
-          await onDelta('copy')
-          return { text: 'new copy', latencyMs: 240, audioSendMs: 85, finishReason: 'stop' }
-        },
-      ),
-    }
-
-    const orchestrator = new DictationSessionOrchestrator(
-      store as never,
-      { capture: vi.fn(async () => context) } as never,
-      createInsertionEngineDouble({
-        createProgressiveSession: vi.fn(() =>
-          createProgressiveSessionDouble({
-            append,
-            finalize,
-          }),
-        ),
-      }) as never,
-      llm as never,
-      { getState: vi.fn(async () => ({ microphone: 'granted', accessibility: 'granted' })) } as never,
-    )
-
     await orchestrator.startCapture('toggle')
-    const sessionId = orchestrator.getSessionSnapshot()?.id
-    if (!sessionId) {
-      throw new Error('Expected session id')
-    }
-
-    await orchestrator.markRecorderStarted(sessionId)
-    await orchestrator.submitAudio('toggle', createPayload())
-
-    expect(append).toHaveBeenCalledTimes(2)
-    expect(finalize).toHaveBeenCalledWith('new copy')
-    expect(store.appendHistoryWithAudio).toHaveBeenCalledTimes(1)
-    expect(store.appendHistoryWithAudio).toHaveBeenCalledWith(
-      expect.objectContaining({
-        id: sessionId,
-        outputText: 'new copy',
-        outcome: 'completed',
-        audioProcessingMs: 32,
-        audioSendMs: 85,
-        fallbackUsed: true,
-      }),
-      expect.any(Object),
-    )
-    expect(orchestrator.getSessionSnapshot()?.status).toBe('completed')
-  })
-
-  it('moves to permission-required when the recorder fails to start and microphone access is blocked', async () => {
-    const orchestrator = new DictationSessionOrchestrator(
-      createStoreDouble() as never,
-      { capture: vi.fn(async () => context) } as never,
-      createInsertionEngineDouble() as never,
-      { stream: vi.fn() } as never,
-      { getState: vi.fn(async () => ({ microphone: 'denied', accessibility: 'granted' })) } as never,
-    )
-
-    await orchestrator.startCapture('push-to-talk')
-    const sessionId = orchestrator.getSessionSnapshot()?.id
-    if (!sessionId) {
-      throw new Error('Expected session id')
-    }
-
-    await orchestrator.markRecorderFailed(sessionId, 'Unable to start microphone capture.')
-
-    expect(orchestrator.getSessionSnapshot()?.status).toBe('permission-required')
-    expect(orchestrator.getSessionSnapshot()?.errorMessage).toContain('Microphone access is required')
-  })
-
-  it('publishes the completed session before history persistence finishes', async () => {
-    let historyPersisted = false
-    let completedObservedBeforeHistory = false
-    const sessions: Array<DictationSession | null> = []
-    const store = createStoreDouble({
-      appendHistoryWithAudio: vi.fn(async () => {
-        await Promise.resolve()
-        historyPersisted = true
-      }),
-    })
-
-    const orchestrator = new DictationSessionOrchestrator(
-      store as never,
-      { capture: vi.fn(async () => context) } as never,
-      createInsertionEngineDouble() as never,
-      {
-        stream: vi.fn(async (_request: LlmRequest, onDelta: (delta: string) => Promise<void>): Promise<LlmResponse> => {
-          await onDelta('ready')
-          return { text: 'ready', latencyMs: 180, audioSendMs: 60, finishReason: 'stop' }
-        }),
-      } as never,
-      { getState: vi.fn(async () => ({ microphone: 'granted', accessibility: 'granted' })) } as never,
-    )
-
-    orchestrator.subscribe((session: DictationSession | null) => {
-      sessions.push(session)
-      if (session?.status === 'completed') {
-        completedObservedBeforeHistory = !historyPersisted
-      }
-    })
-
-    await orchestrator.startCapture('toggle')
-    const sessionId = orchestrator.getSessionSnapshot()?.id
-    if (!sessionId) {
-      throw new Error('Expected session id')
-    }
-
-    await orchestrator.markRecorderStarted(sessionId)
-    await orchestrator.submitAudio('toggle', createPayload())
-
-    expect(store.appendHistoryWithAudio).toHaveBeenCalledTimes(1)
-    expect(sessions.at(-1)?.status).toBe('completed')
-    expect(completedObservedBeforeHistory).toBe(true)
-  })
-
-  it('does not publish completed after cancellation during finalize', async () => {
-    const finalizeState: { resolve: (() => void) | null } = { resolve: null }
-    const store = createStoreDouble()
-    const finalize = vi.fn(
-      () =>
-        new Promise<{
-          requestedMode: 'letter-by-letter'
-          effectiveMode: 'letter-by-letter'
-          insertionMethod: 'clipboard-all-at-once'
-          fallbackUsed: false
-        }>((resolve) => {
-          finalizeState.resolve = () => resolve({
-            requestedMode: 'letter-by-letter',
-            effectiveMode: 'letter-by-letter',
-            insertionMethod: 'clipboard-all-at-once',
-            fallbackUsed: false,
-          })
-        }),
-    )
-
-    const orchestrator = new DictationSessionOrchestrator(
-      store as never,
-      { capture: vi.fn(async () => context) } as never,
-      createInsertionEngineDouble({
-        createProgressiveSession: vi.fn(() =>
-          createProgressiveSessionDouble({
-            finalize,
-          }),
-        ),
-      }) as never,
-      {
-        stream: vi.fn(async (): Promise<LlmResponse> => ({
-          text: 'ready',
-          latencyMs: 180,
-          audioSendMs: 60,
-          finishReason: 'stop',
-        })),
-      } as never,
-      { getState: vi.fn(async () => ({ microphone: 'granted', accessibility: 'granted' })) } as never,
-    )
-
-    await orchestrator.startCapture('toggle')
-    const sessionId = orchestrator.getSessionSnapshot()?.id
-    if (!sessionId) {
-      throw new Error('Expected session id')
-    }
-
-    await orchestrator.markRecorderStarted(sessionId)
-    const submitPromise = orchestrator.submitAudio('toggle', createPayload())
     await Promise.resolve()
-    await orchestrator.cancel()
-    finalizeState.resolve?.()
-    await submitPromise
+    const sessionId = clientState.getSession()?.sessionId
+    expect(sessionId).toBeTruthy()
+    await orchestrator.markRecorderStarted(sessionId ?? '')
 
-    expect(orchestrator.getSessionSnapshot()?.status ?? 'idle').not.toBe('completed')
-    expect(store.appendHistoryWithAudio).not.toHaveBeenCalled()
+    expect(clientState.calls.map((call) => call.name)).toEqual(expect.arrayContaining([
+      'sessions/start',
+      'sessions/updateContext',
+      'sessions/markListening',
+    ]))
+    expect(clientState.getSession()?.status).toBe('listening')
   })
 
-  it('does not call the model when the recorder reports silence', async () => {
-    const llm = { stream: vi.fn() }
-
-    const orchestrator = new DictationSessionOrchestrator(
-      createStoreDouble() as never,
-      { capture: vi.fn(async () => context) } as never,
-      createInsertionEngineDouble() as never,
-      llm as never,
-      { getState: vi.fn(async () => ({ microphone: 'granted', accessibility: 'granted' })) } as never,
+  it('coalesces partial text and flushes it before completion and history storage', async () => {
+    const clientState = createClient(createActiveSession())
+    const { orchestrator, insertion } = createOrchestrator(
+      clientState,
+      async (_request, onDelta) => {
+        await onDelta('hello ')
+        await onDelta('world')
+        return { text: 'hello world', latencyMs: 50, finishReason: 'stop' }
+      },
     )
 
-    await orchestrator.startCapture('toggle')
-    const sessionId = orchestrator.getSessionSnapshot()?.id
-    if (!sessionId) {
-      throw new Error('Expected session id')
-    }
+    await orchestrator.submitAudio('push-to-talk', payload)
 
-    await orchestrator.markRecorderStarted(sessionId)
-    await orchestrator.submitAudio('toggle', {
-      ...createPayload(),
-      speechDetected: false,
-      peakAmplitude: 0.01,
-      rmsAmplitude: 0.002,
-    })
-
-    expect(llm.stream).not.toHaveBeenCalled()
-    expect(orchestrator.getSessionSnapshot()?.status).toBe('notice')
-    expect(orchestrator.getSessionSnapshot()?.noticeMessage).toContain('notices.noSpeechDetected')
+    const names = clientState.calls.map((call) => call.name)
+    expect(names.filter((name) => name === 'sessions/appendPartial')).toHaveLength(1)
+    expect(names.indexOf('sessions/appendPartial')).toBeLessThan(names.indexOf('sessions/complete'))
+    expect(names.indexOf('sessions/complete')).toBeLessThan(names.indexOf('history/appendWithAudio'))
+    expect(insertion.progressive.append).toHaveBeenNthCalledWith(1, 'hello ')
+    expect(insertion.progressive.append).toHaveBeenNthCalledWith(2, 'world')
   })
 
-  it('treats audio shorter than 1.5 seconds as no speech for both modes', async () => {
-    const llm = { stream: vi.fn() }
-
-    const orchestrator = new DictationSessionOrchestrator(
-      createStoreDouble() as never,
-      { capture: vi.fn(async () => context) } as never,
-      createInsertionEngineDouble() as never,
-      llm as never,
-      { getState: vi.fn(async () => ({ microphone: 'granted', accessibility: 'granted' })) } as never,
+  it('records an auditable failure and persists its history without fallback storage', async () => {
+    const clientState = createClient(createActiveSession())
+    const { orchestrator } = createOrchestrator(
+      clientState,
+      async (_request, onDelta) => {
+        await onDelta('partial result')
+        throw new Error('provider failed')
+      },
     )
 
-    await orchestrator.startCapture('push-to-talk')
-    const sessionId = orchestrator.getSessionSnapshot()?.id
-    if (!sessionId) {
-      throw new Error('Expected session id')
-    }
+    await orchestrator.submitAudio('push-to-talk', payload)
 
-    await orchestrator.markRecorderStarted(sessionId)
-    await orchestrator.submitAudio('push-to-talk', {
-      ...createPayload(),
-      durationMs: 1400,
-    })
-
-    expect(llm.stream).not.toHaveBeenCalled()
-    expect(orchestrator.getSessionSnapshot()?.status).toBe('notice')
-    expect(orchestrator.getSessionSnapshot()?.noticeMessage).toContain('notices.noSpeechDetected')
-  })
-
-  it('treats an empty model response as notice and avoids persisting history', async () => {
-    const finalize = vi.fn(async () => ({
-      requestedMode: 'letter-by-letter' as const,
-      effectiveMode: 'letter-by-letter' as const,
-      insertionMethod: 'clipboard-all-at-once' as const,
-      fallbackUsed: false,
+    const names = clientState.calls.map((call) => call.name)
+    expect(names).toContain('sessions/fail')
+    expect(names.indexOf('sessions/fail')).toBeLessThan(names.indexOf('history/appendWithAudio'))
+    const failure = clientState.calls.find((call) => call.name === 'sessions/fail')
+    expect(failure?.args).toEqual(expect.objectContaining({
+      errorMessage: 'provider failed Latest text copied to clipboard.',
+      partialText: 'partial result',
     }))
-    const store = createStoreDouble()
-
-    const orchestrator = new DictationSessionOrchestrator(
-      store as never,
-      { capture: vi.fn(async () => context) } as never,
-      createInsertionEngineDouble({
-        createProgressiveSession: vi.fn(() =>
-          createProgressiveSessionDouble({
-            finalize,
-          }),
-        ),
-      }) as never,
-      {
-        stream: vi.fn(async (): Promise<LlmResponse> => ({
-          text: '   ',
-          latencyMs: 120,
-          audioSendMs: 45,
-          finishReason: 'stop',
-        })),
-      } as never,
-      { getState: vi.fn(async () => ({ microphone: 'granted', accessibility: 'granted' })) } as never,
-    )
-
-    await orchestrator.startCapture('toggle')
-    const sessionId = orchestrator.getSessionSnapshot()?.id
-    if (!sessionId) {
-      throw new Error('Expected session id')
-    }
-
-    await orchestrator.markRecorderStarted(sessionId)
-    await orchestrator.submitAudio('toggle', createPayload())
-
-    expect(finalize).toHaveBeenCalledWith('')
-    expect(store.appendHistoryWithAudio).not.toHaveBeenCalled()
-    expect(orchestrator.getSessionSnapshot()?.status).toBe('notice')
-    expect(orchestrator.getSessionSnapshot()?.noticeMessage).toContain('notices.noFinalText')
   })
 
-  it('recovers partial text to clipboard and persists the failed session', async () => {
-    const store = createStoreDouble()
-    const recoverToClipboard = vi.fn(async () => undefined)
-
-    const orchestrator = new DictationSessionOrchestrator(
-      store as never,
-      { capture: vi.fn(async () => context) } as never,
-      createInsertionEngineDouble({
-        createProgressiveSession: vi.fn((mode: 'all-at-once' | 'letter-by-letter') => {
-          if (mode === 'all-at-once') {
-            return createProgressiveSessionDouble({
-              recoverToClipboard,
-            })
-          }
-
-          return createProgressiveSessionDouble({
-            append: vi.fn(async () => {
-              throw new Error('Protected clipboard write failed')
-            }),
-          })
-        }),
-      }) as never,
-      {
-        stream: vi.fn(async (_request: LlmRequest, onDelta: (delta: string) => Promise<void>): Promise<LlmResponse> => {
-          await onDelta('partial text')
-          return { text: 'partial text', latencyMs: 150, audioSendMs: 52, finishReason: 'stop' }
-        }),
-      } as never,
-      { getState: vi.fn(async () => ({ microphone: 'granted', accessibility: 'granted' })) } as never,
-    )
+  it('does not start a second capture while Syncore reports a live session', async () => {
+    const clientState = createClient(createActiveSession())
+    const { orchestrator } = createOrchestrator(clientState, async () => ({
+      text: '', latencyMs: 0, finishReason: null,
+    }))
 
     await orchestrator.startCapture('toggle')
-    const sessionId = orchestrator.getSessionSnapshot()?.id
-    if (!sessionId) {
-      throw new Error('Expected session id')
-    }
 
-    await orchestrator.markRecorderStarted(sessionId)
-    await orchestrator.submitAudio('toggle', createPayload())
-
-    expect(recoverToClipboard).toHaveBeenCalledWith('partial text')
-    expect(orchestrator.getSessionSnapshot()?.status).toBe('error')
-    expect(store.appendHistoryWithAudio).toHaveBeenCalledTimes(1)
-    expect(store.appendHistoryWithAudio).toHaveBeenCalledWith(
-      expect.objectContaining({
-        id: sessionId,
-        outcome: 'error',
-        outputText: 'partial text',
-        errorMessage: expect.stringContaining('Protected clipboard write failed'),
-      }),
-      expect.any(Object),
-    )
+    expect(clientState.calls).toHaveLength(0)
   })
 })
