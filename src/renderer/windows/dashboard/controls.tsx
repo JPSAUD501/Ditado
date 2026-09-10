@@ -192,8 +192,9 @@ export const ToggleRow = ({
         <motion.span
           className="toggle-thumb"
           initial={{ x: thumbX }}
-          animate={{ x: thumbX }}
-          transition={{ duration: 0.16, ease: easeOutExpo }}
+          animate={{ x: thumbX, scale: 1 }}
+          whileTap={{ scale: 0.85 }}
+          transition={{ type: 'spring', stiffness: 520, damping: 32, mass: 0.8 }}
           style={{ background: value ? 'var(--accent)' : 'var(--text-3)' }}
         />
       </button>

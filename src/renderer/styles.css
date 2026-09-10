@@ -111,16 +111,6 @@ textarea {
   font: inherit;
 }
 
-[data-theme="light"] .overlay-chip {
-  background: rgba(255, 255, 255, 0.92);
-  border-color: rgba(20, 22, 28, 0.10);
-}
-[data-theme="light"] .overlay-chip[data-mode="push-to-talk"] {
-  border-color: rgba(160, 120, 50, 0.30);
-}
-[data-theme="light"] .overlay-chip[data-mode="toggle"] {
-  border-color: rgba(60, 120, 190, 0.25);
-}
 [data-theme="light"] .status-pill { background: var(--bg-2); border-color: var(--border); color: var(--text-3); }
 [data-theme="light"] .status-pill[data-status="listening"] { border-color: rgba(50,140,80,0.3); background: rgba(50,140,80,0.08); }
 [data-theme="light"] .status-pill[data-status="processing"] { border-color: rgba(160,120,50,0.3); background: rgba(160,120,50,0.08); }
@@ -156,6 +146,23 @@ textarea {
 }
 
 /* ─── Overlay ──────────────────────────────────────────────────────── */
+/*
+ * The overlay is always dark (the window is transparent and floats above
+ * every app). The look is deliberately flat: one solid chip, a status-tinted
+ * border, no glow. The status hue lives in `--chip-color` (a registered
+ * @property) so border, icon and text cross-fade together on every change.
+ *
+ * Spacing system (all in px at 16px root):
+ *   chip height 36 · radius 18 · padding-left 10 · padding-right 12
+ *   icon slot 18×18 (glyph 13, equalizer 18 wide) · slot→badge gap 6
+ *   left group→text gap 8 · context badge 16×16
+ */
+
+@property --chip-color {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: rgba(204, 196, 185, 0.36);
+}
 
 .overlay-shell {
   height: 100%;
@@ -167,39 +174,163 @@ textarea {
   overflow: hidden;
 }
 
+.overlay-stage {
+  display: flex;
+  width: 100%;
+  justify-content: center;
+  will-change: transform, opacity, filter;
+}
+
+/* Frame: positioning context for the chip + the completion ring that expands past its edge */
+.overlay-frame {
+  position: relative;
+  display: inline-flex;
+  max-width: 100%;
+  --chip-radius: 18px;
+  /* color + --chip-color are set inline here (status-based); chip and burst inherit them */
+  transition:
+    --chip-color 480ms cubic-bezier(0.22, 1, 0.36, 1),
+    color 480ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 .overlay-chip {
   display: inline-flex;
   align-items: center;
-  gap: 0.45rem;
+  gap: 8px;
   width: auto;
-  height: 2.2rem;
+  height: 36px;
   max-width: calc(100vw - 0.8rem);
-  padding: 0 0.7rem 0 0.5rem;
-  border: 1.5px solid rgba(255, 252, 248, 0.08);
-  border-radius: 1rem;
+  padding: 0 12px 0 10px;
+  border: 1.5px solid color-mix(in oklch, var(--chip-color) 40%, rgba(255, 252, 248, 0.08));
+  border-radius: var(--chip-radius);
   background: rgba(12, 14, 18, 0.92);
-  /* color is set via inline style (status-based) — children inherit via currentColor */
+  box-shadow: 0 2px 10px -4px rgba(0, 0, 0, 0.6);
+  /* color inherited from .overlay-frame — children pick it up via currentColor */
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  position: relative; /* contém os elementos absolutamente posicionados pelo popLayout */
+  position: relative;
+  z-index: 1;
   overflow: hidden;
   will-change: width;
-  transition: color 220ms ease;
+}
+
+/* Burst: one-shot thin ring that expands past the chip edge on completion */
+.overlay-burst {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: var(--chip-radius);
+  border: 1.5px solid color-mix(in oklch, var(--chip-color) 70%, transparent);
+  pointer-events: none;
 }
 
 .overlay-left {
   display: flex;
   align-items: center;
-  gap: 0.2rem;
+  gap: 6px;
   flex: 0 0 auto;
 }
 
+/* Fixed 18×18 slot: glyph and equalizer both fit, so the chip width never jumps between them */
 .overlay-icon {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 18px;
+  height: 18px;
   /* inherits color from chip */
+}
+
+.overlay-icon-glyph {
+  display: block;
+}
+
+/* Per-status glyph motion */
+.overlay-icon[data-status="arming"] .overlay-icon-glyph {
+  animation: overlay-mic-breathe 1.1s ease-in-out infinite;
+}
+
+.overlay-icon[data-status="processing"] .overlay-icon-glyph {
+  animation: overlay-spin 0.9s linear infinite;
+}
+
+.overlay-icon[data-status="streaming"] .overlay-icon-glyph {
+  animation: overlay-pen-write 0.85s ease-in-out infinite;
+  transform-origin: 20% 80%;
+}
+
+.overlay-icon[data-status="error"] .overlay-icon-glyph,
+.overlay-icon[data-status="permission-required"] .overlay-icon-glyph {
+  animation: overlay-alert-blink 1.4s ease-in-out infinite;
+}
+
+.overlay-icon[data-status="notice"] .overlay-icon-glyph {
+  animation: overlay-sparkle 1.6s ease-in-out infinite;
+}
+
+@keyframes overlay-mic-breathe {
+  0%, 100% { transform: scale(1); opacity: 0.8; }
+  50%      { transform: scale(1.12); opacity: 1; }
+}
+
+@keyframes overlay-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@keyframes overlay-pen-write {
+  0%   { transform: translate(0, 0) rotate(0deg); }
+  25%  { transform: translate(0.7px, -0.6px) rotate(-7deg); }
+  50%  { transform: translate(0, 0.2px) rotate(0deg); }
+  75%  { transform: translate(-0.5px, 0.5px) rotate(5deg); }
+  100% { transform: translate(0, 0) rotate(0deg); }
+}
+
+@keyframes overlay-alert-blink {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.55; }
+}
+
+@keyframes overlay-sparkle {
+  0%, 100% { transform: scale(1) rotate(0deg); opacity: 0.85; }
+  50%      { transform: scale(1.1) rotate(8deg); opacity: 1; }
+}
+
+/* Equalizer: 5 bars × 2.4px + 4 gaps × 1.5px = 18px, exactly the icon slot */
+.overlay-equalizer {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5px;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+}
+
+.overlay-eq-bar {
+  width: 2.4px;
+  height: 3px;
+  border-radius: 1.2px;
+  /* Inherits status color from chip via currentColor */
+  background: currentColor;
+  will-change: height;
+  opacity: 0.9;
+}
+
+/* Context badge: 16×16, same visual weight as the glyph */
+.overlay-context-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  border-radius: 5px;
+  color: currentColor;
+  background: color-mix(in oklch, var(--chip-color) 12%, transparent);
+  border: 1px solid color-mix(in oklch, var(--chip-color) 28%, transparent);
+  opacity: 0.85;
 }
 
 .overlay-app-name {
@@ -212,19 +343,72 @@ textarea {
   max-width: 100%;
   min-width: 0;
   /* app name is always muted — not status-colored, for visual hierarchy */
-  color: rgba(228, 221, 212, 0.5);
+  color: rgba(228, 221, 212, 0.55);
   line-height: 1;
+  letter-spacing: 0.005em;
+}
+
+/* While the chip width is tweening the text is momentarily clipped — plain clip
+   reads as motion, an ellipsis flashing in and out reads as a glitch. */
+.overlay-chip[data-resizing="true"] .overlay-app-name {
+  text-overflow: clip;
 }
 
 .overlay-app-name-notice {
   overflow: visible;
   text-overflow: clip;
   max-width: none;
+  color: rgba(228, 221, 212, 0.72);
 }
 
-[data-theme="light"] .overlay-app-name {
-  color: rgba(40, 44, 55, 0.48);
+.overlay-timer {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  /* Inherits status color from chip */
+  color: currentColor;
+  letter-spacing: 0.01em;
+  flex: 0 1 auto;
+  max-width: 100%;
+  min-width: 0;
+  white-space: nowrap;
+  line-height: 1;
 }
+
+.overlay-timer-unit {
+  font-size: 0.58rem;
+  font-weight: 500;
+  /* Slightly dimmer than the number */
+  opacity: 0.5;
+  margin-left: 0.5px;
+}
+
+/* Streaming: a thin indeterminate "writing" line along the chip's bottom edge */
+.overlay-stream-bar {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 1.5px;
+  width: 36%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, transparent, currentColor 40%, currentColor 60%, transparent);
+  opacity: 0;
+  transform: translateX(-100%);
+  pointer-events: none;
+  transition: opacity 240ms ease;
+}
+
+.overlay-chip[data-status="streaming"] .overlay-stream-bar {
+  opacity: 0.6;
+  animation: overlay-stream-slide 1.15s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
+@keyframes overlay-stream-slide {
+  0%   { transform: translateX(-110%); }
+  100% { transform: translateX(290%); }
+}
+
 
 /* ─── App shell ────────────────────────────────────────────────────── */
 
@@ -289,7 +473,7 @@ textarea {
   background: transparent;
   color: var(--text-3);
   cursor: pointer;
-  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+  transition: background 160ms ease, color 160ms ease, border-color 160ms ease, transform 120ms var(--ease-out-expo);
   position: relative;
 }
 
@@ -304,16 +488,29 @@ textarea {
   color: var(--text-1);
 }
 
-.sidebar-icon[data-active="true"]::before {
-  content: "";
+.sidebar-icon:active {
+  transform: scale(0.94);
+}
+
+.sidebar-icon svg {
+  transition: transform 180ms var(--ease-out-expo);
+}
+
+.sidebar-icon:hover svg {
+  transform: translateY(-1px);
+}
+
+/* Active indicator: a shared-layout bar that glides between tabs (see DashboardWindow) */
+.sidebar-active-bar {
   position: absolute;
   left: -8px;
   top: 50%;
-  transform: translateY(-50%);
+  margin-top: -8px;
   width: 3px;
   height: 16px;
   border-radius: 0 2px 2px 0;
   background: var(--accent);
+  box-shadow: 0 0 8px color-mix(in oklch, var(--accent) 45%, transparent);
 }
 
 .sidebar-icon[data-tooltip]::after {
@@ -615,8 +812,20 @@ textarea {
   font-size: 0.78rem;
   font-weight: 500;
   cursor: pointer;
-  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease, opacity 120ms ease;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease,
+    opacity 140ms ease,
+    transform 120ms var(--ease-out-expo),
+    box-shadow 140ms ease;
   white-space: nowrap;
+}
+
+.button-primary:active,
+.button-secondary:active,
+.button-ghost:active {
+  transform: scale(0.97);
 }
 
 .button-primary {
@@ -627,6 +836,7 @@ textarea {
 .button-primary:hover {
   background: rgba(210, 175, 110, 0.22);
   border-color: rgba(210, 175, 110, 0.45);
+  box-shadow: 0 0 0 3px rgba(210, 175, 110, 0.08);
 }
 
 .button-secondary {
@@ -659,11 +869,53 @@ textarea {
 button:disabled {
   opacity: 0.35;
   cursor: not-allowed;
+  transform: none !important;
+}
+
+/* ─── Focus ring (keyboard only) ───────────────────────────────────── */
+
+:focus-visible {
+  outline: 2px solid color-mix(in oklch, var(--accent) 65%, transparent);
+  outline-offset: 2px;
+  border-radius: 0.4rem;
+}
+
+.field:focus-visible,
+.history-search-input:focus-visible {
+  outline: none;
+}
+
+/* ─── Scrollbars ───────────────────────────────────────────────────── */
+
+.content-area,
+.wizard-left {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklch, var(--text-3) 45%, transparent) transparent;
+}
+
+.content-area::-webkit-scrollbar,
+.wizard-left::-webkit-scrollbar {
+  width: 8px;
+}
+
+.content-area::-webkit-scrollbar-thumb,
+.wizard-left::-webkit-scrollbar-thumb {
+  background: color-mix(in oklch, var(--text-3) 40%, transparent);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.content-area::-webkit-scrollbar-thumb:hover,
+.wizard-left::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in oklch, var(--text-3) 70%, transparent);
+  background-clip: padding-box;
 }
 
 /* ─── Status pill ──────────────────────────────────────────────────── */
 
 .status-pill {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 0.325rem;
@@ -677,6 +929,18 @@ button:disabled {
   border: 1px solid var(--border);
   background: var(--bg-2);
   color: var(--text-3);
+  overflow: hidden;
+  transition: background 320ms ease, border-color 320ms ease, color 320ms ease, box-shadow 320ms ease;
+}
+
+.status-pill-label {
+  display: inline-block;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.status-pill[data-status="listening"] {
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--status-listen) 12%, transparent);
 }
 
 .status-pill[data-status="listening"] { border-color: rgba(112,192,134,0.3); background: rgba(112,192,134,0.08); color: var(--status-listen); }
@@ -694,6 +958,28 @@ button:disabled {
   border-radius: 999px;
   background: currentColor;
   flex: 0 0 auto;
+  transition: background 320ms ease;
+}
+
+.status-pill[data-status="arming"] .status-dot,
+.status-pill[data-status="listening"] .status-dot {
+  animation: status-dot-pulse 1.4s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+
+.status-pill[data-status="processing"] .status-dot,
+.status-pill[data-status="streaming"] .status-dot {
+  animation: status-dot-blink 0.9s ease-in-out infinite;
+}
+
+@keyframes status-dot-pulse {
+  0%   { box-shadow: 0 0 0 0 color-mix(in oklch, currentColor 55%, transparent); }
+  70%  { box-shadow: 0 0 0 5px color-mix(in oklch, currentColor 0%, transparent); }
+  100% { box-shadow: 0 0 0 0 color-mix(in oklch, currentColor 0%, transparent); }
+}
+
+@keyframes status-dot-blink {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.45; transform: scale(0.8); }
 }
 
 /* ─── Labels ───────────────────────────────────────────────────────── */
@@ -768,12 +1054,22 @@ button:disabled {
   display: flex;
   align-items: flex-start;
   gap: 0.75rem;
-  transition: border-color 200ms ease, background 200ms ease;
+  transition: border-color 200ms ease, background 200ms ease, transform 220ms var(--ease-out-expo), box-shadow 220ms ease;
 }
 
 .stat-card:hover {
   border-color: var(--border-strong);
   background: var(--bg-2);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px -8px rgba(0, 0, 0, 0.5);
+}
+
+.stat-card-icon {
+  transition: transform 220ms var(--ease-out-expo);
+}
+
+.stat-card:hover .stat-card-icon {
+  transform: scale(1.06);
 }
 
 .stat-card-icon {
@@ -1063,11 +1359,15 @@ button:disabled {
   background: var(--bg-1);
   cursor: pointer;
   margin-bottom: 0.6rem;
-  transition: border-color 150ms ease, background 150ms ease;
+  transition: border-color 150ms ease, background 150ms ease, transform 180ms var(--ease-out-expo);
 }
 .wizard-choice-card:hover {
   border-color: rgba(210, 175, 110, 0.4);
   background: var(--bg-2);
+  transform: translateY(-1px);
+}
+.wizard-choice-card:active {
+  transform: scale(0.99);
 }
 .wizard-choice-card[data-selected] {
   border-color: var(--accent);
@@ -1491,12 +1791,13 @@ button:disabled {
   border: 1px solid var(--border);
   border-radius: 0.75rem;
   overflow: hidden;
-  transition: border-color 200ms ease, box-shadow 200ms ease;
+  transition: border-color 200ms ease, box-shadow 200ms ease, transform 220ms var(--ease-out-expo);
 }
 
 .hentry-card:hover {
   border-color: var(--border-strong);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 6px 20px -6px rgba(0, 0, 0, 0.35);
+  transform: translateY(-1px);
 }
 
 .hentry-row {
@@ -2112,6 +2413,7 @@ button:disabled {
 .toggle-track[data-on="true"] {
   background: rgba(210, 175, 110, 0.22);
   border-color: rgba(210, 175, 110, 0.3);
+  box-shadow: 0 0 0 3px rgba(210, 175, 110, 0.06);
 }
 
 .toggle-thumb {
@@ -2124,6 +2426,11 @@ button:disabled {
   border-radius: 999px;
   pointer-events: none;
   transition: background 150ms ease;
+}
+
+.session-dot[data-status="listening"],
+.session-dot[data-status="arming"] {
+  animation: status-dot-pulse 1.4s cubic-bezier(0.22, 1, 0.36, 1) infinite;
 }
 
 /* ─── Animations ───────────────────────────────────────────────────── */
@@ -2143,69 +2450,6 @@ button:disabled {
 .animate-pulse-scale { animation: pulse-scale 1.1s ease-in-out infinite; }
 .animate-spin-slow { animation: spin 1.2s linear infinite; }
 .animate-shimmer { animation: shimmer 1.4s ease-in-out infinite; }
-
-/* ── Overlay: equalizer wrapper ───────────────────────────────────── */
-
-.overlay-eq-wrap {
-  display: flex;
-  align-items: center;
-  flex: 0 0 auto;
-}
-
-/* ── Overlay: equalizer bars (heights driven by Framer Motion values) */
-
-.overlay-equalizer {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  height: 14px;
-  flex: 0 0 auto;
-}
-
-.overlay-eq-bar {
-  width: 2.5px;
-  height: 2px;
-  border-radius: 1.5px;
-  /* Inherits status color from chip via currentColor */
-  background: currentColor;
-  will-change: height;
-  opacity: 0.85;
-}
-
-/* ── Overlay: live timer ──────────────────────────────────────────── */
-
-.overlay-timer {
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  /* Inherits status color from chip */
-  color: currentColor;
-  letter-spacing: 0.01em;
-  flex: 0 1 auto;
-  max-width: 100%;
-  min-width: 0;
-  white-space: nowrap;
-  line-height: 1;
-}
-
-.overlay-timer-unit {
-  font-size: 0.58rem;
-  font-weight: 500;
-  /* Slightly dimmer than the number */
-  opacity: 0.5;
-  margin-left: 0.5px;
-}
-
-/* ── Overlay: context badge ───────────────────────────────────────── */
-
-.overlay-context-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-  color: currentColor;
-}
 
 /* ─── macOS traffic-light clearance ────────────────────────────────── */
 

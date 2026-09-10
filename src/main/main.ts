@@ -55,8 +55,8 @@ let lastOverlayState: OverlayViewModel | null = null
 let startupOverlayState: OverlayViewModel | null = null
 let currentDashboardTheme: Settings['theme'] = 'system'
 const OVERLAY_WIDTH = 420
-const OVERLAY_HEIGHT = 54
-const OVERLAY_EXIT_DURATION_MS = 140
+const OVERLAY_HEIGHT = 64
+const OVERLAY_EXIT_DURATION_MS = 220
 const STARTUP_UPDATING_NOTICE_DURATION_MS = 900
 const STARTUP_UPDATED_NOTICE_DURATION_MS = 1_400
 const STABLE_USER_DATA_DIR_NAME = 'Ditado'
@@ -230,7 +230,7 @@ const showOverlay = (): void => {
 
   const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
   const posX = Math.round(display.workArea.x + (display.workArea.width - OVERLAY_WIDTH) / 2)
-  const posY = Math.round(display.workArea.y + display.workArea.height - OVERLAY_HEIGHT - 22)
+  const posY = Math.round(display.workArea.y + display.workArea.height - OVERLAY_HEIGHT - 16)
   overlay.setBounds({ x: posX, y: posY, width: OVERLAY_WIDTH, height: OVERLAY_HEIGHT }, false)
   if (overlayHideTimer) {
     clearTimeout(overlayHideTimer)
