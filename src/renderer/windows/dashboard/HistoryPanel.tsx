@@ -48,13 +48,13 @@ export const HistoryPanel = ({
   const errorCount = history.length - successCount
 
   return (
-    <div className="grid gap-3">
+    <div className="history-page">
       {/* Header: count + retention + clear */}
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
+      <div className="history-header">
+        <div className="history-header-meta">
           <span className="eyebrow">{t('history.entries', { count: history.length })}</span>
-          <span style={{ color: 'var(--text-3)', fontSize: '0.65rem' }}>·</span>
-          <span className="text-xs" style={{ color: 'var(--text-3)' }}>
+          <span className="history-header-sep">·</span>
+          <span className="history-header-retention">
             {t('history.retention', { days: retentionDays })}
           </span>
         </div>
@@ -119,7 +119,7 @@ export const HistoryPanel = ({
           </div>
         </div>
       ) : (
-        <div className="grid gap-1.5">
+        <div className="history-list">
           {filtered.map((entry) => (
             <HistoryRow key={entry.id} entry={entry} />
           ))}

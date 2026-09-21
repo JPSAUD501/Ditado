@@ -176,10 +176,10 @@ export const ToggleRow = ({
   const thumbX = value ? 16 : 0
 
   return (
-    <div className="flex items-start justify-between gap-3 py-1">
-      <div className="min-w-0">
-        <div className="text-xs font-medium" style={{ color: 'var(--text-1)' }}>{label}</div>
-        <p className="mt-0.5 text-xs" style={{ color: 'var(--text-3)', lineHeight: 1.45 }}>{description}</p>
+    <div className="toggle-row">
+      <div className="toggle-row-text">
+        <div className="toggle-row-label">{label}</div>
+        <p className="toggle-row-desc">{description}</p>
       </div>
       <button
         className="toggle-track"
@@ -195,7 +195,6 @@ export const ToggleRow = ({
           animate={{ x: thumbX, scale: 1 }}
           whileTap={{ scale: 0.85 }}
           transition={{ type: 'spring', stiffness: 520, damping: 32, mass: 0.8 }}
-          style={{ background: value ? 'var(--accent)' : 'var(--text-3)' }}
         />
       </button>
     </div>

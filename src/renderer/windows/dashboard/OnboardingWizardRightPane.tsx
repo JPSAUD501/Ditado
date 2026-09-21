@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 
 import { useTranslation } from 'react-i18next'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ArrowRight, Check, CheckCircle, KeyRound, Mic } from 'lucide-react'
+import { ArrowRight, Check, CheckCircle, Hand, KeyRound, Mic, RefreshCw, Scissors } from 'lucide-react'
 
 import type { DictationSession, Settings } from '@shared/contracts'
 import { formatHotkeyForDisplay, normalizeHotkey } from '@shared/hotkeys'
@@ -408,15 +408,11 @@ const RightWhisper = () => {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: '1.5rem', padding: '2rem' }}>
-      <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.35, ease: easeOutExpo }} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem' }}>
-        <div style={{ width: 56, height: 56, borderRadius: '1rem', background: 'var(--accent-muted)', border: '1px solid rgba(210,175,110,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)' }}>
-          <Mic size={26} strokeWidth={1.5} />
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, height: 18, overflow: 'hidden' }}>
-          {[0.4, 0.7, 1, 0.7, 0.4].map((scale, index) => (
-            <motion.div key={index} style={{ width: 3, height: 16, borderRadius: 2, background: 'var(--accent)', opacity: 0.65, transformOrigin: 'center' }} animate={{ scaleY: [0.2, scale, 0.2] }} transition={{ duration: 1.2, repeat: Infinity, delay: index * 0.12, ease: 'easeInOut' }} />
-          ))}
-        </div>
+      <motion.div className="wz-hero-mark" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35, ease: easeOutExpo }}>
+        <Mic size={26} strokeWidth={1.5} />
+        <span className="wz-hero-wave" aria-hidden="true">
+          {[0, 1, 2, 3, 4, 5, 6].map((i) => <i key={i} />)}
+        </span>
       </motion.div>
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.15 }} style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', justifyContent: 'center', maxWidth: 300 }}>
         {apps.map((app, index) => (
@@ -596,33 +592,32 @@ const RightReady = () => {
 const RightWelcome = () => {
   const { t } = useTranslation()
   const features = [
-    { icon: '🎙️', text: t('onboarding.featureWhisper') },
-    { icon: '✂️', text: t('onboarding.featureSelectTransform') },
-    { icon: '🔄', text: t('onboarding.featureSelfCorrect') },
-    { icon: '🙌', text: t('onboarding.featureHandsFree') },
+    { Icon: Mic, text: t('onboarding.featureWhisper') },
+    { Icon: Scissors, text: t('onboarding.featureSelectTransform') },
+    { Icon: RefreshCw, text: t('onboarding.featureSelfCorrect') },
+    { Icon: Hand, text: t('onboarding.featureHandsFree') },
   ]
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: '2rem', padding: '2rem' }}>
-      <motion.div initial={{ opacity: 0, scale: 0.7, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ duration: 0.4, ease: easeOutExpo }} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
-        <div style={{ width: 88, height: 88, borderRadius: '1.5rem', background: 'var(--accent-muted)', border: '2px solid rgba(210,175,110,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)', boxShadow: '0 8px 32px rgba(210,175,110,0.12)' }}>
+    <div className="wz-hero">
+      <motion.div className="wz-hero-brand" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease: easeOutExpo }}>
+        <div className="wz-hero-mark">
           <Mic size={40} strokeWidth={1.4} />
+          <span className="wz-hero-wave" aria-hidden="true">
+            {[0, 1, 2, 3, 4, 5, 6].map((i) => <i key={i} />)}
+          </span>
         </div>
-        <div>
-          <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-1)', letterSpacing: '-0.03em', textAlign: 'center' }}>Ditado</div>
-          <div style={{ fontSize: '0.78rem', color: 'var(--text-3)', textAlign: 'center', marginTop: '0.25rem' }}>
-            {t('onboarding.welcomeTagline')}
-          </div>
-        </div>
+        <div className="wz-hero-name">Ditado</div>
+        <div className="wz-hero-tagline">{t('onboarding.welcomeTagline')}</div>
       </motion.div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', width: '100%', maxWidth: 300 }}>
-        {features.map(({ icon, text }, index) => (
-          <motion.div key={text} initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.22, delay: 0.2 + index * 0.07, ease: easeOutExpo }} style={{ display: 'flex', alignItems: 'flex-start', gap: '0.55rem', padding: '0.5rem 0.65rem', borderRadius: '0.5rem', background: 'var(--bg-2)', border: '1px solid var(--border)', fontSize: '0.72rem', color: 'var(--text-2)', lineHeight: 1.45 }}>
-            <span style={{ fontSize: '0.85rem', flexShrink: 0, marginTop: '0.05rem' }}>{icon}</span>
+      <ul className="wz-feature-list">
+        {features.map(({ Icon, text }, index) => (
+          <motion.li key={text} className="wz-feature" initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.22, delay: 0.2 + index * 0.07, ease: easeOutExpo }}>
+            <Icon size={14} strokeWidth={1.8} className="wz-feature-icon" />
             <span>{text}</span>
-          </motion.div>
+          </motion.li>
         ))}
-      </div>
+      </ul>
     </div>
   )
 }
