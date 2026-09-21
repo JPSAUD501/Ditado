@@ -257,6 +257,13 @@ export const DashboardWindow = ({ initialTab }: { initialTab: DashboardTab }) =>
               aria-label={t(labelKey)}
               onClick={() => setActiveTab(id)}
             >
+              {activeTab === id && (
+                <motion.span
+                  className="sidebar-active-bar"
+                  layoutId="sidebar-active-bar"
+                  transition={reducedMotion ? { duration: 0 } : { type: 'spring', duration: 0.42, bounce: 0.22 }}
+                />
+              )}
               <Icon size={17} strokeWidth={1.8} />
             </button>
           ))}
