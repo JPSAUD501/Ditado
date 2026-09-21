@@ -44,7 +44,7 @@ const StepWelcome = ({ isUpgradeOnboarding = false }: { isUpgradeOnboarding?: bo
         {t('common.stepOf', { step: 1, total: TOTAL_STEPS })}
       </div>
       <div className="wizard-title">{t('onboarding.welcome')}</div>
-      <div className="wizard-desc" style={{ marginBottom: '1.5rem' }}>{t('onboarding.welcomeDesc')}</div>
+      <div className="wizard-desc">{t('onboarding.welcomeDesc')}</div>
 
       {isUpgradeOnboarding && (
         <div style={{
@@ -62,18 +62,17 @@ const StepWelcome = ({ isUpgradeOnboarding = false }: { isUpgradeOnboarding?: bo
       )}
 
       {/* Key differentiators — short, punchy, no duplication with right panel */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+      <ul className="wizard-points">
         {([
-          { color: '#3b82f6', label: t('onboarding.welcomePoint1') },
+          { color: 'var(--status-write)', label: t('onboarding.welcomePoint1') },
           { color: 'var(--accent)', label: t('onboarding.welcomePoint2') },
-          { color: '#10b981', label: t('onboarding.welcomePoint3') },
+          { color: 'var(--status-ok)', label: t('onboarding.welcomePoint3') },
         ]).map(({ color, label }) => (
-          <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', fontSize: '0.8rem', color: 'var(--text-2)' }}>
-            <div style={{ width: 6, height: 6, borderRadius: '50%', background: color, flexShrink: 0 }} />
+          <li key={label} className="wizard-point" style={{ '--point-color': color } as React.CSSProperties}>
             {label}
-          </div>
+          </li>
         ))}
-      </div>
+      </ul>
     </div>
   )
 }
@@ -728,42 +727,27 @@ export const OnboardingWizard = ({
       style={{ display: 'flex' }}
     >
       {/* LEFT PANEL */}
-      <div className="wizard-left" style={{
-        width: 420, flexShrink: 0, display: 'flex', flexDirection: 'column',
-        padding: '2rem', overflowY: 'auto',
-        borderRight: '1px solid var(--border)',
-      }}>
+      <div className="wizard-left">
         {/* Progress dots */}
-        <div className="wizard-nav" style={{ display: 'flex', gap: '0.3rem', marginBottom: '1.5rem' }}>
+        <div className="wizard-nav" aria-hidden="true">
           {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
-            <motion.div
+            <div
               key={i}
               className="wizard-nav-dot"
               data-active={i === step ? 'true' : undefined}
               data-done={i < step ? 'true' : undefined}
-              layout
-              transition={{ duration: 0.25, ease: easeOutExpo }}
-              style={{
-                height: 4, borderRadius: 2, flexShrink: 0,
-                background: i === step ? 'var(--accent)' : i < step ? 'rgba(210,175,110,0.4)' : 'var(--border)',
-                width: i === step ? 20 : 8,
-                transition: 'width 250ms, background 250ms',
-              }}
             />
           ))}
+          <span className="wizard-nav-count">{step + 1}/{TOTAL_STEPS}</span>
         </div>
 
         {/* Back button */}
         {step > 0 && (
           <button
-            className="wizard-back button-ghost"
+            className="wizard-back"
             type="button"
             onClick={goPrev}
             disabled={finishing}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
-              fontSize: '0.72rem', marginBottom: '0.5rem', alignSelf: 'flex-start',
-            }}
           >
             <ArrowLeft size={13} /> {t('common.back')}
           </button>
@@ -779,7 +763,7 @@ export const OnboardingWizard = ({
             animate="center"
             exit="exit"
             transition={{ duration: 0.22, ease: easeOutExpo }}
-            style={{ flex: 1 }}
+            className="wizard-step"
           >
             {/* Step order: 0=Welcome, 1=Appearance, 2=Whisper, 3=Microphone,
                             4=ApiKey, 5=ShortcutTest, 6=PTT, 7=SelectTransform, 8=HandsFree, 9=Ready */}
@@ -834,19 +818,15 @@ export const OnboardingWizard = ({
           </motion.div>
         </AnimatePresence>
 
-        <div className="wizard-spacer" style={{ flex: 1 }} />
+        <div className="wizard-spacer" />
 
         {/* Actions */}
-        <div className="wizard-actions" style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.5rem',
-          marginTop: '1.5rem',
-        }}>
+        <div className="wizard-actions">
           {showSkip && (
             <button
-              className="button-ghost"
+              className="button-ghost wizard-skip"
               type="button"
               onClick={goNext}
-              style={{ fontSize: '0.72rem' }}
             >
               {t('common.skip')}
             </button>
@@ -866,7 +846,7 @@ export const OnboardingWizard = ({
       </div>
 
       {/* RIGHT PANEL */}
-      <div className="wizard-right" style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
+      <div className="wizard-right">
         <AnimatePresence mode="wait" custom={direction}>
           <motion.div
             key={step}
@@ -876,7 +856,7 @@ export const OnboardingWizard = ({
             animate="center"
             exit="exit"
             transition={{ duration: 0.28, ease: easeOutExpo }}
-            style={{ position: 'absolute', inset: 0 }}
+            className="wizard-right-stage"
           >
             <OnboardingWizardRightPane
               step={step}

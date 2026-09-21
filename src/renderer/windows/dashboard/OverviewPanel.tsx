@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
-import { Check, Copy, Mic, Type, CheckCircle, Clock, Zap, TrendingUp, AppWindow, AlertTriangle, ArrowRight } from 'lucide-react'
+import { Check, Copy, Mic, Type, CheckCircle, Clock, Zap, AppWindow, AlertTriangle, ArrowRight } from 'lucide-react'
 
 import { StatusPill } from '@renderer/components/StatusPill'
 import type { DashboardViewModel, DictationStatus, HistoryEntry } from '@shared/contracts'
@@ -86,9 +86,9 @@ const SystemIssuesBanner = ({
       animate={reducedMotion ? undefined : { opacity: 1, y: 0 }}
       transition={{ duration: 0.28, ease: easeOutExpo }}
     >
-      <AlertTriangle size={13} style={{ flexShrink: 0, color: 'var(--status-error)' }} />
-      <span style={{ flex: 1 }}>
-        <span style={{ fontWeight: 600 }}>
+      <AlertTriangle size={13} className="system-issues-icon" />
+      <span className="system-issues-text">
+        <span className="system-issues-title">
           {issues.length === 1 ? t('overview.issueDetected') : t('overview.issuesDetected')}:{' '}
         </span>
         {issues.join(', ')}
@@ -111,11 +111,12 @@ const StatCard = ({
 }) => (
   <motion.div
     className="stat-card"
+    style={{ '--stat-color': color } as React.CSSProperties}
     initial={reducedMotion ? false : { opacity: 0, y: 16, scale: 0.95 }}
     animate={reducedMotion ? undefined : { opacity: 1, y: 0, scale: 1 }}
     transition={{ duration: 0.35, ease: easeOutExpo, delay: index * 0.06 }}
   >
-    <div className="stat-card-icon" style={{ background: `color-mix(in oklch, ${color} 12%, transparent)`, color }}>
+    <div className="stat-card-icon" style={{ '--stat-color': color } as React.CSSProperties}>
       <Icon size={16} strokeWidth={2} />
     </div>
     <div className="stat-card-content">
@@ -149,20 +150,14 @@ const WeekChart = ({ data, reducedMotion }: { data: number[]; reducedMotion: boo
             <div className="week-chart-bar-track">
               <motion.div
                 className="week-chart-bar"
+                data-today={i === 6 ? 'true' : undefined}
+                data-empty={count === 0 ? 'true' : undefined}
                 initial={reducedMotion ? false : { height: 0 }}
                 animate={{ height: barPx }}
                 transition={{ duration: 0.5, ease: easeOutExpo, delay: 0.15 + i * 0.05 }}
-                style={{
-                  background: i === 6
-                    ? 'var(--accent)'
-                    : count > 0 ? 'color-mix(in oklch, var(--accent) 55%, transparent)' : 'transparent',
-                }}
               />
             </div>
-            <span
-              className="week-chart-label"
-              style={{ color: i === 6 ? 'var(--accent)' : 'var(--text-3)', fontWeight: i === 6 ? 700 : 600 }}
-            >
+            <span className="week-chart-label" data-today={i === 6 ? 'true' : undefined}>
               {orderedDays[i]}
             </span>
           </div>
@@ -222,7 +217,7 @@ const MiniHistoryEntry = ({
       transition={{ duration: 0.25, ease: easeOutExpo, delay: 0.35 + index * 0.06 }}
     >
       <div className="hentry-row">
-        <div className="hentry-content" style={{ cursor: 'default' }}>
+        <div className="hentry-content" data-static="true">
           <div className="hentry-top">
             <div className="hentry-app-row">
               <span className="hentry-app">{entry.appName}</span>
@@ -258,11 +253,11 @@ const MiniHistoryEntry = ({
             >
               <AnimatePresence mode="wait" initial={false}>
                 {copied ? (
-                  <motion.span key="check" initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }} transition={{ duration: 0.15 }} style={{ display: 'flex', color: 'var(--status-ok)' }}>
+                  <motion.span key="check" initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }} transition={{ duration: 0.15 }} className="flex" style={{ color: 'var(--status-ok)' }}>
                     <Check size={12} />
                   </motion.span>
                 ) : (
-                  <motion.span key="copy" initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }} transition={{ duration: 0.15 }} style={{ display: 'flex' }}>
+                  <motion.span key="copy" initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }} transition={{ duration: 0.15 }} className="flex">
                     <Copy size={12} />
                   </motion.span>
                 )}
@@ -297,32 +292,30 @@ export const OverviewPanel = ({
   const hasHistory = state.history.length > 0
 
   return (
-    <div className="grid gap-3">
+    <div className="ov-grid">
       {/* System issues banner — only shown when something is wrong */}
       <SystemIssuesBanner apiOk={apiOk} micOk={micOk} accOk={accOk} reducedMotion={reducedMotion} />
 
       {/* Row 1: Live status strip */}
       <motion.div
-        className="surface-panel p-4"
+        className="surface-panel ov-status"
+        data-status={sessionStatus}
         initial={reducedMotion ? false : { opacity: 0, y: 12 }}
         animate={reducedMotion ? undefined : { opacity: 1, y: 0 }}
         transition={{ duration: 0.3, ease: easeOutExpo }}
       >
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
+        <div className="ov-status-row">
+          <div className="ov-status-main">
             <StatusPill status={sessionStatus} />
-            <span className="text-sm font-semibold" style={{ color: 'var(--text-1)' }}>{stageLabel}</span>
+            <span className="ov-status-label">{stageLabel}</span>
           </div>
           {state.session?.targetApp && (
-            <span className="text-xs" style={{ color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>
-              {state.session.targetApp}
-            </span>
+            <span className="ov-status-target">{state.session.targetApp}</span>
           )}
         </div>
         {state.session?.partialText && (
           <motion.div
-            className="surface-muted p-2.5 text-sm wrap-safe mt-3"
-            style={{ color: 'var(--text-2)', lineHeight: 1.5 }}
+            className="surface-muted ov-partial wrap-safe"
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             transition={{ duration: 0.25, ease: easeOutExpo }}
@@ -374,14 +367,14 @@ export const OverviewPanel = ({
           <div className="dashboard-row">
             {/* Weekly activity */}
             <motion.div
-              className="surface-panel p-4 dashboard-chart-card"
+              className="surface-panel ov-card dashboard-chart-card"
               initial={reducedMotion ? false : { opacity: 0, y: 12 }}
               animate={reducedMotion ? undefined : { opacity: 1, y: 0 }}
               transition={{ duration: 0.35, ease: easeOutExpo, delay: 0.2 }}
             >
-              <div className="flex items-center justify-between mb-4">
+              <div className="ov-card-head">
                 <span className="eyebrow">{t('overview.usageThisWeek')}</span>
-                <span className="text-xs" style={{ color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>
+                <span className="ov-card-meta">
                   {t('overview.dictationsCount', { count: stats.weekActivity.reduce((a, b) => a + b, 0) })}
                 </span>
               </div>
@@ -390,54 +383,39 @@ export const OverviewPanel = ({
 
             {/* Top apps + avg latency */}
             <motion.div
-              className="surface-panel p-4 dashboard-side-card"
+              className="surface-panel ov-card dashboard-side-card"
               initial={reducedMotion ? false : { opacity: 0, y: 12 }}
               animate={reducedMotion ? undefined : { opacity: 1, y: 0 }}
               transition={{ duration: 0.35, ease: easeOutExpo, delay: 0.28 }}
             >
               {stats.topApps.length > 0 && (
-                <div className="mb-3">
-                  <div className="eyebrow mb-2">{t('overview.topApps')}</div>
-                  <div className="grid gap-1">
+                <div className="ov-topapps">
+                  <div className="ov-card-head"><span className="eyebrow">{t('overview.topApps')}</span></div>
+                  <div className="ov-topapps-list">
                     {stats.topApps.map(([app, count], i) => (
                       <motion.div
                         key={app}
-                        className="flex items-center justify-between"
-                        style={{ padding: '0.2rem 0' }}
+                        className="ov-topapp"
+                        style={{ '--share': Math.max(count / stats.topApps[0][1], 0.08) } as React.CSSProperties}
                         initial={reducedMotion ? false : { opacity: 0, x: -8 }}
                         animate={reducedMotion ? undefined : { opacity: 1, x: 0 }}
                         transition={{ duration: 0.25, ease: easeOutExpo, delay: 0.35 + i * 0.05 }}
                       >
-                        <div className="flex items-center gap-1.5" style={{ minWidth: 0, flex: 1 }}>
-                          <AppWindow size={11} style={{ color: 'var(--text-3)', flexShrink: 0 }} />
-                          <span
-                            className="text-xs"
-                            style={{
-                              color: 'var(--text-1)',
-                              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                            }}
-                          >
-                            {app}
-                          </span>
-                        </div>
-                        <span className="text-xs" style={{ color: 'var(--text-3)', fontFamily: 'var(--font-mono)', flexShrink: 0, paddingLeft: '0.5rem' }}>{count}</span>
+                        <AppWindow size={11} className="ov-topapp-icon" />
+                        <span className="ov-topapp-name">{app}</span>
+                        <span className="ov-topapp-bar" aria-hidden="true" />
+                        <span className="ov-topapp-count">{count}</span>
                       </motion.div>
                     ))}
                   </div>
                 </div>
               )}
-              <div
-                className="flex items-center justify-between"
-                style={{
-                  paddingTop: stats.topApps.length > 0 ? '0.5rem' : 0,
-                  borderTop: stats.topApps.length > 0 ? '1px solid var(--border)' : 'none',
-                }}
-              >
-                <div className="flex items-center gap-1.5">
-                  <Zap size={11} style={{ color: 'var(--accent)' }} />
-                  <span className="text-xs" style={{ color: 'var(--text-2)' }}>{t('overview.avgLatency')}</span>
+              <div className="ov-latency" data-divided={stats.topApps.length > 0 ? 'true' : undefined}>
+                <div className="ov-latency-label">
+                  <Zap size={11} className="ov-latency-icon" />
+                  <span>{t('overview.avgLatency')}</span>
                 </div>
-                <span className="text-xs" style={{ color: 'var(--text-1)', fontFamily: 'var(--font-mono)' }}>
+                <span className="ov-latency-value">
                   {stats.avgLatency > 0 ? `${(stats.avgLatency / 1000).toFixed(1)}s` : '—'}
                 </span>
               </div>
@@ -446,12 +424,12 @@ export const OverviewPanel = ({
 
           {/* Row 4: Recent outputs (last 3) */}
           <motion.div
-            className="surface-panel p-4"
+            className="surface-panel ov-card ov-recent"
             initial={reducedMotion ? false : { opacity: 0, y: 12 }}
             animate={reducedMotion ? undefined : { opacity: 1, y: 0 }}
             transition={{ duration: 0.35, ease: easeOutExpo, delay: 0.35 }}
           >
-            <div className="flex items-center justify-between mb-3">
+            <div className="ov-card-head">
               <span className="eyebrow">{t('overview.recentOutputs')}</span>
               {state.history.length > 3 && (
                 <button
@@ -476,38 +454,31 @@ export const OverviewPanel = ({
                 ))}
               </div>
             ) : (
-              <p className="text-xs" style={{ color: 'var(--text-3)' }}>{t('overview.noHistory')}</p>
+              <p className="copy-muted text-xs">{t('overview.noHistory')}</p>
             )}
           </motion.div>
         </>
       ) : (
         /* Empty state — welcome card */
         <motion.div
-          className="surface-panel p-5"
-          style={{ textAlign: 'center' }}
-          initial={reducedMotion ? false : { opacity: 0, y: 16, scale: 0.97 }}
-          animate={reducedMotion ? undefined : { opacity: 1, y: 0, scale: 1 }}
+          className="surface-panel ov-empty"
+          initial={reducedMotion ? false : { opacity: 0, y: 16 }}
+          animate={reducedMotion ? undefined : { opacity: 1, y: 0 }}
           transition={{ duration: 0.4, ease: easeOutExpo, delay: 0.1 }}
         >
           <motion.div
-            style={{
-              width: 48, height: 48, borderRadius: 14,
-              background: 'var(--accent-muted)', border: '1px solid rgba(210,175,110,0.2)',
-              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-              color: 'var(--accent)', marginBottom: '1rem',
-            }}
+            className="ov-empty-mark"
             initial={reducedMotion ? false : { scale: 0 }}
             animate={reducedMotion ? undefined : { scale: 1 }}
             transition={{ type: 'spring', stiffness: 400, damping: 20, delay: 0.2 }}
           >
-            <TrendingUp size={22} />
+            <Mic size={22} strokeWidth={1.6} />
+            <span className="ov-empty-wave" aria-hidden="true">
+              {[0, 1, 2, 3, 4].map((i) => <i key={i} />)}
+            </span>
           </motion.div>
-          <div className="text-sm font-semibold mb-1" style={{ color: 'var(--text-1)' }}>
-            {t('overview.welcome')}
-          </div>
-          <p className="text-xs" style={{ color: 'var(--text-3)', lineHeight: 1.5, maxWidth: '28rem', margin: '0 auto' }}>
-            {t('overview.welcomeDesc')}
-          </p>
+          <div className="ov-empty-title">{t('overview.welcome')}</div>
+          <p className="ov-empty-desc">{t('overview.welcomeDesc')}</p>
         </motion.div>
       )}
     </div>

@@ -339,5 +339,16 @@
     "retry": "Tentar novamente",
     "downloading": "Baixando {{percent}}%",
     "checkForUpdates": "Verificar atualizações"
+  },
+  "statusPill": {
+    "idle": "Inativo",
+    "arming": "Abrindo",
+    "listening": "Ouvindo",
+    "processing": "Pensando",
+    "streaming": "Escrevendo",
+    "completed": "Concluído",
+    "notice": "Aviso",
+    "error": "Erro",
+    "permission-required": "Permissão"
   }
 }

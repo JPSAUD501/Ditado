@@ -339,5 +339,16 @@
     "retry": "Retry",
     "downloading": "Downloading {{percent}}%",
     "checkForUpdates": "Check for updates"
+  },
+  "statusPill": {
+    "idle": "Idle",
+    "arming": "Arming",
+    "listening": "Listening",
+    "processing": "Thinking",
+    "streaming": "Writing",
+    "completed": "Done",
+    "notice": "Tip",
+    "error": "Error",
+    "permission-required": "Permission"
   }
 }

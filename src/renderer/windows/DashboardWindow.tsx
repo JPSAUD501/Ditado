@@ -235,7 +235,7 @@ export const DashboardWindow = ({ initialTab }: { initialTab: DashboardTab }) =>
   const activeTabMeta = navTabs.find((tab) => tab.id === activeTab)
 
   return (
-    <div className="app-shell">
+    <div className="app-shell" data-status={sessionStatus} data-mode={state.session?.activationMode ?? 'toggle'}>
       {/* Sidebar */}
       <nav className="sidebar">
         <div className="sidebar-logo" aria-label="Ditado">
@@ -275,7 +275,7 @@ export const DashboardWindow = ({ initialTab }: { initialTab: DashboardTab }) =>
 
       {/* Main */}
       <div className="main-content">
-        <div className="topbar">
+        <div className="topbar" data-status={sessionStatus}>
           <span className="topbar-title">{activeTabMeta ? t(activeTabMeta.labelKey) : 'Ditado'}</span>
           {state.session?.targetApp ? (
             <>
