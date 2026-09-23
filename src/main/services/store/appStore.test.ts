@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, readFile, utimes, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { defaultSettings } from '../../../shared/defaults.js'
 
 let userDataDir = ''
@@ -40,6 +40,12 @@ const loadStore = async (
   }
 }
 
+// Each test re-imports the store; transform the module graph once up front so the first test
+// isn't charged for the cold load (seconds when the whole suite runs in parallel).
+beforeAll(async () => {
+  await import('./appStore.js')
+}, 30_000)
+
 beforeEach(async () => {
   userDataDir = await mkdtemp(join(tmpdir(), 'ditado-store-'))
   mockedAppVersion = '0.1.48'
@@ -49,8 +55,6 @@ afterEach(async () => {
   await Promise.all(activeStores.splice(0).map((store) => store.shutdown().catch(() => undefined)))
 })
 
-// Each test re-imports the store and boots a fresh Syncore runtime (SQLite); the first one also pays the
-// cold module load, which can exceed the 5s default when the whole suite runs in parallel.
 const legacyEntry = (id: string, createdAt: string, outputText: string) => ({
   id,
   createdAt,
@@ -89,7 +93,7 @@ const touchLegacyFilesInFuture = async () => {
   }
 }
 
-describe('AppStore', { timeout: 30_000 }, () => {
+describe('AppStore', () => {
   it('starts clean from defaults when the current settings file is invalid', async () => {
     const settingsFile = join(userDataDir, 'data', 'settings.json')
     await mkdir(join(userDataDir, 'data'), { recursive: true })

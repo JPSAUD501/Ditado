@@ -1,7 +1,7 @@
 import { app, safeStorage } from 'electron'
 import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import type { SyncoreClient } from 'syncorejs'
+import { withoutSystemFields, type SyncoreClient } from 'syncorejs'
 
 import { api } from '../../../../syncore/_generated/api.js'
 import {
@@ -39,19 +39,6 @@ const readJsonFile = async (filePath: string): Promise<unknown | null> => {
 
 const ensureParentDir = async (filePath: string): Promise<void> => {
   await mkdir(dirname(filePath), { recursive: true })
-}
-
-const omitSyncoreMetadata = <T extends { _id?: string; _creationTime?: number; key?: string }>(
-  value: T | null,
-): Omit<T, '_id' | '_creationTime' | 'key'> | null => {
-  if (!value) {
-    return null
-  }
-  const { _id, _creationTime, key, ...rest } = value
-  void _id
-  void _creationTime
-  void key
-  return rest
 }
 
 const toStoredSettings = (settings: Settings): PersistedSettings => {
@@ -363,7 +350,12 @@ export class AppStore {
 
   private async getPersistedSyncoreSettings(): Promise<Partial<Settings> | null> {
     const settingsDoc = await this.clientOrThrow().query(api.settings.get)
-    return omitSyncoreMetadata(settingsDoc as { _id?: string; _creationTime?: number; key?: string } | null) as Partial<Settings> | null
+    if (!settingsDoc) {
+      return null
+    }
+    const { key, ...settings } = withoutSystemFields(settingsDoc)
+    void key
+    return settings
   }
 
   private async buildCurrentSettings(persistedSettings: Partial<Settings>): Promise<Settings> {

@@ -1,50 +1,11 @@
-import { mutation, query, s, type QueryCtx } from "../_generated/server.js";
+import { mutation, query, type QueryCtx } from "../_generated/server.js";
+import schema from "../schema.js";
 
 const SETTINGS_KEY = "default";
 
-const settingsFields = {
-  launchOnLogin: s.boolean(),
-  pushToTalkHotkey: s.string(),
-  toggleHotkey: s.string(),
-  preferredMicrophoneId: s.nullable(s.string()),
-  sendContextAutomatically: s.boolean(),
-  telemetryEnabled: s.boolean(),
-  autoUpdateEnabled: s.boolean(),
-  updateChannel: s.enum(["stable", "beta"] as const),
-  insertionStreamingMode: s.enum(["letter-by-letter", "all-at-once"] as const),
-  historyRetentionDays: s.number(),
-  maxHistoryAudioBytes: s.number(),
-  modelId: s.string(),
-  zeroDataRetention: s.boolean(),
-  onboardingCompleted: s.boolean(),
-  theme: s.enum(["dark", "light", "system"] as const),
-  language: s.enum(["en", "pt-BR", "es", "system"] as const),
-  lastSeenAppVersion: s.nullable(s.string()),
-  pendingStartupUpdatedNoticeVersion: s.nullable(s.string()),
-  pendingUpgradeOnboardingVersion: s.nullable(s.string())
-};
-
-const settingsPatchFields = {
-  launchOnLogin: s.optional(s.boolean()),
-  pushToTalkHotkey: s.optional(s.string()),
-  toggleHotkey: s.optional(s.string()),
-  preferredMicrophoneId: s.optional(s.nullable(s.string())),
-  sendContextAutomatically: s.optional(s.boolean()),
-  telemetryEnabled: s.optional(s.boolean()),
-  autoUpdateEnabled: s.optional(s.boolean()),
-  updateChannel: s.optional(s.enum(["stable", "beta"] as const)),
-  insertionStreamingMode: s.optional(s.enum(["letter-by-letter", "all-at-once"] as const)),
-  historyRetentionDays: s.optional(s.number()),
-  maxHistoryAudioBytes: s.optional(s.number()),
-  modelId: s.optional(s.string()),
-  zeroDataRetention: s.optional(s.boolean()),
-  onboardingCompleted: s.optional(s.boolean()),
-  theme: s.optional(s.enum(["dark", "light", "system"] as const)),
-  language: s.optional(s.enum(["en", "pt-BR", "es", "system"] as const)),
-  lastSeenAppVersion: s.optional(s.nullable(s.string())),
-  pendingStartupUpdatedNoticeVersion: s.optional(s.nullable(s.string())),
-  pendingUpgradeOnboardingVersion: s.optional(s.nullable(s.string()))
-};
+// Derived from the table so a new settings column can't be silently dropped.
+const settingsFields = schema.tables.appSettings.validator.omit("key");
+const settingsPatchFields = settingsFields.partial();
 
 const getSettingsDoc = async (ctx: QueryCtx) =>
   ctx.db.query("appSettings").withIndex("by_key", (q) => q.eq("key", SETTINGS_KEY)).unique();

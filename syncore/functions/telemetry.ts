@@ -1,16 +1,10 @@
 import { mutation, query, s } from "../_generated/server.js";
-import type { Infer } from "syncorejs";
+import { withoutSystemFields, type Infer } from "syncorejs";
+import schema from "../schema.js";
 
 const TELEMETRY_LIMIT = 10_000;
 
-const telemetryRecord = {
-  externalId: s.string(),
-  timestamp: s.string(),
-  kind: s.enum(["metric", "error"] as const),
-  name: s.string(),
-  detail: s.record(s.string(), s.string())
-};
-const telemetryRecordValidator = s.object(telemetryRecord);
+const telemetryRecordValidator = schema.tables.telemetryRecords.validator;
 type TelemetryRecordInput = Infer<typeof telemetryRecordValidator>;
 
 export const tail = query({
@@ -19,9 +13,7 @@ export const tail = query({
     const limit = Math.max(0, Math.min(args.limit ?? 30, TELEMETRY_LIMIT));
     const rows = await ctx.db.query("telemetryRecords").withIndex("by_timestamp").order("desc").take(limit);
     return rows.map((row) => {
-      const { externalId, ...record } = row;
-      delete (record as { _id?: string })._id;
-      delete (record as { _creationTime?: number })._creationTime;
+      const { externalId, ...record } = withoutSystemFields(row);
       return {
         ...record,
         id: externalId
@@ -31,7 +23,7 @@ export const tail = query({
 });
 
 export const append = mutation({
-  args: telemetryRecord,
+  args: telemetryRecordValidator,
   handler: async (ctx, args) => {
     const existing = await ctx.db.query("telemetryRecords")
       .withIndex("by_externalId", (q) => q.eq("externalId", args.externalId))
