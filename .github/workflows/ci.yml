@@ -45,7 +45,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: windows-latest
+          # Pinned like release.yml: node-gyp can't find Visual Studio 2026 on windows-latest,
+          # so rebuilding native deps while packaging fails there.
+          - os: windows-2022
             artifact_name: ditado-build-windows
           - os: macos-latest
             artifact_name: ditado-build-macos
@@ -70,6 +72,14 @@ jobs:
 
       - name: Build app bundles
         run: npm run build
+
+      - name: Package unpacked app
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npx electron-builder --dir --publish never
+
+      - name: Verify packaged dependencies
+        run: npm run verify:packaged-deps
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v6

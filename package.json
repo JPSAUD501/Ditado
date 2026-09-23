@@ -36,6 +36,7 @@
     "test:e2e": "playwright test",
     "preview": "vite preview",
     "package": "npm run build && electron-builder",
+    "verify:packaged-deps": "node scripts/verify-packaged-dependencies.mjs",
     "release:github": "npm run build && electron-builder --publish always",
     "syncorejs:dev": "syncorejs dev",
     "syncorejs:codegen": "syncorejs codegen",
@@ -165,6 +166,7 @@
     "@opentelemetry/semantic-conventions": "^1.40.0",
     "active-win": "^8.2.1",
     "clsx": "^2.1.1",
+    "date-fns": "^4.3.0",
     "electron-updater": "^6.8.3",
     "framer-motion": "^12.23.24",
     "i18next": "^25.8.18",
@@ -179,6 +181,7 @@
     "zustand": "^5.0.8"
   },
   "devDependencies": {
+    "@electron/asar": "^3.4.1",
     "@eslint/js": "^9.39.1",
     "@playwright/test": "^1.56.1",
     "@tailwindcss/vite": "^4.1.14",
