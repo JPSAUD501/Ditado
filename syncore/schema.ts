@@ -91,6 +91,7 @@ export default defineSchema({
     historyRetentionDays: s.number(),
     maxHistoryAudioBytes: s.number(),
     modelId: s.string(),
+    zeroDataRetention: s.optional(s.boolean()),
     onboardingCompleted: s.boolean(),
     theme: s.enum(["dark", "light", "system"] as const),
     language: s.enum(["en", "pt-BR", "es", "system"] as const),

@@ -172,7 +172,7 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-i18next": "^16.5.8",
-    "syncorejs": "^0.2.6",
+    "syncorejs": "^0.3.3",
     "tone": "^15.1.22",
     "uiohook-napi": "^1.5.4",
     "zod": "^4.1.12",

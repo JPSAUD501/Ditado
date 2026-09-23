@@ -49,7 +49,9 @@ afterEach(async () => {
   await Promise.all(activeStores.splice(0).map((store) => store.shutdown().catch(() => undefined)))
 })
 
-describe('AppStore', () => {
+// Each test re-imports the store and boots a fresh Syncore runtime (SQLite); the first one also pays the
+// cold module load, which can exceed the 5s default when the whole suite runs in parallel.
+describe('AppStore', { timeout: 30_000 }, () => {
   it('starts clean from defaults when the current settings file is invalid', async () => {
     const settingsFile = join(userDataDir, 'data', 'settings.json')
     await mkdir(join(userDataDir, 'data'), { recursive: true })
@@ -461,5 +463,28 @@ describe('AppStore', () => {
     expect(persisted).toHaveLength(10_000)
     expect(persisted[0]?.id).toBe('metric-latest')
     expect(persisted.at(-1)?.id).toBe('metric-1')
+  })
+
+  it('persists every user-editable setting through Syncore across restarts', async () => {
+    const AppStore = await loadStore()
+    const store = new AppStore()
+    await store.initialize()
+    await store.updateSettings({
+      zeroDataRetention: true,
+      modelId: 'google/gemini-3.6-flash',
+      insertionStreamingMode: 'all-at-once',
+      historyRetentionDays: 30,
+    })
+    await store.shutdown()
+
+    const restarted = new AppStore()
+    await restarted.initialize()
+
+    expect(restarted.getSettings()).toMatchObject({
+      zeroDataRetention: true,
+      modelId: 'google/gemini-3.6-flash',
+      insertionStreamingMode: 'all-at-once',
+      historyRetentionDays: 30,
+    })
   })
 })
