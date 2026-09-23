@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
+import { installSyncoreWindowBridge } from 'syncorejs/node/ipc'
 
 import type {
   DashboardTab,
@@ -14,6 +15,8 @@ import type {
 } from '../shared/contracts.js'
 import type { HotkeyCapturePayload } from '../shared/hotkeys.js'
 import { ipcChannels } from '../shared/ipc.js'
+
+eval(installSyncoreWindowBridge())
 
 const subscribe = <T,>(channel: string, listener: (payload: T) => void): (() => void) => {
   const handler = (_event: Electron.IpcRendererEvent, payload: T) => {

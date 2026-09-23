@@ -1,6 +1,7 @@
-import { app, BrowserWindow, nativeTheme, powerMonitor, screen, session } from 'electron'
+import { app, BrowserWindow, ipcMain, nativeTheme, powerMonitor, screen, session } from 'electron'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { bindElectronWindowToSyncoreRuntime } from 'syncorejs/node'
 
 import { defaultPermissionState } from '../shared/defaults.js'
 import type { HotkeyCapturePayload } from '../shared/hotkeys.js'
@@ -35,6 +36,7 @@ import { createRemoteTelemetryRuntime } from './services/telemetry/telemetryRemo
 import { TelemetryService } from './services/telemetry/telemetryService.js'
 import { runStartupUpdateFlow } from './services/update/startupUpdateFlow.js'
 import { UpdateService } from './services/update/updateService.js'
+import { createAppSyncoreRuntime } from '../syncore-runtime.js'
 
 type Windows = {
   overlay: BrowserWindow | null
@@ -324,8 +326,12 @@ void app.whenReady().then(async () => {
   app.setPath('userData', join(app.getPath('appData'), STABLE_USER_DATA_DIR_NAME))
   configureMediaPermissions(session.defaultSession)
   const telemetryBuildConfig = await loadTelemetryBuildConfig()
+  const syncoreRuntime = createAppSyncoreRuntime()
+  await syncoreRuntime.start()
+  const syncoreClient = syncoreRuntime.createClient()
+  const syncoreBindings: Array<{ dispose: () => void | Promise<void> }> = []
 
-  const store = new AppStore()
+  const store = new AppStore(syncoreClient)
   await store.initialize()
   currentDashboardTheme = store.getSettings().theme
   const shouldShowStartupUpdatedNotice = store.getSettings().pendingStartupUpdatedNoticeVersion === app.getVersion()
@@ -398,6 +404,20 @@ void app.whenReady().then(async () => {
     getPreferredDashboardTab(store.getSettings()),
     currentDashboardTheme,
   )
+  if (windows.overlay) {
+    syncoreBindings.push(bindElectronWindowToSyncoreRuntime({
+      runtime: syncoreRuntime,
+      window: windows.overlay,
+      ipcMain,
+    }))
+  }
+  if (windows.dashboard) {
+    syncoreBindings.push(bindElectronWindowToSyncoreRuntime({
+      runtime: syncoreRuntime,
+      window: windows.dashboard,
+      ipcMain,
+    }))
+  }
   windows.dashboard.on('blur', () => { setHotkeyCaptureMode(false) })
   windows.dashboard.on('hide', () => { setHotkeyCaptureMode(false) })
 
@@ -699,8 +719,13 @@ void app.whenReady().then(async () => {
       insertion,
       telemetry,
     }).finally(() => {
-      isQuitting = true
-      app.quit()
+      void Promise.all(syncoreBindings.map((binding) => Promise.resolve(binding.dispose()).catch(() => undefined)))
+        .then(() => syncoreRuntime.stop())
+        .catch(() => undefined)
+        .finally(() => {
+          isQuitting = true
+          app.quit()
+        })
     })
   })
 

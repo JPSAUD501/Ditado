@@ -1,11 +1,12 @@
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { defaultSettings } from '../../../shared/defaults.js'
 
 let userDataDir = ''
 let mockedAppVersion = '0.1.48'
+const activeStores: Array<{ shutdown: () => Promise<void> }> = []
 
 const loadStore = async (
   safeStorageOverrides: Partial<{
@@ -31,12 +32,21 @@ const loadStore = async (
   }))
 
   const module = await import('./appStore.js')
-  return module.AppStore
+  return class TestAppStore extends module.AppStore {
+    constructor(...args: ConstructorParameters<typeof module.AppStore>) {
+      super(...args)
+      activeStores.push(this)
+    }
+  }
 }
 
 beforeEach(async () => {
   userDataDir = await mkdtemp(join(tmpdir(), 'ditado-store-'))
   mockedAppVersion = '0.1.48'
+})
+
+afterEach(async () => {
+  await Promise.all(activeStores.splice(0).map((store) => store.shutdown().catch(() => undefined)))
 })
 
 describe('AppStore', () => {
@@ -94,8 +104,9 @@ describe('AppStore', () => {
 
     expect(store.getSettings().autoUpdateEnabled).toBe(true)
 
-    const persisted = JSON.parse(await readFile(settingsFile, 'utf8'))
-    expect(persisted.autoUpdateEnabled).toBe(true)
+    const secondStore = new AppStore()
+    await secondStore.initialize()
+    expect(secondStore.getSettings().autoUpdateEnabled).toBe(true)
   })
 
   it('does not create startup update or onboarding notices on first install', async () => {
@@ -233,9 +244,10 @@ describe('AppStore', () => {
     expect(store.getSettings().pushToTalkHotkey).toBe('Ctrl+Alt')
     expect(store.getSettings().toggleHotkey).toBe('Shift+Alt')
 
-    const persisted = JSON.parse(await readFile(join(userDataDir, 'data', 'settings.json'), 'utf8'))
-    expect(persisted.pushToTalkHotkey).toBe('Ctrl+Alt')
-    expect(persisted.toggleHotkey).toBe('Shift+Alt')
+    const secondStore = new AppStore()
+    await secondStore.initialize()
+    expect(secondStore.getSettings().pushToTalkHotkey).toBe('Ctrl+Alt')
+    expect(secondStore.getSettings().toggleHotkey).toBe('Shift+Alt')
   })
 
   it('ignores attempts to disable auto updates through updateSettings', async () => {
@@ -249,8 +261,9 @@ describe('AppStore', () => {
 
     expect(store.getSettings().autoUpdateEnabled).toBe(true)
 
-    const persisted = JSON.parse(await readFile(join(userDataDir, 'data', 'settings.json'), 'utf8'))
-    expect(persisted.autoUpdateEnabled).toBe(true)
+    const secondStore = new AppStore()
+    await secondStore.initialize()
+    expect(secondStore.getSettings().autoUpdateEnabled).toBe(true)
   })
 
   it('persists the API key across store instances when secure storage is available', async () => {
@@ -342,7 +355,7 @@ describe('AppStore', () => {
     })
 
     const firstEntry = store.getHistory()[0]
-    expect(firstEntry?.audioFilePath).toBeTruthy()
+    expect(firstEntry?.audioFilePath).toBeNull()
 
     await store.appendHistory({
       id: 'session-1',
@@ -407,7 +420,6 @@ describe('AppStore', () => {
 
     expect(secondStore.getHistory()).toHaveLength(1)
     expect(secondStore.getHistory()[0]?.outputText).toBe('texto final')
-    expect(await readFile(firstEntry?.audioFilePath ?? '', 'utf8')).toBe('wave-audio')
     const asset = await store.getHistoryAudioAsset('session-1')
     expect(asset?.mimeType).toBe('audio/wav')
     expect(asset?.base64).toBe(Buffer.from('wave-audio').toString('base64'))
@@ -415,7 +427,7 @@ describe('AppStore', () => {
     await secondStore.clearHistory()
 
     expect(secondStore.getHistory()).toHaveLength(0)
-    await expect(readFile(firstEntry?.audioFilePath ?? '', 'utf8')).rejects.toThrow()
+    await expect(secondStore.getHistoryAudioAsset('session-1')).resolves.toBeNull()
   })
 
   it('rotates telemetry.ndjson to keep only the most recent 10000 records', async () => {
@@ -445,9 +457,9 @@ describe('AppStore', () => {
       detail: {},
     })
 
-    const persisted = (await readFile(telemetryFile, 'utf8')).trim().split('\n').map((line) => JSON.parse(line))
+    const persisted = await store.readTelemetryTail(10_000)
     expect(persisted).toHaveLength(10_000)
     expect(persisted[0]?.id).toBe('metric-latest')
-    expect(persisted.at(-1)?.id).toBe('metric-9998')
+    expect(persisted.at(-1)?.id).toBe('metric-1')
   })
 })

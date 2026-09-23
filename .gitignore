@@ -10,6 +10,7 @@ node_modules
 dist
 dist-electron
 release
+.syncore/
 .vite-cache
 coverage
 playwright-report
