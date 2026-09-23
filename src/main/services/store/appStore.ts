@@ -1,5 +1,5 @@
 import { app, safeStorage } from 'electron'
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import type { SyncoreClient } from 'syncorejs'
 
@@ -130,15 +130,23 @@ export class AppStore {
     await mkdir(this.historyAudioDir, { recursive: true })
     await this.ensureClient()
 
-    const syncoreSettings = await this.getPersistedSyncoreSettings()
-    const settingsCandidate = syncoreSettings ?? await readJsonFile(this.settingsFile)
+    // The legacy JSON files are only ever read by this store. If one of them changed after the last import,
+    // an older build (still writing JSON) ran against a profile that already had a Syncore database, so the
+    // JSON is the newer source of truth: prefer its settings and import it again (the import is idempotent).
+    const importStatus = await this.clientOrThrow().query(api.migration.status)
+    const legacyChangedAfterImport = importStatus != null
+      && await this.legacyFilesChangedSince(Date.parse(importStatus.updatedAt))
+
+    const syncoreSettings = legacyChangedAfterImport ? null : await this.getPersistedSyncoreSettings()
+    const settingsCandidate = syncoreSettings
+      ?? await readJsonFile(this.settingsFile)
+      ?? (legacyChangedAfterImport ? await this.getPersistedSyncoreSettings() : null)
     const persistedSettings = parsePersistedSettings(settingsCandidate) ?? {}
     this.settings = await this.buildCurrentSettings(persistedSettings)
 
     await this.clientOrThrow().mutation(api.settings.ensureInitialized, toStoredSettings(this.settings))
 
-    const importStatus = await this.clientOrThrow().query(api.migration.status)
-    if (!importStatus) {
+    if (!importStatus || legacyChangedAfterImport) {
       await this.importLegacyHistory()
       await this.importLegacyTelemetry()
       await this.clientOrThrow().mutation(api.migration.markLegacyImportCompleted, {
@@ -438,11 +446,31 @@ export class AppStore {
     this.history = keptEntries
   }
 
+  private async legacyFilesChangedSince(importedAtMs: number): Promise<boolean> {
+    if (Number.isNaN(importedAtMs)) {
+      return false
+    }
+
+    for (const file of [this.settingsFile, this.historyFile, this.telemetryFile]) {
+      try {
+        if ((await stat(file)).mtimeMs > importedAtMs) {
+          return true
+        }
+      } catch {
+        // Missing legacy file: nothing newer to import from it.
+      }
+    }
+    return false
+  }
+
   private async importLegacyHistory(): Promise<void> {
     const historyCandidate = await readJsonFile(this.historyFile)
     const entries = parseHistory(historyCandidate) ?? []
+    const existingRows = await this.clientOrThrow().query(api.history.list) as Array<{ id: string, audio: { storageId?: string | null } }>
+    const idsWithStoredAudio = new Set(existingRows.filter((row) => row.audio.storageId).map((row) => row.id))
     for (const entry of entries) {
-      const audioAsset = await this.readLegacyAudioForEntry(entry)
+      // On a re-import, entries whose audio is already in Syncore keep it (append preserves it) instead of re-uploading.
+      const audioAsset = idsWithStoredAudio.has(entry.id) ? null : await this.readLegacyAudioForEntry(entry)
       if (audioAsset) {
         await this.clientOrThrow().mutation(api.history.appendWithAudio, {
           entry: toHistoryInput(entry),
@@ -463,13 +491,22 @@ export class AppStore {
       return
     }
 
+    // A crash mid-write can leave a truncated line; skip it rather than failing startup.
+    const parseLine = (line: string): unknown => {
+      try {
+        return JSON.parse(line)
+      } catch {
+        return null
+      }
+    }
+
     const records = raw
       .split('\n')
       .filter(Boolean)
-      .map((line) => telemetryRecordSchema.safeParse(JSON.parse(line)))
+      .map((line) => telemetryRecordSchema.safeParse(parseLine(line)))
       .filter((entry) => entry.success)
       .map((entry) => entry.data)
-      .slice(0, TELEMETRY_LIMIT)
+      .slice(-TELEMETRY_LIMIT)
 
     await this.clientOrThrow().mutation(api.telemetry.importLegacy, {
       records: records.map((record) => ({

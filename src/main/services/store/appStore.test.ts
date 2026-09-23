@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, utimes, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -51,6 +51,44 @@ afterEach(async () => {
 
 // Each test re-imports the store and boots a fresh Syncore runtime (SQLite); the first one also pays the
 // cold module load, which can exceed the 5s default when the whole suite runs in parallel.
+const legacyEntry = (id: string, createdAt: string, outputText: string) => ({
+  id,
+  createdAt,
+  outcome: 'completed',
+  appName: 'VS Code',
+  windowTitle: 'notes.md',
+  activationMode: 'push-to-talk',
+  modelId: 'google/gemini-3-flash-preview',
+  outputText,
+  errorMessage: null,
+  submittedContext: null,
+  usedContext: false,
+  latencyMs: 300,
+  audioProcessingMs: 10,
+  audioSendMs: 40,
+  insertionStrategy: 'insert-at-cursor',
+  requestedMode: 'all-at-once',
+  effectiveMode: 'all-at-once',
+  insertionMethod: 'clipboard-all-at-once',
+  fallbackUsed: false,
+  timeToFirstTokenMs: 0,
+  timeToCompleteMs: 0,
+})
+
+const writeLegacyProfile = async (settings: Record<string, unknown>, entries: unknown[]) => {
+  await mkdir(join(userDataDir, 'data'), { recursive: true })
+  await writeFile(join(userDataDir, 'data', 'settings.json'), JSON.stringify(settings), 'utf8')
+  await writeFile(join(userDataDir, 'data', 'history.json'), JSON.stringify(entries), 'utf8')
+}
+
+// Pushes the legacy files' mtime clearly past the import marker (coarse filesystem timestamps).
+const touchLegacyFilesInFuture = async () => {
+  const future = new Date(Date.now() + 60_000)
+  for (const name of ['settings.json', 'history.json']) {
+    await utimes(join(userDataDir, 'data', name), future, future)
+  }
+}
+
 describe('AppStore', { timeout: 30_000 }, () => {
   it('starts clean from defaults when the current settings file is invalid', async () => {
     const settingsFile = join(userDataDir, 'data', 'settings.json')
@@ -486,5 +524,75 @@ describe('AppStore', { timeout: 30_000 }, () => {
       insertionStreamingMode: 'all-at-once',
       historyRetentionDays: 30,
     })
+  })
+
+  it('re-imports legacy files that changed after a previous Syncore import', async () => {
+    await writeLegacyProfile(
+      { modelId: 'google/gemini-3-flash-preview', lastSeenAppVersion: '0.1.48', onboardingCompleted: true },
+      [legacyEntry('session-a', '2026-05-20T10:00:00.000Z', 'antes')],
+    )
+    const AppStore = await loadStore()
+    const first = new AppStore()
+    await first.initialize()
+    await first.shutdown()
+
+    // An older build keeps writing JSON after the Syncore database already exists.
+    await writeLegacyProfile(
+      { modelId: 'google/gemini-3.6-flash', lastSeenAppVersion: '0.1.48', onboardingCompleted: true },
+      [
+        legacyEntry('session-b', '2026-09-20T10:00:00.000Z', 'depois'),
+        legacyEntry('session-a', '2026-05-20T10:00:00.000Z', 'antes'),
+      ],
+    )
+    await touchLegacyFilesInFuture()
+
+    const second = new AppStore()
+    await second.initialize()
+
+    expect(second.getSettings().modelId).toBe('google/gemini-3.6-flash')
+    expect(second.getHistory().map((entry) => entry.id)).toEqual(['session-b', 'session-a'])
+  })
+
+  it('keeps Syncore data when the legacy files are older than the import', async () => {
+    await writeLegacyProfile(
+      { modelId: 'google/gemini-3-flash-preview', lastSeenAppVersion: '0.1.48', onboardingCompleted: true },
+      [legacyEntry('session-a', '2026-05-20T10:00:00.000Z', 'antes')],
+    )
+    const AppStore = await loadStore()
+    const first = new AppStore()
+    await first.initialize()
+    await first.updateSettings({ modelId: 'google/gemini-3.6-flash' })
+    await first.shutdown()
+
+    const second = new AppStore()
+    await second.initialize()
+
+    expect(second.getSettings().modelId).toBe('google/gemini-3.6-flash')
+    expect(second.getHistory()).toHaveLength(1)
+  })
+
+  it('skips corrupted telemetry.ndjson lines instead of failing startup', async () => {
+    await mkdir(join(userDataDir, 'data'), { recursive: true })
+    const record = (id: string, second: number) => JSON.stringify({
+      id,
+      timestamp: new Date(2026, 0, 1, 0, 0, second).toISOString(),
+      kind: 'metric',
+      name: id,
+      detail: {},
+    })
+    await writeFile(
+      join(userDataDir, 'data', 'telemetry.ndjson'),
+      `${record('metric-1', 1)}
+{"id":"metric-trunc
+${record('metric-2', 2)}
+`,
+      'utf8',
+    )
+
+    const AppStore = await loadStore()
+    const store = new AppStore()
+    await store.initialize()
+
+    expect((await store.readTelemetryTail(10)).map((entry) => entry.id)).toEqual(['metric-2', 'metric-1'])
   })
 })
