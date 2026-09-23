@@ -376,6 +376,7 @@ export const settingsSchema = z.object({
   historyRetentionDays: z.number().int().positive().default(365),
   maxHistoryAudioBytes: z.number().int().positive().default(512 * 1024 * 1024),
   modelId: z.string().default('google/gemini-3-flash-preview'),
+  zeroDataRetention: z.boolean().default(false),
   apiKeyPresent: z.boolean().default(false),
   onboardingCompleted: z.boolean().default(false),
   theme: z.enum(['dark', 'light', 'system']).default('system'),
@@ -400,6 +401,7 @@ export const settingsPatchSchema = z.object({
   historyRetentionDays: z.number().int().positive().optional(),
   maxHistoryAudioBytes: z.number().int().positive().optional(),
   modelId: z.string().optional(),
+  zeroDataRetention: z.boolean().optional(),
   onboardingCompleted: z.boolean().optional(),
   theme: z.enum(['dark', 'light', 'system']).optional(),
   language: z.enum(['en', 'pt-BR', 'es', 'system']).optional(),
@@ -417,6 +419,7 @@ export const llmRequestSchema = z.object({
   languageHint: z.string().nullable(),
   context: contextSnapshotSchema,
   modelId: z.string(),
+  zeroDataRetention: z.boolean(),
 })
 
 export type LlmRequest = z.infer<typeof llmRequestSchema>

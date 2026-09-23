@@ -40,12 +40,11 @@ export class OpenRouterService {
           stream: true,
           temperature: 0.2,
           topP: 0.9,
-          // Sampling params are hints: some ZDR endpoints (e.g. Vertex for gemini-3.6-flash) don't accept
-          // temperature/top_p, and requiring them would leave no endpoint to route to.
+          // temperature/top_p are hints: endpoints that don't support them ignore them instead of being
+          // filtered out (requiring them left gemini-3.6-flash with no endpoint to route to).
           provider: {
             allowFallbacks: false,
-            requireParameters: false,
-            zdr: true,
+            ...(request.zeroDataRetention ? { zdr: true } : {}),
           },
           messages: [
             {

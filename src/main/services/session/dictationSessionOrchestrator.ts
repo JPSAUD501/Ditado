@@ -379,6 +379,7 @@ export class DictationSessionOrchestrator {
           languageHint: payload.languageHint,
           context,
           modelId: this.store.getSettings().modelId,
+          zeroDataRetention: this.store.getSettings().zeroDataRetention,
         },
         async (delta) => {
           if (this.cancelledSessionIds.has(currentSession.id)) {

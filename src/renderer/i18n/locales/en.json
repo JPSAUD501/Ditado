@@ -169,6 +169,8 @@
     "keySaved": "Key saved",
     "modelId": "Model ID",
     "anyOpenRouterModel": "Any OpenRouter model.",
+    "zeroDataRetention": "Zero data retention",
+    "zeroDataRetentionDesc": "Only route to providers that don't store your audio or text. Some models get fewer options or become unavailable.",
     "hotkeys": "Hotkeys",
     "toggleLabel": "Toggle",
     "toggleHint": "Press to start, press again to send.",
