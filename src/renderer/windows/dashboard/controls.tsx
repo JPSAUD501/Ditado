@@ -530,7 +530,8 @@ export const HistoryRow = ({
   const textPreview = entry.outputText
     || (isError ? (entry.errorMessage ?? t('history.noTextInserted')) : t('history.noTextInserted'))
   const modeLabel = entry.activationMode === 'push-to-talk' ? t('common.push') : t('common.toggle')
-  const hasAudio = Boolean(entry.audioFilePath)
+  // Audio lives in Syncore storage and is fetched by entry id, so entries have no file path.
+  const hasAudio = entry.audioBytes > 0
   const hasContext = Boolean(entry.submittedContext?.selectedText)
   const timelineStages = buildTimelineStages(entry)
   const hasMetrics = timelineStages.length > 0

@@ -456,7 +456,8 @@ describe('DashboardWindow', () => {
       modelId: 'google/gemini-3-flash-preview',
       outputText: 'expanded output',
       errorMessage: null,
-      audioFilePath: 'history-audio/entry-expand.wav',
+      // Syncore-backed entries have no file path; the audio is fetched by entry id.
+      audioFilePath: null,
       audioDurationMs: 1400,
       audioMimeType: 'audio/wav',
       audioBytes: 2048,
