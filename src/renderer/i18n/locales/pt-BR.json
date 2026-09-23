@@ -169,6 +169,8 @@
     "keySaved": "Chave salva",
     "modelId": "ID do Modelo",
     "anyOpenRouterModel": "Qualquer modelo OpenRouter.",
+    "zeroDataRetention": "Retenção zero de dados",
+    "zeroDataRetentionDesc": "Só usa provedores que não guardam seu áudio nem o texto. Alguns modelos ficam com menos opções ou indisponíveis.",
     "hotkeys": "Atalhos",
     "toggleLabel": "Alternar",
     "toggleHint": "Pressione para iniciar, pressione novamente para enviar.",

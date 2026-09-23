@@ -40,10 +40,11 @@ export class OpenRouterService {
           stream: true,
           temperature: 0.2,
           topP: 0.9,
+          // temperature/top_p are hints: endpoints that don't support them ignore them instead of being
+          // filtered out (requiring them left gemini-3.6-flash with no endpoint to route to).
           provider: {
             allowFallbacks: false,
-            requireParameters: true,
-            zdr: true,
+            ...(request.zeroDataRetention ? { zdr: true } : {}),
           },
           messages: [
             {

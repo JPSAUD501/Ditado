@@ -23,6 +23,7 @@ export const defaultSettings: Settings = {
   historyRetentionDays: 365,
   maxHistoryAudioBytes: 512 * 1024 * 1024,
   modelId: 'google/gemini-3-flash-preview',
+  zeroDataRetention: false,
   apiKeyPresent: false,
   onboardingCompleted: false,
   theme: 'system',

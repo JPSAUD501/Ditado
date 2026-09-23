@@ -138,6 +138,12 @@ export const SettingsPanel = ({
                 onChange={(e) => void updateSettings({ modelId: e.target.value })}
               />
             </Field>
+            <ToggleRow
+              label={t('settings.zeroDataRetention')}
+              description={t('settings.zeroDataRetentionDesc')}
+              value={settings.zeroDataRetention}
+              onChange={(v) => void updateSettings({ zeroDataRetention: v })}
+            />
           </Section>
         </div>
 
